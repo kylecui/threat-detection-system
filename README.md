@@ -75,20 +75,31 @@ kubectl get pods -n threat-detection-dev
 - **Multi-Environment Support**: Development and production configurations
 - **Health Monitoring**: Comprehensive health checks and metrics
 - **Offline Data Import**: Historical data processing with replay capabilities
+- **High-Reliability Bulk Ingestion**: Connection pooling, retry logic, and automatic recovery for large-scale log processing
+- **Enhanced Threat Scoring**: Multi-dimensional algorithm with port diversity and device coverage rewards
 
 ## Threat Scoring Algorithm
 
-The system uses a sophisticated threat scoring algorithm:
+The system uses a sophisticated threat scoring algorithm with enhanced multi-dimensional analysis:
 
 ```
-threat_score = (port_weight × ip_count × attack_count) × time_weight
+threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeight × portWeight × deviceWeight
 ```
 
 Where:
-- `port_weight`: Risk weight based on target port
-- `ip_count`: Number of unique source IPs
-- `attack_count`: Frequency of attack attempts
-- `time_weight`: Time-based decay factor
+- `portWeight`: Risk weight based on port diversity (1.0-2.0)
+- `deviceWeight`: Multi-device coverage reward (1.0-1.5)
+- `timeWeight`: Time-based decay factor
+- `ipWeight`: IP diversity amplification
+- `attackCount`: Frequency of attack attempts
+- `uniqueIps`: Number of distinct source IPs
+- `uniquePorts`: Number of distinct target ports
+
+**Latest Enhancements:**
+- Port diversity analysis for sophisticated attack detection
+- Multi-device coverage rewards for distributed attacks
+- Configurable time windows (default: 30s aggregation, 2min scoring)
+- Improved accuracy for complex threat patterns
 
 ## Project Structure
 
@@ -236,6 +247,11 @@ kubectl logs -f deployment/data-ingestion -n threat-detection-dev
 2. **Memory Issues**: Ensure Docker has at least 4GB RAM allocated
 3. **Kafka Connection**: Verify Zookeeper is running before Kafka
 4. **Flink Jobs**: Check JobManager logs for submission errors
+5. **Connection Reset Errors**: Use the enhanced bulk ingestion script with built-in connection pooling:
+   ```bash
+   python3 bulk_ingest_logs.py --count 5 --workers 4 --batch-size 25
+   ```
+6. **Bulk Ingestion Failures**: Monitor connection pool refresh logs and ensure batch sizes are optimized
 
 ### Getting Help
 
