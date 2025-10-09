@@ -1,6 +1,25 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    hostname: postgres
+    container_name: postgres
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_DB: threat_detection
+      POSTGRES_USER: threat_user
+      POSTGRES_PASSWORD: threat_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U threat_user -d threat_detection"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
     hostname: zookeeper
@@ -53,7 +72,9 @@ services:
       start_period: 30s
 
   stream-processing:
-    image: threat-detection/stream-processing:1.0
+    build:
+      context: ../services/stream-processing
+      dockerfile: Dockerfile
     hostname: stream-processing
     container_name: stream-processing
     depends_on:
@@ -81,7 +102,9 @@ services:
       start_period: 60s
 
   taskmanager:
-    image: threat-detection/stream-processing:1.0
+    build:
+      context: ../services/stream-processing
+      dockerfile: Dockerfile
     hostname: taskmanager
     container_name: taskmanager
     depends_on:
@@ -111,3 +134,10 @@ services:
       kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic minute-aggregations
       "
     restart: "no"
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: threat-detection-network

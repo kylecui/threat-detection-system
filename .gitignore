@@ -37,3 +37,8 @@ logs/
 # Temporary files
 tmp/
 old/
+
+# Python
+.venv
+__pycache__/
+*.pyc

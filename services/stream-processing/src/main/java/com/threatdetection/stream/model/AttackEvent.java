@@ -21,6 +21,7 @@ public class AttackEvent {
     private String severity;
     private String description;
     private String rawLog;
+    private String customerId;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'")
     private LocalDateTime timestamp;
@@ -31,7 +32,7 @@ public class AttackEvent {
     public AttackEvent(String devSerial, int logType, int subType, String attackMac,
                       String attackIp, String responseIp, int responsePort, int lineId,
                       int ifaceType, int vlanId, long logTime, int ethType, int ipType,
-                      String rawLog) {
+                      String rawLog, String customerId) {
         this.devSerial = devSerial;
         this.logType = logType;
         this.subType = subType;
@@ -46,6 +47,7 @@ public class AttackEvent {
         this.ethType = ethType;
         this.ipType = ipType;
         this.rawLog = rawLog;
+        this.customerId = customerId;
         this.timestamp = LocalDateTime.now();
         this.severity = determineSeverity(subType);
         this.description = generateDescription();
@@ -117,6 +119,9 @@ public class AttackEvent {
 
     public String getRawLog() { return rawLog; }
     public void setRawLog(String rawLog) { this.rawLog = rawLog; }
+
+    public String getCustomerId() { return customerId; }
+    public void setCustomerId(String customerId) { this.customerId = customerId; }
 
     public LocalDateTime getTimestamp() { return timestamp; }
     public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }

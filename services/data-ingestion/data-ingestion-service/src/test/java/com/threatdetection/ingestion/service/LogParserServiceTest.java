@@ -3,6 +3,7 @@ package com.threatdetection.ingestion.service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.Map;
@@ -18,12 +19,15 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class LogParserServiceTest {
 
+    @Mock
+    private DevSerialToCustomerMappingService mappingService;
+
     private LogParserService logParserService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        logParserService = new LogParserService();
+        logParserService = new LogParserService(mappingService);
     }
 
     @Test

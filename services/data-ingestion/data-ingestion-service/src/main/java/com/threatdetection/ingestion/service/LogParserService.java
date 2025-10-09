@@ -17,13 +17,19 @@ public class LogParserService {
 
     private static final Logger logger = LoggerFactory.getLogger(LogParserService.class);
 
+    private final DevSerialToCustomerMappingService mappingService;
+
+    public LogParserService(DevSerialToCustomerMappingService mappingService) {
+        this.mappingService = mappingService;
+    }
+
     // 攻击日志解析模式 (log_type=1) - 支持完整的syslog格式
     private static final Pattern ATTACK_LOG_PATTERN = Pattern.compile(
         "(?:<\\d+>\\w+\\s+\\d+\\s+\\d+:\\d+:\\d+\\s+[^\\s]+\\s+[^:]+:\\s*)?" +  // 可选的syslog头部
         "syslog_version=(\\d+(?:\\.\\d+)*)\\s*,\\s*" +
         "dev_serial=(" + System.getenv().getOrDefault("DEV_SERIAL_PATTERN", "[0-9A-Za-z]+") + ")\\s*,\\s*" +
         "log_type=(\\d+)\\s*,\\s*" +
-        "sub_type\\s*=\\s*(\\d+)\\s*,\\s*" +
+        "sub_type\\s*=\\s*(\\d+)\\s*,\\s*" +  // 修复：允许sub_type后面和=前后的空格
         "attack_mac=([0-9A-Fa-f:]+)\\s*,\\s*" +
         "attack_ip=((?:\\d{1,3}\\.){3}\\d{1,3})\\s*,\\s*" +
         "response_ip=((?:\\d{1,3}\\.){3}\\d{1,3})\\s*,\\s*" +
@@ -32,8 +38,8 @@ public class LogParserService {
         "Iface_type=(\\d+)\\s*,\\s*" +
         "Vlan_id=(\\d+)\\s*,\\s*" +
         "log_time=(\\d+)" +
-        "(?:\\s*,\\s*eth_type\\s*=\\s*(\\d+))?" +  // 可选的eth_type字段
-        "(?:\\s*,\\s*ip_type\\s*=\\s*(\\d+))?$"    // 可选的ip_type字段
+        "(?:\\s*,\\s*eth_type\\s*=\\s*(\\d+))?" +  // 修复：允许eth_type后面和=前后的空格
+        "(?:\\s*,\\s*ip_type\\s*=\\s*(\\d+))?$"    // 修复：允许ip_type后面和=前后的空格
     );
 
     // 状态日志解析模式 (log_type=2) - 支持完整的syslog格式
@@ -271,13 +277,38 @@ public class LogParserService {
      */
     private Optional<AttackEvent> parseAttackLog(String logContent) {
         try {
-            Matcher matcher = ATTACK_LOG_PATTERN.matcher(logContent);
+            System.out.println("DEBUG: Attempting to match attack log pattern");
+            System.out.println("DEBUG: Log content: " + logContent);
+            System.out.println("DEBUG: Pattern: " + ATTACK_LOG_PATTERN.pattern());
+
+            String contentToParse = logContent;
+
+            // 处理"message repeated"格式的日志
+            if (logContent.contains("message repeated")) {
+                System.out.println("DEBUG: Detected 'message repeated' format, extracting content");
+                // 提取方括号内的内容
+                int bracketStart = logContent.indexOf('[');
+                int bracketEnd = logContent.lastIndexOf(']');
+                if (bracketStart != -1 && bracketEnd != -1 && bracketEnd > bracketStart) {
+                    contentToParse = logContent.substring(bracketStart + 1, bracketEnd).trim();
+                    System.out.println("DEBUG: Extracted content from brackets: " + contentToParse);
+                } else {
+                    System.out.println("DEBUG: Failed to extract content from 'message repeated' format - no valid brackets found");
+                    System.out.println("DEBUG: Original logContent: " + logContent);
+                    return Optional.empty();
+                }
+            }
+
+            Matcher matcher = ATTACK_LOG_PATTERN.matcher(contentToParse);
             if (!matcher.find()) {
-                logger.info("Attack log pattern not matched: {}", logContent);
+                System.out.println("DEBUG: Pattern did NOT match!");
+                logger.error("Attack log pattern did NOT match. Pattern: {}", ATTACK_LOG_PATTERN.pattern());
+                logger.error("Log content: {}", logContent);
                 return Optional.empty();
             }
 
-            logger.info("Attack log pattern matched, extracting fields from: {}", logContent);
+            System.out.println("DEBUG: Pattern matched successfully!");
+            logger.info("Attack log pattern matched successfully, extracting fields from: {}", logContent);
 
             // 提取和验证字段
             String devSerial = validateDevSerial(matcher.group(2));
@@ -341,10 +372,14 @@ public class LogParserService {
 
             logger.debug("All fields validated successfully, creating AttackEvent (eth_type: {}, ip_type: {})", ethType, ipType);
 
+            // Resolve customer ID from devSerial for multi-tenancy support
+            String customerId = mappingService.resolveCustomerId(devSerial);
+            logger.info("Resolved customerId '{}' for devSerial '{}'", customerId, devSerial);
+
             AttackEvent event = new AttackEvent(devSerial, logType, subType, attackMac,
                                               attackIp, responseIp, responsePort, lineId,
                                               ifaceType, vlanId, logTime, ethType, ipType,
-                                              logContent);
+                                              logContent, customerId);
 
             return Optional.of(event);
 

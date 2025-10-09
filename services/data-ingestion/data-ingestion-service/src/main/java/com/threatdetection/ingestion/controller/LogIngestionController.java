@@ -8,6 +8,7 @@ import com.threatdetection.ingestion.service.AsyncBatchLogIngestionService;
 import com.threatdetection.ingestion.service.KafkaProducerService;
 import com.threatdetection.ingestion.service.LogParserService;
 import com.threatdetection.ingestion.service.MetricsService;
+import com.threatdetection.ingestion.service.DevSerialToCustomerMappingService;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,15 +27,18 @@ public class LogIngestionController {
     private final KafkaProducerService kafkaProducerService;
     private final AsyncBatchLogIngestionService batchIngestionService;
     private final MetricsService metricsService;
+    private final DevSerialToCustomerMappingService devSerialToCustomerMappingService;
     
     public LogIngestionController(LogParserService logParserService, 
                                 KafkaProducerService kafkaProducerService,
                                 AsyncBatchLogIngestionService batchIngestionService,
-                                MetricsService metricsService) {
+                                MetricsService metricsService,
+                                DevSerialToCustomerMappingService devSerialToCustomerMappingService) {
         this.logParserService = logParserService;
         this.kafkaProducerService = kafkaProducerService;
         this.batchIngestionService = batchIngestionService;
         this.metricsService = metricsService;
+        this.devSerialToCustomerMappingService = devSerialToCustomerMappingService;
     }
     
     @PostMapping("/ingest")
@@ -161,6 +165,20 @@ public class LogIngestionController {
     @GetMapping("/health")
     public ResponseEntity<String> health() {
         return ResponseEntity.ok("Log Ingestion Service is healthy");
+    }
+    
+    /**
+     * Test endpoint to verify customer mapping from database
+     */
+    @GetMapping("/customer-mapping/{devSerial}")
+    public ResponseEntity<String> getCustomerMapping(@PathVariable String devSerial) {
+        try {
+            String customerId = devSerialToCustomerMappingService.resolveCustomerId(devSerial);
+            return ResponseEntity.ok("DevSerial: " + devSerial + " -> Customer: " + customerId);
+        } catch (Exception e) {
+            logger.error("Error resolving customer mapping for devSerial: " + devSerial, e);
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
+        }
     }
     
     /**

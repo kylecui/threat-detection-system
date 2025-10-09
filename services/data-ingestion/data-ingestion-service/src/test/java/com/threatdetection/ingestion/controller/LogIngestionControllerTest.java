@@ -49,7 +49,8 @@ class LogIngestionControllerTest {
             logParserService,
             null, // kafkaProducerService not needed for these tests
             batchIngestionService,
-            metricsService
+            metricsService,
+            null // devSerialToCustomerMappingService not needed for these tests
         );
     }
 

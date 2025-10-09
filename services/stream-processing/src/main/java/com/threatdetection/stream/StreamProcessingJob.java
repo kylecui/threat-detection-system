@@ -9,8 +9,8 @@ import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
-import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.api.java.tuple.Tuple4;
+import org.apache.flink.api.java.tuple.Tuple5;
 import org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema;
 import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.connector.kafka.source.KafkaSource;
@@ -29,14 +29,12 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -137,28 +135,33 @@ public class StreamProcessingJob {
                 .name("status-event-logger")
                 .print(); // For debugging - can be removed in production
 
-    // Minute-level aggregation for attack events - 按攻击来源聚合
+    // Minute-level aggregation for attack events - 按客户和攻击来源聚合
     DataStream<String> minuteAggregations = attackStream
         .map(event -> {
-            // 使用攻击MAC地址作为聚合键（攻击来源）
-            String aggregationKey = Optional.ofNullable(event.getAttackMac()).orElse("unknown");
+            // 使用客户ID + 攻击MAC地址作为复合聚合键，确保多租户隔离
+            String customerId = Optional.ofNullable(event.getCustomerId()).orElse("unknown");
+            String attackMac = Optional.ofNullable(event.getAttackMac()).orElse("unknown");
+            String aggregationKey = customerId + ":" + attackMac; // 复合键格式: customerId:attackMac
+            
             // 包含端口信息用于威胁评分
-            Tuple4<String, String, Integer, String> result = Tuple4.of(
-                aggregationKey, // attackMac
+            Tuple5<String, String, Integer, String, String> result = Tuple5.of(
+                aggregationKey,    // customerId:attackMac
                 event.getAttackIp(), // attackIp
                 event.getResponsePort(), // responsePort
-                event.getDevSerial() // devSerial (for multi-device scenarios)
+                event.getDevSerial(),   // devSerial
+                customerId             // customerId (for output)
             );
-            logger.info("Mapping attack event {} to aggregation key (attack source): {}", event.getId(), result.f0);
+            logger.info("Mapping attack event {} to aggregation key (customer:source): {}", event.getId(), result.f0);
             return result;
         })
         .returns(org.apache.flink.api.common.typeinfo.Types.TUPLE(
-            org.apache.flink.api.common.typeinfo.Types.STRING,  // attackMac
+            org.apache.flink.api.common.typeinfo.Types.STRING,  // aggregationKey (customerId:attackMac)
             org.apache.flink.api.common.typeinfo.Types.STRING,  // attackIp
             org.apache.flink.api.common.typeinfo.Types.INT,     // responsePort
-            org.apache.flink.api.common.typeinfo.Types.STRING   // devSerial
+            org.apache.flink.api.common.typeinfo.Types.STRING,  // devSerial
+            org.apache.flink.api.common.typeinfo.Types.STRING   // customerId
         ))
-                .keyBy(tuple -> tuple.f0) // key by attack source (MAC)
+                .keyBy(tuple -> tuple.f0) // key by composite key (customerId:attackMac)
                 .window(TumblingProcessingTimeWindows.of(Time.seconds(AGGREGATION_WINDOW_SECONDS)))
                 .process(new AttackAggregationProcessFunction());
 
@@ -221,31 +224,35 @@ public class StreamProcessingJob {
         }
     }
 
-    // Aggregation process function - 按攻击来源聚合
+    // Aggregation process function - 按客户和攻击来源聚合
     public static class AttackAggregationProcessFunction extends ProcessWindowFunction<
-            Tuple4<String, String, Integer, String>, String, String, TimeWindow> {
+            Tuple5<String, String, Integer, String, String>, String, String, TimeWindow> {
 
         @Override
-        public void process(String key, Context context, Iterable<Tuple4<String, String, Integer, String>> elements, Collector<String> out) throws Exception {
-            logger.info("Processing aggregation window for attack source: {}, window: {} to {}", key, context.window().getStart(), context.window().getEnd());
+        public void process(String key, Context context, Iterable<Tuple5<String, String, Integer, String, String>> elements, Collector<String> out) throws Exception {
+            logger.info("Processing aggregation window for customer:source: {}, window: {} to {}", key, context.window().getStart(), context.window().getEnd());
             Set<String> uniqueIps = new HashSet<>();
             Set<Integer> uniquePorts = new HashSet<>();
             Set<String> uniqueDevSerials = new HashSet<>();
+            String customerId = null;
             int attackCount = 0;
 
-            for (Tuple4<String, String, Integer, String> element : elements) {
+            for (Tuple5<String, String, Integer, String, String> element : elements) {
                 uniqueIps.add(element.f1); // attack IP
                 uniquePorts.add(element.f2); // response port
                 uniqueDevSerials.add(element.f3); // devSerial
+                if (customerId == null) {
+                    customerId = element.f4; // customerId (should be same for all elements in this window)
+                }
                 attackCount++;
             }
 
-            logger.info("Aggregation for attack source {}: {} unique IPs, {} unique ports, {} unique devices, {} attacks",
+            logger.info("Aggregation for customer:source {}: {} unique IPs, {} unique ports, {} unique devices, {} attacks",
                 key, uniqueIps.size(), uniquePorts.size(), uniqueDevSerials.size(), attackCount);
 
-            // 增强的聚合输出：包含端口多样性和设备信息
-            String result = String.format("{\"attackMac\":\"%s\",\"uniqueIps\":%d,\"uniquePorts\":%d,\"uniqueDevices\":%d,\"attackCount\":%d,\"timestamp\":%d,\"windowStart\":%d,\"windowEnd\":%d}",
-                    key, uniqueIps.size(), uniquePorts.size(), uniqueDevSerials.size(), attackCount,
+            // 增强的聚合输出：包含客户ID和端口多样性、设备信息
+            String result = String.format("{\"customerId\":\"%s\",\"attackMac\":\"%s\",\"uniqueIps\":%d,\"uniquePorts\":%d,\"uniqueDevices\":%d,\"attackCount\":%d,\"timestamp\":%d,\"windowStart\":%d,\"windowEnd\":%d}",
+                    customerId, key.substring(key.indexOf(":") + 1), uniqueIps.size(), uniquePorts.size(), uniqueDevSerials.size(), attackCount,
                     context.window().getEnd(),
                     context.window().getStart(),
                     context.window().getEnd());
@@ -253,13 +260,15 @@ public class StreamProcessingJob {
         }
     }
 
-    // Threat score calculator - 按攻击来源评分
-    public static class ThreatScoreCalculator implements MapFunction<String, Tuple3<String, Double, Long>> {
+    // Threat score calculator - 按客户和攻击来源评分
+    public static class ThreatScoreCalculator implements MapFunction<String, Tuple4<String, String, Double, Long>> {
         @Override
-        public Tuple3<String, Double, Long> map(String value) throws Exception {
+        public Tuple4<String, String, Double, Long> map(String value) throws Exception {
             // Parse aggregation JSON
             com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(value);
+            String customerId = node.get("customerId").asText();
             String attackMac = node.get("attackMac").asText();
+            String aggregationKey = customerId + ":" + attackMac; // 复合键
             int uniqueIps = node.get("uniqueIps").asInt();
             int uniquePorts = node.get("uniquePorts").asInt();
             int uniqueDevices = node.get("uniqueDevices").asInt();
@@ -282,10 +291,10 @@ public class StreamProcessingJob {
             // Total_Score = (attackCount * uniqueIps * uniquePorts) * timeWeight * ipWeight * portWeight * deviceWeight
             double threatScore = (attackCount * uniqueIps * uniquePorts) * timeWeight * ipWeight * portWeight * deviceWeight;
 
-            logger.info("Calculated threat score for {}: count={}, ips={}, ports={}, devices={}, timeWeight={}, score={}",
-                attackMac, attackCount, uniqueIps, uniquePorts, uniqueDevices, timeWeight, threatScore);
+            logger.info("Calculated threat score for customer:source {}: count={}, ips={}, ports={}, devices={}, timeWeight={}, score={}",
+                aggregationKey, attackCount, uniqueIps, uniquePorts, uniqueDevices, timeWeight, threatScore);
 
-            return Tuple3.of(attackMac, threatScore, timestamp);
+            return Tuple4.of(aggregationKey, customerId, threatScore, timestamp);
         }
 
         /**
@@ -314,30 +323,35 @@ public class StreamProcessingJob {
         }
     }
 
-    // Threat score aggregator - 按攻击来源聚合威胁评分
-    public static class ThreatScoreAggregator implements WindowFunction<Tuple3<String, Double, Long>, String, String, TimeWindow> {
+    // Threat score aggregator - 按客户和攻击来源聚合威胁评分
+    public static class ThreatScoreAggregator implements WindowFunction<Tuple4<String, String, Double, Long>, String, String, TimeWindow> {
         @Override
-        public void apply(String key, TimeWindow window, Iterable<Tuple3<String, Double, Long>> input, Collector<String> out) {
-            logger.info("Processing threat scoring window for attack source: {}, window: {} to {}", key, window.getStart(), window.getEnd());
+        public void apply(String key, TimeWindow window, Iterable<Tuple4<String, String, Double, Long>> input, Collector<String> out) {
+            logger.info("Processing threat scoring window for customer:source: {}, window: {} to {}", key, window.getStart(), window.getEnd());
             double maxScore = 0.0;
             long latestTimestamp = 0;
+            String customerId = null;
             int totalAttacks = 0;
 
-            for (Tuple3<String, Double, Long> score : input) {
-                maxScore = Math.max(maxScore, score.f1);
-                latestTimestamp = Math.max(latestTimestamp, score.f2);
+            for (Tuple4<String, String, Double, Long> score : input) {
+                maxScore = Math.max(maxScore, score.f2);
+                latestTimestamp = Math.max(latestTimestamp, score.f3);
+                if (customerId == null) {
+                    customerId = score.f1; // customerId
+                }
                 totalAttacks++;
             }
 
-            logger.info("Threat score for attack source {}: {} (from {} aggregations)", key, maxScore, totalAttacks);
+            logger.info("Threat score for customer:source {}: {} (from {} aggregations)", key, maxScore, totalAttacks);
 
             // Determine threat level based on score ranges
             String threatLevel = determineThreatLevel(maxScore);
             String threatName = getThreatLevelName(threatLevel);
 
-            // Output format for attack source based threats
-            out.collect(String.format("{\"attackMac\":\"%s\",\"threatScore\":%.2f,\"threatLevel\":\"%s\",\"threatName\":\"%s\",\"timestamp\":%d,\"windowStart\":%d,\"windowEnd\":%d,\"totalAggregations\":%d}",
-                    key, maxScore, threatLevel, threatName, latestTimestamp, window.getStart(), window.getEnd(), totalAttacks));
+            // Output format for customer-isolated threats
+            String attackMac = key.substring(key.indexOf(":") + 1);
+            out.collect(String.format("{\"customerId\":\"%s\",\"attackMac\":\"%s\",\"threatScore\":%.2f,\"threatLevel\":\"%s\",\"threatName\":\"%s\",\"timestamp\":%d,\"windowStart\":%d,\"windowEnd\":%d,\"totalAggregations\":%d}",
+                    customerId, attackMac, maxScore, threatLevel, threatName, latestTimestamp, window.getStart(), window.getEnd(), totalAttacks));
         }
 
         private String determineThreatLevel(double score) {
