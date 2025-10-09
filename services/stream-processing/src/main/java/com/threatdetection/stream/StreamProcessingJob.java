@@ -1,6 +1,7 @@
 package com.threatdetection.stream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.threatdetection.stream.model.AttackEvent;
 import com.threatdetection.stream.model.StatusEvent;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
@@ -9,6 +10,7 @@ import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.java.tuple.Tuple3;
+import org.apache.flink.api.java.tuple.Tuple4;
 import org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema;
 import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.connector.kafka.source.KafkaSource;
@@ -17,7 +19,7 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
-import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
+import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.util.Collector;
@@ -46,7 +48,13 @@ import java.util.stream.Collectors;
 public class StreamProcessingJob {
 
     private static final Logger logger = LoggerFactory.getLogger(StreamProcessingJob.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+
+    // 可配置的窗口大小参数
+    private static final int AGGREGATION_WINDOW_SECONDS = Integer.parseInt(
+        System.getenv().getOrDefault("AGGREGATION_WINDOW_SECONDS", "30"));
+    private static final int THREAT_SCORING_WINDOW_MINUTES = Integer.parseInt(
+        System.getenv().getOrDefault("THREAT_SCORING_WINDOW_MINUTES", "2"));
 
     public static void main(String[] args) throws Exception {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -79,6 +87,8 @@ public class StreamProcessingJob {
         Properties kafkaProps = new Properties();
         kafkaProps.setProperty("bootstrap.servers", bootstrapServers);
         kafkaProps.setProperty("group.id", "threat-detection-stream");
+        kafkaProps.setProperty("auto.offset.reset", "earliest");
+        kafkaProps.setProperty("enable.auto.commit", "false");
 
         // Kafka sources
         KafkaSource<String> attackSource = KafkaSource.<String>builder()
@@ -106,35 +116,57 @@ public class StreamProcessingJob {
         .filter(StreamProcessingJob::isAttackEventValid)
         .name("attack-event-validation")
                 .assignTimestampsAndWatermarks(
-                        WatermarkStrategy.<AttackEvent>forBoundedOutOfOrderness(Duration.ofSeconds(10))
-                                .withTimestampAssigner((event, timestamp) -> event.getLogTime() * 1000)
+                        WatermarkStrategy.<AttackEvent>forMonotonousTimestamps()
+                                .withTimestampAssigner((event, timestamp) -> System.currentTimeMillis()) // 使用当前时间作为处理时间
                 );
 
-        // Status events stream
+        // Status events stream - for device status monitoring
         DataStream<StatusEvent> statusStream = env.fromSource(statusSource, WatermarkStrategy.noWatermarks(), "status-events")
         .flatMap(new StatusEventDeserializer())
         .name("status-event-deserializer")
                 .assignTimestampsAndWatermarks(
-                        WatermarkStrategy.<StatusEvent>forBoundedOutOfOrderness(Duration.ofSeconds(10))
-                                .withTimestampAssigner((event, timestamp) -> event.getDevStartTime() * 1000)
+                        WatermarkStrategy.<StatusEvent>forMonotonousTimestamps()
+                                .withTimestampAssigner((event, timestamp) -> System.currentTimeMillis())
                 );
 
-    // Minute-level aggregation for attack events
+        // Log status events for monitoring (optional - can be extended for device health monitoring)
+        statusStream
+                .map(event -> String.format("{\"devSerial\":\"%s\",\"logType\":%d,\"sentryCount\":%d,\"realHostCount\":%d,\"timestamp\":%d}",
+                        event.getDevSerial(), event.getLogType(), event.getSentryCount(),
+                        event.getRealHostCount(), event.getDevStartTime()))
+                .name("status-event-logger")
+                .print(); // For debugging - can be removed in production
+
+    // Minute-level aggregation for attack events - 按攻击来源聚合
     DataStream<String> minuteAggregations = attackStream
-        .map(event -> Tuple3.of(buildAggregationKey(event), event.getAttackIp(), 1))
+        .map(event -> {
+            // 使用攻击MAC地址作为聚合键（攻击来源）
+            String aggregationKey = Optional.ofNullable(event.getAttackMac()).orElse("unknown");
+            // 包含端口信息用于威胁评分
+            Tuple4<String, String, Integer, String> result = Tuple4.of(
+                aggregationKey, // attackMac
+                event.getAttackIp(), // attackIp
+                event.getResponsePort(), // responsePort
+                event.getDevSerial() // devSerial (for multi-device scenarios)
+            );
+            logger.info("Mapping attack event {} to aggregation key (attack source): {}", event.getId(), result.f0);
+            return result;
+        })
         .returns(org.apache.flink.api.common.typeinfo.Types.TUPLE(
-            org.apache.flink.api.common.typeinfo.Types.STRING,
-            org.apache.flink.api.common.typeinfo.Types.STRING,
-            org.apache.flink.api.common.typeinfo.Types.INT))
-                .keyBy(tuple -> tuple.f0) // key by devSerial_port
-                .window(TumblingEventTimeWindows.of(Time.minutes(1)))
+            org.apache.flink.api.common.typeinfo.Types.STRING,  // attackMac
+            org.apache.flink.api.common.typeinfo.Types.STRING,  // attackIp
+            org.apache.flink.api.common.typeinfo.Types.INT,     // responsePort
+            org.apache.flink.api.common.typeinfo.Types.STRING   // devSerial
+        ))
+                .keyBy(tuple -> tuple.f0) // key by attack source (MAC)
+                .window(TumblingProcessingTimeWindows.of(Time.seconds(AGGREGATION_WINDOW_SECONDS)))
                 .process(new AttackAggregationProcessFunction());
 
-        // 10-minute threat scoring
+        // 10-minute threat scoring - 按攻击来源评分
         DataStream<String> threatScores = minuteAggregations
                 .map(new ThreatScoreCalculator())
-                .keyBy(score -> score.f0) // key by devSerial
-                .window(TumblingEventTimeWindows.of(Time.minutes(10)))
+                .keyBy(score -> score.f0) // key by attack source (MAC)
+                .window(TumblingProcessingTimeWindows.of(Time.minutes(THREAT_SCORING_WINDOW_MINUTES)))
                 .apply(new ThreatScoreAggregator());
 
         // Kafka sinks
@@ -165,10 +197,12 @@ public class StreamProcessingJob {
         @Override
         public void flatMap(String value, Collector<AttackEvent> out) {
             try {
+                logger.info("Attempting to deserialize attack event: {}", value);
                 AttackEvent event = objectMapper.readValue(value, AttackEvent.class);
+                logger.info("Successfully deserialized attack event: {}", event.getId());
                 out.collect(event);
             } catch (Exception e) {
-                logger.warn("Failed to deserialize attack event: {}", value, e);
+                logger.error("Failed to deserialize attack event: {}", value, e);
             }
         }
     }
@@ -177,91 +211,93 @@ public class StreamProcessingJob {
         @Override
         public void flatMap(String value, Collector<StatusEvent> out) {
             try {
+                logger.info("Attempting to deserialize status event: {}", value);
                 StatusEvent event = objectMapper.readValue(value, StatusEvent.class);
+                logger.info("Successfully deserialized status event: {}", event.getDevSerial());
                 out.collect(event);
             } catch (Exception e) {
-                logger.warn("Failed to deserialize status event: {}", value, e);
+                logger.error("Failed to deserialize status event: {}", value, e);
             }
         }
     }
 
-    // Aggregation process function
+    // Aggregation process function - 按攻击来源聚合
     public static class AttackAggregationProcessFunction extends ProcessWindowFunction<
-            Tuple3<String, String, Integer>, String, String, TimeWindow> {
+            Tuple4<String, String, Integer, String>, String, String, TimeWindow> {
 
         @Override
-        public void process(String key, Context context, Iterable<Tuple3<String, String, Integer>> elements, Collector<String> out) throws Exception {
+        public void process(String key, Context context, Iterable<Tuple4<String, String, Integer, String>> elements, Collector<String> out) throws Exception {
+            logger.info("Processing aggregation window for attack source: {}, window: {} to {}", key, context.window().getStart(), context.window().getEnd());
             Set<String> uniqueIps = new HashSet<>();
+            Set<Integer> uniquePorts = new HashSet<>();
+            Set<String> uniqueDevSerials = new HashSet<>();
             int attackCount = 0;
 
-            for (Tuple3<String, String, Integer> element : elements) {
-                uniqueIps.add(element.f1);
-                attackCount += element.f2;
+            for (Tuple4<String, String, Integer, String> element : elements) {
+                uniqueIps.add(element.f1); // attack IP
+                uniquePorts.add(element.f2); // response port
+                uniqueDevSerials.add(element.f3); // devSerial
+                attackCount++;
             }
 
-            // Parse key to get devSerial and port
-            String[] parts = key.split("_", 2);
-            if (parts.length != 2) {
-                logger.warn("Unexpected aggregation key format: {}", key);
-                return;
-            }
+            logger.info("Aggregation for attack source {}: {} unique IPs, {} unique ports, {} unique devices, {} attacks",
+                key, uniqueIps.size(), uniquePorts.size(), uniqueDevSerials.size(), attackCount);
 
-            String devSerial = parts[0];
-            int port;
-            try {
-                port = Integer.parseInt(parts[1]);
-            } catch (NumberFormatException ex) {
-                logger.warn("Failed to parse port from aggregation key {}: {}", key, ex.getMessage());
-                return;
-            }
-
-            String result = String.format("{\"devSerial\":\"%s\",\"port\":%d,\"uniqueIps\":%d,\"attackCount\":%d,\"timestamp\":%d}",
-                    devSerial, port, uniqueIps.size(), attackCount, context.window().getEnd());
+            // 增强的聚合输出：包含端口多样性和设备信息
+            String result = String.format("{\"attackMac\":\"%s\",\"uniqueIps\":%d,\"uniquePorts\":%d,\"uniqueDevices\":%d,\"attackCount\":%d,\"timestamp\":%d,\"windowStart\":%d,\"windowEnd\":%d}",
+                    key, uniqueIps.size(), uniquePorts.size(), uniqueDevSerials.size(), attackCount,
+                    context.window().getEnd(),
+                    context.window().getStart(),
+                    context.window().getEnd());
             out.collect(result);
         }
     }
 
-    // Threat score calculator
+    // Threat score calculator - 按攻击来源评分
     public static class ThreatScoreCalculator implements MapFunction<String, Tuple3<String, Double, Long>> {
         @Override
         public Tuple3<String, Double, Long> map(String value) throws Exception {
             // Parse aggregation JSON
             com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(value);
-            String devSerial = node.get("devSerial").asText();
-            int port = node.get("port").asInt();
+            String attackMac = node.get("attackMac").asText();
             int uniqueIps = node.get("uniqueIps").asInt();
+            int uniquePorts = node.get("uniquePorts").asInt();
+            int uniqueDevices = node.get("uniqueDevices").asInt();
             int attackCount = node.get("attackCount").asInt();
             long timestamp = node.get("timestamp").asLong();
 
-            // Calculate port weight
-            double portWeight = getPortWeight(port);
-
-            // Calculate time weight
+            // Calculate time weight (from MySQL logic - score_weighting)
             double timeWeight = getTimeWeight(timestamp);
 
-            // Calculate threat score
-            double threatScore = (portWeight * uniqueIps * attackCount) * timeWeight;
+            // Calculate IP diversity weight (sum_ip from MySQL)
+            double ipWeight = uniqueIps > 1 ? 2.0 : 1.0;
 
-            return Tuple3.of(devSerial, threatScore, timestamp);
+            // Calculate port diversity weight (new feature)
+            double portWeight = calculatePortWeight(uniquePorts);
+
+            // Calculate device diversity weight (for multi-device scenarios)
+            double deviceWeight = uniqueDevices > 1 ? 1.5 : 1.0;
+
+            // Enhanced threat score calculation
+            // Total_Score = (attackCount * uniqueIps * uniquePorts) * timeWeight * ipWeight * portWeight * deviceWeight
+            double threatScore = (attackCount * uniqueIps * uniquePorts) * timeWeight * ipWeight * portWeight * deviceWeight;
+
+            logger.info("Calculated threat score for {}: count={}, ips={}, ports={}, devices={}, timeWeight={}, score={}",
+                attackMac, attackCount, uniqueIps, uniquePorts, uniqueDevices, timeWeight, threatScore);
+
+            return Tuple3.of(attackMac, threatScore, timestamp);
         }
 
-        private double getPortWeight(int port) {
-            // Common vulnerable ports have higher weights
-            switch (port) {
-                case 22: return 2.0;   // SSH
-                case 23: return 1.8;   // Telnet
-                case 80: return 1.5;   // HTTP
-                case 443: return 1.5;  // HTTPS
-                case 3389: return 2.0; // RDP
-                case 21: return 1.8;   // FTP
-                case 25: return 1.6;   // SMTP
-                case 53: return 1.4;   // DNS
-                case 110: return 1.6;  // POP3
-                case 143: return 1.6;  // IMAP
-                case 3306: return 2.0; // MySQL
-                case 5432: return 2.0; // PostgreSQL
-                default: return 1.0;   // Default weight
-            }
+        /**
+         * Calculate port diversity weight based on number of unique ports
+         * Higher port diversity indicates more sophisticated attacks
+         */
+        private double calculatePortWeight(int uniquePorts) {
+            if (uniquePorts <= 1) return 1.0;      // Single port - basic scan
+            else if (uniquePorts <= 5) return 1.2;  // Few ports - targeted scan
+            else if (uniquePorts <= 10) return 1.5; // Moderate ports - broader scan
+            else if (uniquePorts <= 20) return 1.8; // Many ports - comprehensive scan
+            else return 2.0; // Very high port diversity - sophisticated attack
         }
 
         private double getTimeWeight(long timestamp) {
@@ -270,26 +306,59 @@ public class StreamProcessingJob {
                 Instant.ofEpochMilli(timestamp), ZoneId.systemDefault());
             int hour = dateTime.getHour();
 
-            if (hour >= 0 && hour < 5) return 1.2;    // 0-5h
-            else if (hour >= 5 && hour < 9) return 1.1; // 5-9h
-            else if (hour >= 9 && hour < 17) return 1.0; // 9-17h
-            else if (hour >= 17 && hour < 21) return 0.9; // 17-21h
-            else return 0.8; // 21-24h
+            if (hour >= 0 && hour < 5) return 1.2;    // 0-5h - suspicious timing
+            else if (hour >= 5 && hour < 9) return 1.1; // 5-9h - early morning
+            else if (hour >= 9 && hour < 17) return 1.0; // 9-17h - business hours
+            else if (hour >= 17 && hour < 21) return 0.9; // 17-21h - evening
+            else return 0.8; // 21-24h - night time
         }
     }
 
-    // Threat score aggregator
+    // Threat score aggregator - 按攻击来源聚合威胁评分
     public static class ThreatScoreAggregator implements WindowFunction<Tuple3<String, Double, Long>, String, String, TimeWindow> {
         @Override
         public void apply(String key, TimeWindow window, Iterable<Tuple3<String, Double, Long>> input, Collector<String> out) {
+            logger.info("Processing threat scoring window for attack source: {}, window: {} to {}", key, window.getStart(), window.getEnd());
             double maxScore = 0.0;
             long latestTimestamp = 0;
+            int totalAttacks = 0;
+
             for (Tuple3<String, Double, Long> score : input) {
                 maxScore = Math.max(maxScore, score.f1);
                 latestTimestamp = Math.max(latestTimestamp, score.f2);
+                totalAttacks++;
             }
-            out.collect(String.format("{\"devSerial\":\"%s\",\"threatScore\":%.2f,\"timestamp\":%d}",
-                    key, maxScore, latestTimestamp));
+
+            logger.info("Threat score for attack source {}: {} (from {} aggregations)", key, maxScore, totalAttacks);
+
+            // Determine threat level based on score ranges
+            String threatLevel = determineThreatLevel(maxScore);
+            String threatName = getThreatLevelName(threatLevel);
+
+            // Output format for attack source based threats
+            out.collect(String.format("{\"attackMac\":\"%s\",\"threatScore\":%.2f,\"threatLevel\":\"%s\",\"threatName\":\"%s\",\"timestamp\":%d,\"windowStart\":%d,\"windowEnd\":%d,\"totalAggregations\":%d}",
+                    key, maxScore, threatLevel, threatName, latestTimestamp, window.getStart(), window.getEnd(), totalAttacks));
+        }
+
+        private String determineThreatLevel(double score) {
+            // Enhanced threat level determination based on comprehensive scoring
+            // Considering attack frequency, IP diversity, port diversity, time patterns, and device coverage
+            if (score >= 1000.0) return "CRITICAL";    // Very high threat - immediate action required
+            else if (score >= 500.0) return "HIGH";     // High threat - urgent attention needed
+            else if (score >= 200.0) return "MEDIUM";   // Medium threat - monitor closely
+            else if (score >= 50.0) return "LOW";       // Low threat - routine monitoring
+            else return "INFO";                         // Informational - minimal threat
+        }
+
+        private String getThreatLevelName(String level) {
+            switch (level) {
+                case "CRITICAL": return "严重威胁";
+                case "HIGH": return "高危";
+                case "MEDIUM": return "中危";
+                case "LOW": return "低危";
+                case "INFO": return "信息";
+                default: return "未知";
+            }
         }
     }
     private static boolean isAttackEventValid(AttackEvent event) {
@@ -300,17 +369,22 @@ public class StreamProcessingJob {
             logger.warn("Dropping attack event with missing devSerial: {}", event);
             return false;
         }
-        if (event.getResponsePort() <= 0) {
-            logger.warn("Dropping attack event with invalid port: {}", event);
+        // Phase 1A: 同步端口验证逻辑 - 支持特殊数据传递
+        // 允许超出标准端口范围的值，包括负数和超过65535的值
+        // 这些特殊值在威胁检测场景中可能表示特定的状态或异常情况
+        if (!isValidPort(event.getResponsePort())) {
+            logger.warn("Dropping attack event with invalid port: {} (allowed range: -65536 to 999999)", event.getResponsePort());
             return false;
         }
         return true;
     }
 
-    private static String buildAggregationKey(AttackEvent event) {
-        String devSerial = Optional.ofNullable(event.getDevSerial()).orElse("unknown");
-        int port = event.getResponsePort() > 0 ? event.getResponsePort() : 0;
-        return devSerial + "_" + port;
+    /**
+     * 检查端口是否在可接受范围内
+     * 允许-65536到999999范围内的值，包括特殊值
+     */
+    private static boolean isValidPort(int port) {
+        return port >= -65536 && port <= 999999;
     }
 
     private static void ensureTopicsAvailable(String bootstrapServers, List<String> topics) throws Exception {
