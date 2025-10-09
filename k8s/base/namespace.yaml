@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: threat-detection
+  labels:
+    name: threat-detection
+    app: threat-detection-system

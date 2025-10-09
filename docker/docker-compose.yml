@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports: ["2181:2181"]
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports: ["9092:9092", "9101:9101"]
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  data-ingestion:
+    build:
+      context: ../   # ← 仓库根目录（包含父 pom.xml）
+      dockerfile: services/data-ingestion/data-ingestion-service/Dockerfile
+    hostname: data-ingestion-service
+    container_name: data-ingestion-service
+    depends_on:
+      - kafka
+    ports: ["8080:8080"]
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  stream-processing:
+    image: threat-detection/stream-processing:1.0
+    hostname: stream-processing
+    container_name: stream-processing
+    depends_on:
+      kafka:
+        condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
+    ports: ["8081:8081"]
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: stream-processing
+        parallelism.default: 1
+        taskmanager.numberOfTaskSlots: 1
+        rest.port: 8081
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      INPUT_TOPIC: attack-events
+      STATUS_TOPIC: status-events
+      OUTPUT_TOPIC: threat-alerts
+      AGGREGATION_TOPIC: minute-aggregations
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/overview"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  taskmanager:
+    image: threat-detection/stream-processing:1.0
+    hostname: taskmanager
+    container_name: taskmanager
+    depends_on:
+      stream-processing:
+        condition: service_started
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: stream-processing
+        taskmanager.numberOfTaskSlots: 2
+        taskmanager.memory.process.size: 1728m
+    command: "taskmanager"
+    restart: unless-stopped
+
+  topic-init:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: topic-init
+    container_name: topic-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: >-
+      "
+      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic attack-events &&
+      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic status-events &&
+      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic threat-alerts &&
+      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic minute-aggregations
+      "
+    restart: "no"

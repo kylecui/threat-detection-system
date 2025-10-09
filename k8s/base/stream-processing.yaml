@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stream-processing-jobmanager
+  namespace: threat-detection
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stream-processing
+      component: jobmanager
+  template:
+    metadata:
+      labels:
+        app: stream-processing
+        component: jobmanager
+    spec:
+      containers:
+      - name: flink-jobmanager
+        image: threat-detection/stream-processing:1.0
+        ports:
+        - containerPort: 8081
+          name: webui
+        - containerPort: 6123
+          name: rpc
+        env:
+        - name: FLINK_PROPERTIES
+          value: |
+            jobmanager.rpc.address: stream-processing-jobmanager
+            parallelism.default: 1
+            taskmanager.numberOfTaskSlots: 1
+            rest.port: 8081
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka:29092"
+        - name: INPUT_TOPIC
+          value: "attack-events"
+        - name: STATUS_TOPIC
+          value: "status-events"
+        - name: OUTPUT_TOPIC
+          value: "threat-alerts"
+        - name: AGGREGATION_TOPIC
+          value: "minute-aggregations"
+        command: ["/docker-entrypoint.sh"]
+        args: ["standalone-job", "--job-classname", "com.threatdetection.stream.StreamProcessingJob"]
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /overview
+            port: 8081
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /overview
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stream-processing-taskmanager
+  namespace: threat-detection
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stream-processing
+      component: taskmanager
+  template:
+    metadata:
+      labels:
+        app: stream-processing
+        component: taskmanager
+    spec:
+      containers:
+      - name: flink-taskmanager
+        image: threat-detection/stream-processing:1.0
+        env:
+        - name: FLINK_PROPERTIES
+          value: |
+            jobmanager.rpc.address: stream-processing-jobmanager
+            taskmanager.numberOfTaskSlots: 2
+            taskmanager.memory.process.size: 1728m
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        command: ["/docker-entrypoint.sh"]
+        args: ["taskmanager"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stream-processing
+  namespace: threat-detection
+spec:
+  selector:
+    app: stream-processing
+    component: jobmanager
+  ports:
+  - port: 8081
+    targetPort: 8081
+    name: webui
+  type: ClusterIP

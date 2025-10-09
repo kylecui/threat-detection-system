@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: threat-detection-development
+
+namespace: threat-detection-dev
+
+resources:
+  - ../../base
+
+patchesStrategicMerge:
+  - replica-patch.yaml
+  - resource-patch.yaml
+
+images:
+  - name: threat-detection/data-ingestion-service
+    newTag: dev
+  - name: threat-detection/stream-processing
+    newTag: dev
+
+configMapGenerator:
+  - name: threat-detection-config
+    behavior: replace
+    literals:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - ZOOKEEPER_CONNECT=zookeeper:2181
