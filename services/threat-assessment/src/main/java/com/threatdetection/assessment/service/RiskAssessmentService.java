@@ -12,10 +12,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
+import org.springframework.kafka.core.KafkaTemplate;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.time.LocalDateTime;
 
 /**
  * Core risk assessment service implementing advanced threat evaluation algorithms
@@ -30,6 +30,7 @@ public class RiskAssessmentService {
     private final ThreatAssessmentRepository threatAssessmentRepository;
     private final ThreatIntelligenceService threatIntelligenceService;
     private final RecommendationEngine recommendationEngine;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
     // Metrics
     private final Timer assessmentTimer;
@@ -41,11 +42,13 @@ public class RiskAssessmentService {
                                 ThreatAssessmentRepository threatAssessmentRepository,
                                 ThreatIntelligenceService threatIntelligenceService,
                                 RecommendationEngine recommendationEngine,
+                                KafkaTemplate<String, String> kafkaTemplate,
                                 MeterRegistry meterRegistry) {
         this.threatAlertRepository = threatAlertRepository;
         this.threatAssessmentRepository = threatAssessmentRepository;
         this.threatIntelligenceService = threatIntelligenceService;
         this.recommendationEngine = recommendationEngine;
+        this.kafkaTemplate = kafkaTemplate;
 
         // Initialize metrics
         this.assessmentTimer = Timer.builder("assessment.duration")
@@ -116,6 +119,11 @@ public class RiskAssessmentService {
         // Track high-risk assessments
         if (riskLevel == RiskLevel.CRITICAL || riskLevel == RiskLevel.HIGH) {
             highRiskCounter.increment();
+        }
+
+        // Publish threat event to Kafka for CRITICAL threats
+        if (riskLevel == RiskLevel.CRITICAL) {
+            publishThreatEvent(request, assessment);
         }
 
         // Create response
@@ -297,5 +305,54 @@ public class RiskAssessmentService {
         }
 
         return trends;
+    }
+
+    /**
+     * Publish threat event to Kafka for alert management
+     */
+    private void publishThreatEvent(AssessmentRequest request, ThreatAssessment assessment) {
+        try {
+            // Create threat event message
+            Map<String, Object> threatEvent = new HashMap<>();
+            threatEvent.put("id", assessment.getAssessmentId());
+            threatEvent.put("alertId", request.getAlertId());
+            threatEvent.put("severity", assessment.getRiskLevel().ordinal()); // Convert enum to int
+            threatEvent.put("threatScore", assessment.getRiskScore());
+            threatEvent.put("title", request.getThreatName() != null ? request.getThreatName() : "Critical Threat Detected");
+            threatEvent.put("description", generateThreatDescription(request, assessment));
+            threatEvent.put("attackMac", request.getAttackMac());
+            threatEvent.put("timestamp", System.currentTimeMillis());
+            threatEvent.put("attackPatterns", request.getAttackPatterns());
+            threatEvent.put("affectedAssets", request.getAffectedAssets());
+
+            // Convert to JSON
+            String message = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(threatEvent);
+
+            // Publish to Kafka
+            kafkaTemplate.send("threat-events", assessment.getAssessmentId(), message);
+
+            logger.info("Published CRITICAL threat event to Kafka: {}", assessment.getAssessmentId());
+
+        } catch (Exception e) {
+            logger.error("Failed to publish threat event for assessment: {}", assessment.getAssessmentId(), e);
+        }
+    }
+
+    /**
+     * Generate threat description based on assessment
+     */
+    private String generateThreatDescription(AssessmentRequest request, ThreatAssessment assessment) {
+        StringBuilder description = new StringBuilder();
+        description.append("Critical threat detected with risk score: ").append(String.format("%.2f", assessment.getRiskScore()));
+
+        if (request.getAttackPatterns() != null && !request.getAttackPatterns().isEmpty()) {
+            description.append(". Attack patterns: ").append(String.join(", ", request.getAttackPatterns()));
+        }
+
+        if (request.getAffectedAssets() != null && !request.getAffectedAssets().isEmpty()) {
+            description.append(". Affected assets: ").append(String.join(", ", request.getAffectedAssets()));
+        }
+
+        return description.toString();
     }
 }

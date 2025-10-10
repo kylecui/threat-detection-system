@@ -8,6 +8,7 @@ This directory contains all scripts for the threat detection system, organized b
 scripts/
 ├── init-kafka.sh          # Kafka initialization script
 ├── Dockerfile             # Docker image for scripts
+├── integration_test_notifications.py  # Email notification integration test
 ├── test/                  # Testing scripts and utilities
 │   ├── concurrency_test.py
 │   ├── data_ingestion_test.py
@@ -106,24 +107,19 @@ python3 scripts/test/concurrency_test.py --workers 10 --requests 1000
 - Error rate monitoring
 - Response time analysis
 
-#### data_ingestion_test.py
-**Purpose**: Test data ingestion service endpoints
+#### integration_test_notifications.py
+**Purpose**: Integration test for email notification system with CRITICAL threat events
 **Usage**:
 ```bash
-# Test single log ingestion
-python3 scripts/test/data_ingestion_test.py tmp/test_logs/sample.log --max-records 10
-
-# Test with dry-run
-python3 scripts/test/data_ingestion_test.py tmp/test_logs/sample.log --dry-run
-
-# Test batch ingestion
-python3 scripts/test/data_ingestion_test.py --sample attack --max-records 50
+# Run integration test for email notifications
+python3 scripts/integration_test_notifications.py
 ```
 **Features**:
-- Single and batch log ingestion testing
-- API endpoint validation
-- Performance benchmarking
-- Error handling verification
+- Generates CRITICAL-level threat events
+- Tests email notification functionality
+- Validates rate limiting (5 emails per 10 minutes)
+- Monitors notification statistics
+- Comprehensive test reporting
 
 ### Shell Test Scripts
 
@@ -353,15 +349,23 @@ java -cp scripts/utils TestRegex "pattern" "test_string"
 
 ## 🔄 Recent Updates
 
+- **v1.3**: Added integration test for email notification system
 - **v1.2**: Reorganized directory structure with dedicated test/, tools/, and utils/ subdirectories
 - **v1.1**: Enhanced bulk ingestion with connection pooling and retry logic
 - **v1.0**: Initial script organization and categorization
 - **Directory Restructuring**: Separated initialization scripts from testing and utility scripts
 - **Connection Management**: Eliminated connection reset errors in bulk operations
 - **Performance Monitoring**: Added comprehensive monitoring capabilities
+- **Email Notification Testing**: Added integration test for CRITICAL threat email alerts
 
----
+## Current Implementation Status
 
-*Last Updated: October 10, 2025*
-*Script Version: v1.2*</content>
+- ✅ **Bulk Ingestion Tools**: Production-ready bulk log ingestion with high reliability
+- ✅ **Performance Monitoring**: Comprehensive monitoring and metrics collection
+- ✅ **Integration Testing**: Email notification integration tests
+- ✅ **Kafka Management**: Initialization and topic management scripts
+- ✅ **Data Processing**: Test data generation and processing utilities
+- ✅ **Concurrent Testing**: Load testing with configurable concurrency
+- ✅ **Stream Processing Tests**: Flink job testing and validation
+- ✅ **Real Log Processing**: Production log data validation and testing</content>
 <parameter name="filePath">/home/kylecui/threat-detection-system/scripts/README.md

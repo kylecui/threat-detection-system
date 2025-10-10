@@ -17,6 +17,7 @@ sleep 60
 # 验证服务状态
 curl http://localhost:8080/actuator/health  # 数据摄取服务
 curl http://localhost:8081/overview         # Flink Web UI
+curl http://localhost:8082/actuator/health  # 告警管理服务
 curl http://localhost:8083/api/v1/assessment/health  # 威胁评估服务
 ```
 
@@ -125,6 +126,118 @@ curl http://localhost:8083/api/v1/assessment/recommendations/1
 }
 ```
 
+## � 告警管理API
+
+### 发送通知
+```bash
+# 发送Email通知：POST /api/v1/alerts/notify/email
+curl -X POST http://localhost:8082/api/v1/alerts/notify/email \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient": "admin@example.com",
+    "subject": "威胁检测告警",
+    "content": "检测到高危威胁，风险分数：856.7",
+    "threatId": 1
+  }'
+
+# 发送SMS通知：POST /api/v1/alerts/notify/sms
+curl -X POST http://localhost:8082/api/v1/alerts/notify/sms \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient": "+8613800000000",
+    "content": "威胁告警：检测到SQL注入攻击",
+    "threatId": 1
+  }'
+
+# 发送Webhook通知：POST /api/v1/alerts/notify/webhook
+curl -X POST http://localhost:8082/api/v1/alerts/notify/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient": "https://webhook.example.com/alert",
+    "content": "新威胁检测到",
+    "threatId": 1
+  }'
+
+# 发送Slack通知：POST /api/v1/alerts/notify/slack
+curl -X POST http://localhost:8082/api/v1/alerts/notify/slack \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient": "https://hooks.slack.com/services/...",
+    "content": "威胁告警：高危攻击检测",
+    "threatId": 1
+  }'
+
+# 发送Teams通知：POST /api/v1/alerts/notify/teams
+curl -X POST http://localhost:8082/api/v1/alerts/notify/teams \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient": "https://outlook.office.com/webhook/...",
+    "subject": "安全告警",
+    "content": "检测到严重威胁",
+    "threatId": 1
+  }'
+```
+
+### 批量发送通知
+```bash
+# 批量发送通知：POST /api/v1/alerts/notify/batch
+curl -X POST http://localhost:8082/api/v1/alerts/notify/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notifications": [
+      {
+        "channel": "EMAIL",
+        "recipient": "admin@example.com",
+        "subject": "威胁告警",
+        "content": "检测到高危威胁"
+      },
+      {
+        "channel": "SMS",
+        "recipient": "+8613800000000",
+        "content": "威胁告警：检测到SQL注入攻击"
+      }
+    ]
+  }'
+```
+
+### 查询通知历史
+```bash
+# 获取所有通知：GET /api/v1/alerts/notifications
+curl http://localhost:8082/api/v1/alerts/notifications
+
+# 按状态过滤：GET /api/v1/alerts/notifications?status=SENT
+curl "http://localhost:8082/api/v1/alerts/notifications?status=SENT"
+
+# 按通道过滤：GET /api/v1/alerts/notifications?channel=EMAIL
+curl "http://localhost:8082/api/v1/alerts/notifications?channel=EMAIL"
+
+# 获取通知统计：GET /api/v1/alerts/notifications/stats
+curl http://localhost:8082/api/v1/alerts/notifications/stats
+
+# 响应示例：
+{
+  "totalNotifications": 150,
+  "successfulNotifications": 145,
+  "failedNotifications": 5,
+  "byChannel": {
+    "EMAIL": 80,
+    "SMS": 45,
+    "SLACK": 15,
+    "TEAMS": 10
+  },
+  "byStatus": {
+    "SENT": 145,
+    "FAILED": 5
+  }
+}
+```
+
+### 重试失败通知
+```bash
+# 重试所有失败通知：POST /api/v1/alerts/notifications/retry
+curl -X POST http://localhost:8082/api/v1/alerts/notifications/retry
+```
+
 ## 🔄 端到端数据流
 
 ### 完整处理流程
@@ -132,7 +245,9 @@ curl http://localhost:8083/api/v1/assessment/recommendations/1
 2. **流处理**: Flink实时聚合攻击事件（30秒窗口）
 3. **威胁评分**: 基于多维度算法计算威胁分数（2分钟窗口）
 4. **威胁评估**: 高级风险评估和情报关联
-5. **存储**: 结果存储到PostgreSQL数据库
+5. **告警生成**: 根据威胁等级自动触发通知
+6. **多通道通知**: 支持Email、SMS、Webhook、Slack和Teams通知
+7. **存储**: 结果存储到PostgreSQL数据库
 
 ### 数据流示例
 ```bash
@@ -155,6 +270,15 @@ docker exec -it $(docker ps -q -f name=kafka) kafka-console-consumer \
 
 # 4. 查询威胁评估结果
 curl http://localhost:8083/api/v1/assessment/threats
+
+# 5. 发送告警通知（可选）
+curl -X POST http://localhost:8082/api/v1/alerts/notify/email \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient": "admin@example.com",
+    "subject": "威胁检测告警",
+    "content": "检测到高危威胁，风险分数：856.7"
+  }'
 ```
 
 ## 🛠️ 测试工具使用
@@ -274,22 +398,40 @@ stream-processing:
     THREAT_SCORING_WINDOW_MINUTES: 2    # 默认2分钟
 ```
 
-#### 威胁评估服务
+#### 告警管理服务
 ```yaml
 # docker-compose.yml 中的配置
-threat-assessment:
+alert-management:
   environment:
     SPRING_PROFILES_ACTIVE: docker
     SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-    SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
-    SPRING_DATASOURCE_USERNAME: threat_user
-    SPRING_DATASOURCE_PASSWORD: threat_pass
-    SPRING_REDIS_HOST: redis
-    SPRING_REDIS_PORT: 6379
-    # 威胁评估配置
-    THREAT_ASSESSMENT_ENABLED: true
-    INTELLIGENCE_UPDATE_INTERVAL: 3600000  # 1小时
-    RISK_SCORING_WEIGHTS: "attackCount:1.0,uniqueIps:1.5,uniquePorts:2.0,deviceCount:1.2"
+    # Email配置
+    # SPRING_MAIL_HOST: smtp.gmail.com
+    # SPRING_MAIL_PORT: 587
+    # SPRING_MAIL_USERNAME: your-email@gmail.com
+    # SPRING_MAIL_PASSWORD: your-app-password
+    SPRING_MAIL_HOST: smtp.163.com
+    SPRING_MAIL_PORT: 25
+    SPRING_MAIL_USERNAME: threat_detection@163.com
+    SPRING_MAIL_PASSWORD: TTXWjJiuxmE2HCRE
+    # TTXWjJiuxmE2HCRE will expire in 180 days. 
+    # SMS配置 (Twilio)
+    SMS_PROVIDER: twilio
+    TWILIO_ACCOUNT_SID: your-twilio-sid
+    TWILIO_AUTH_TOKEN: your-twilio-token
+    TWILIO_PHONE_NUMBER: +1234567890
+    # SMS配置 (阿里云)
+    ALIYUN_ACCESS_KEY_ID: your-aliyun-key
+    ALIYUN_ACCESS_KEY_SECRET: your-aliyun-secret
+    ALIYUN_SMS_SIGN_NAME: your-sign-name
+    ALIYUN_SMS_TEMPLATE_CODE: SMS_123456789
+    # Slack配置
+    SLACK_WEBHOOK_URL: https://hooks.slack.com/services/...
+    # Teams配置
+    TEAMS_WEBHOOK_URL: https://outlook.office.com/webhook/...
+    # 通知配置
+    NOTIFICATION_RETRY_MAX_ATTEMPTS: 3
+    NOTIFICATION_RETRY_DELAY_SECONDS: 60
 ```
 
 ### 可配置参数
@@ -306,6 +448,18 @@ threat-assessment:
 | 威胁评估启用 | `THREAT_ASSESSMENT_ENABLED` | true | 是否启用威胁评估服务 |
 | 情报更新间隔 | `INTELLIGENCE_UPDATE_INTERVAL` | 3600000 | 威胁情报更新间隔（毫秒） |
 | 风险评分权重 | `RISK_SCORING_WEIGHTS` | attackCount:1.0,uniqueIps:1.5,uniquePorts:2.0,deviceCount:1.2 | 多维度风险评分权重配置 |
+| SMS提供商 | `SMS_PROVIDER` | twilio | SMS服务提供商 (twilio/aliyun) |
+| Twilio账户SID | `TWILIO_ACCOUNT_SID` | - | Twilio账户SID |
+| Twilio认证令牌 | `TWILIO_AUTH_TOKEN` | - | Twilio认证令牌 |
+| Twilio电话号码 | `TWILIO_PHONE_NUMBER` | - | Twilio发送电话号码 |
+| 阿里云访问密钥ID | `ALIYUN_ACCESS_KEY_ID` | - | 阿里云访问密钥ID |
+| 阿里云访问密钥密钥 | `ALIYUN_ACCESS_KEY_SECRET` | - | 阿里云访问密钥密钥 |
+| 阿里云SMS签名 | `ALIYUN_SMS_SIGN_NAME` | - | 阿里云SMS签名名称 |
+| 阿里云SMS模板 | `ALIYUN_SMS_TEMPLATE_CODE` | - | 阿里云SMS模板代码 |
+| Slack Webhook URL | `SLACK_WEBHOOK_URL` | - | Slack webhook URL |
+| Teams Webhook URL | `TEAMS_WEBHOOK_URL` | - | Microsoft Teams webhook URL |
+| 通知重试次数 | `NOTIFICATION_RETRY_MAX_ATTEMPTS` | 3 | 通知失败时的最大重试次数 |
+| 通知重试延迟 | `NOTIFICATION_RETRY_DELAY_SECONDS` | 60 | 重试间隔时间（秒） |
 
 ### 自定义时间窗口示例
 ```bash
@@ -358,6 +512,7 @@ docker-compose -f docker/docker-compose.yml ps
 docker-compose -f docker/docker-compose.yml logs -f stream-processing
 docker-compose -f docker/docker-compose.yml logs -f data-ingestion
 docker-compose -f docker/docker-compose.yml logs -f threat-assessment
+docker-compose -f docker/docker-compose.yml logs -f alert-management
 
 # 检查Kafka主题
 docker exec -it $(docker ps -q -f name=kafka) kafka-topics --bootstrap-server localhost:9092 --list
@@ -375,6 +530,10 @@ docker exec -it $(docker ps -q -f name=kafka) kafka-topics --bootstrap-server lo
 5. **Flink作业失败**: 检查日志中的配置错误
 6. **威胁评估服务连接失败**: 检查PostgreSQL数据库连接和HikariCP配置
 7. **数据格式错误**: 验证syslog格式是否正确
+8. **SMS发送失败**: 检查SMS提供商配置（Twilio或阿里云）
+9. **Email发送失败**: 验证SMTP配置和认证信息
+10. **Webhook通知失败**: 检查目标URL的可访问性和响应格式
+11. **Slack/Teams通知失败**: 验证webhook URL的有效性
 
 ### 数据库查询示例
 ```bash
@@ -395,8 +554,8 @@ SELECT threat_type, severity, description FROM threat_intelligence LIMIT 5;
 
 ---
 
-*最后更新时间：2025年1月9日*
-*系统版本：v2.0*
-*包含完整功能：数据摄取、流处理、威胁评估、端到端集成测试*
-*集成测试结果：成功处理921条威胁评估记录*</content>
+*最后更新时间：2025年10月10日*
+*系统版本：v2.1*
+*包含完整功能：数据摄取、流处理、威胁评估、多通道告警通知系统*
+*集成测试结果：成功处理921条威胁评估记录，通知系统集成完成*</content>
 <parameter name="filePath">/home/kylecui/threat-detection-system/USAGE_GUIDE.md
