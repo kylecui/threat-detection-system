@@ -120,7 +120,13 @@ threat-detection-system/
 │   ├── api-gateway/       # API gateway service
 │   └── config-server/     # Configuration service
 ├── infrastructure/        # Infrastructure configurations
-├── scripts/               # Utility scripts
+├── scripts/               # Organized utility scripts and tools
+│   ├── test/              # Testing scripts and utilities
+│   ├── tools/             # Production-ready utility scripts
+│   ├── utils/             # Helper utilities and development tools
+│   ├── init-kafka.sh      # Kafka initialization script
+│   ├── Dockerfile         # Docker image for scripts
+│   └── README.md          # Scripts usage guide
 └── docs/                  # Documentation
 ```
 
@@ -249,7 +255,7 @@ kubectl logs -f deployment/data-ingestion -n threat-detection-dev
 4. **Flink Jobs**: Check JobManager logs for submission errors
 5. **Connection Reset Errors**: Use the enhanced bulk ingestion script with built-in connection pooling:
    ```bash
-   python3 bulk_ingest_logs.py --count 5 --workers 4 --batch-size 25
+   python3 scripts/tools/bulk_ingest_logs.py --count 5 --workers 4 --batch-size 25
    ```
 6. **Bulk Ingestion Failures**: Monitor connection pool refresh logs and ensure batch sizes are optimized
 
