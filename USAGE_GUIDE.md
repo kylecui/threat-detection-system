@@ -17,6 +17,7 @@ sleep 60
 # 验证服务状态
 curl http://localhost:8080/actuator/health  # 数据摄取服务
 curl http://localhost:8081/overview         # Flink Web UI
+curl http://localhost:8083/api/v1/assessment/health  # 威胁评估服务
 ```
 
 ### 2. 停止系统
@@ -54,6 +55,106 @@ curl http://localhost:8080/api/v1/logs/stats
 
 # 重置统计：POST /api/v1/logs/stats/reset
 curl -X POST http://localhost:8080/api/v1/logs/stats/reset
+```
+
+## 🛡️ 威胁评估API
+
+### 威胁评估查询
+```bash
+# 获取所有威胁评估：GET /api/v1/assessment/threats
+curl http://localhost:8083/api/v1/assessment/threats
+
+# 按风险等级过滤：GET /api/v1/assessment/threats?riskLevel=HIGH
+curl "http://localhost:8083/api/v1/assessment/threats?riskLevel=HIGH"
+
+# 按时间范围查询：GET /api/v1/assessment/threats?startTime=2024-01-01T00:00:00&endTime=2024-12-31T23:59:59
+curl "http://localhost:8083/api/v1/assessment/threats?startTime=2024-01-01T00:00:00&endTime=2024-12-31T23:59:59"
+
+# 获取特定威胁详情：GET /api/v1/assessment/threats/{id}
+curl http://localhost:8083/api/v1/assessment/threats/1
+```
+
+### 威胁情报查询
+```bash
+# 获取威胁情报：GET /api/v1/assessment/intelligence
+curl http://localhost:8083/api/v1/assessment/intelligence
+
+# 按威胁类型过滤：GET /api/v1/assessment/intelligence?threatType=DDoS
+curl "http://localhost:8083/api/v1/assessment/intelligence?threatType=DDoS"
+```
+
+### 风险评估统计
+```bash
+# 获取风险统计：GET /api/v1/assessment/stats
+curl http://localhost:8083/api/v1/assessment/stats
+
+# 响应示例：
+{
+  "totalAssessments": 921,
+  "criticalCount": 15,
+  "highCount": 89,
+  "mediumCount": 234,
+  "lowCount": 456,
+  "infoCount": 127,
+  "averageRiskScore": 245.67
+}
+```
+
+### 缓解建议查询
+```bash
+# 获取缓解建议：GET /api/v1/assessment/recommendations/{threatId}
+curl http://localhost:8083/api/v1/assessment/recommendations/1
+
+# 响应示例：
+{
+  "threatId": 1,
+  "recommendations": [
+    {
+      "action": "BLOCK_IP",
+      "description": "阻止可疑IP地址",
+      "priority": "HIGH",
+      "estimatedEffectiveness": 0.95
+    },
+    {
+      "action": "RATE_LIMIT",
+      "description": "实施速率限制",
+      "priority": "MEDIUM",
+      "estimatedEffectiveness": 0.78
+    }
+  ]
+}
+```
+
+## 🔄 端到端数据流
+
+### 完整处理流程
+1. **数据摄取**: 日志通过数据摄取API进入系统
+2. **流处理**: Flink实时聚合攻击事件（30秒窗口）
+3. **威胁评分**: 基于多维度算法计算威胁分数（2分钟窗口）
+4. **威胁评估**: 高级风险评估和情报关联
+5. **存储**: 结果存储到PostgreSQL数据库
+
+### 数据流示例
+```bash
+# 1. 发送攻击日志
+curl -X POST http://localhost:8080/api/v1/logs/ingest \
+  -H "Content-Type: text/plain" \
+  -d "syslog_version=1.10.0,dev_serial=device1,attack_mac=AA:BB:CC:DD:EE:FF,attack_ip=192.168.1.100,response_port=80"
+
+# 2. 查看实时聚合（30秒后）
+docker exec -it $(docker ps -q -f name=kafka) kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic minute-aggregations \
+  --from-beginning --max-messages 1
+
+# 3. 查看威胁警报（2分钟后）
+docker exec -it $(docker ps -q -f name=kafka) kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic threat-alerts \
+  --from-beginning --max-messages 1
+
+# 4. 查询威胁评估结果
+curl http://localhost:8083/api/v1/assessment/threats
 ```
 
 ## 🛠️ 测试工具使用
@@ -173,6 +274,24 @@ stream-processing:
     THREAT_SCORING_WINDOW_MINUTES: 2    # 默认2分钟
 ```
 
+#### 威胁评估服务
+```yaml
+# docker-compose.yml 中的配置
+threat-assessment:
+  environment:
+    SPRING_PROFILES_ACTIVE: docker
+    SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
+    SPRING_DATASOURCE_USERNAME: threat_user
+    SPRING_DATASOURCE_PASSWORD: threat_pass
+    SPRING_REDIS_HOST: redis
+    SPRING_REDIS_PORT: 6379
+    # 威胁评估配置
+    THREAT_ASSESSMENT_ENABLED: true
+    INTELLIGENCE_UPDATE_INTERVAL: 3600000  # 1小时
+    RISK_SCORING_WEIGHTS: "attackCount:1.0,uniqueIps:1.5,uniquePorts:2.0,deviceCount:1.2"
+```
+
 ### 可配置参数
 
 | 参数 | 环境变量 | 默认值 | 说明 |
@@ -184,6 +303,9 @@ stream-processing:
 | 输入主题 | `INPUT_TOPIC` | attack-events | 攻击事件输入主题 |
 | 输出主题 | `OUTPUT_TOPIC` | threat-alerts | 威胁警报输出主题 |
 | 聚合主题 | `AGGREGATION_TOPIC` | minute-aggregations | 聚合数据输出主题 |
+| 威胁评估启用 | `THREAT_ASSESSMENT_ENABLED` | true | 是否启用威胁评估服务 |
+| 情报更新间隔 | `INTELLIGENCE_UPDATE_INTERVAL` | 3600000 | 威胁情报更新间隔（毫秒） |
+| 风险评分权重 | `RISK_SCORING_WEIGHTS` | attackCount:1.0,uniqueIps:1.5,uniquePorts:2.0,deviceCount:1.2 | 多维度风险评分权重配置 |
 
 ### 自定义时间窗口示例
 ```bash
@@ -193,68 +315,7 @@ docker exec -it stream-processing env AGGREGATION_WINDOW_SECONDS=15 THREAT_SCORI
 # 需要重启Flink作业以应用新配置
 ```
 
-## � 设备序列号验证配置
-
-### 问题背景
-系统最初只支持十六进制格式的设备序列号（如`9d262111f2476d34`），但实际环境中可能存在包含字母的复杂序列号（如`GSFB2204200410007425`）。
-
-### 解决方案
-通过环境变量`DEV_SERIAL_PATTERN`实现可配置的设备序列号验证：
-
-```yaml
-# docker-compose.yml 配置示例
-data-ingestion:
-  environment:
-    DEV_SERIAL_PATTERN: "[0-9A-Za-z]+"  # 默认值，支持字母数字组合
-```
-
-### 支持的模式示例
-- `[0-9A-Fa-f]+`: 仅十六进制字符（原始模式）
-- `[0-9A-Za-z]+`: 字母数字组合（默认，推荐用于开发/测试）
-- `[0-9A-Za-z_-]+`: 包含下划线和连字符
-- `.*`: 接受任何字符（仅用于调试）
-
-### 验证逻辑
-1. 设备序列号不能为空或纯空格
-2. 必须匹配配置的正则表达式模式
-3. 验证通过后转换为大写格式存储
-
-## �📈 数据格式说明
-
-### 输入日志格式
-```
-syslog_version=1.10.0,dev_serial={设备序列号},log_type=1,sub_type=1,attack_mac={攻击MAC},attack_ip={攻击IP},response_port={响应端口}
-```
-
-### 聚合输出格式
-```json
-{
-  "attackMac": "74:12:B3:FE:EE:7F",
-  "uniqueIps": 1,
-  "uniquePorts": 2,
-  "uniqueDevices": 1,
-  "attackCount": 7,
-  "timestamp": 1759994460000,
-  "windowStart": 1759994430000,
-  "windowEnd": 1759994460000
-}
-```
-
-### 威胁警报格式
-```json
-{
-  "attackMac": "74:12:B3:FE:EE:7F",
-  "threatScore": 18.48,
-  "threatLevel": "INFO",
-  "threatName": "信息",
-  "timestamp": 1759994460000,
-  "windowStart": 1759994400000,
-  "windowEnd": 1759994520000,
-  "totalAggregations": 1
-}
-```
-
-## 🔍 威胁评分算法
+##  威胁评分算法
 
 当前实现的增强算法：
 ```
@@ -266,6 +327,15 @@ threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeigh
 - `deviceWeight`: 多设备覆盖奖励 (1.0-1.5)
 - `timeWeight`: 时间衰减因子
 - `ipWeight`: IP多样性奖励
+
+### 多维度风险评估
+威胁评估服务使用以下维度进行综合风险评估：
+- **攻击频率**: 单位时间内的攻击次数
+- **IP多样性**: 涉及的不同IP地址数量
+- **端口分布**: 目标端口的多样性
+- **设备覆盖**: 受影响的设备数量
+- **时间模式**: 攻击的时间分布特征
+- **威胁情报**: 已知威胁模式的匹配度
 
 ## 📋 威胁等级
 
@@ -287,6 +357,7 @@ docker-compose -f docker/docker-compose.yml ps
 # 查看服务日志
 docker-compose -f docker/docker-compose.yml logs -f stream-processing
 docker-compose -f docker/docker-compose.yml logs -f data-ingestion
+docker-compose -f docker/docker-compose.yml logs -f threat-assessment
 
 # 检查Kafka主题
 docker exec -it $(docker ps -q -f name=kafka) kafka-topics --bootstrap-server localhost:9092 --list
@@ -302,11 +373,30 @@ docker exec -it $(docker ps -q -f name=kafka) kafka-topics --bootstrap-server lo
 3. **JAR文件版本问题**: 重新构建Docker镜像
 4. **Kafka连接失败**: 确保Zookeeper先启动
 5. **Flink作业失败**: 检查日志中的配置错误
-6. **数据格式错误**: 验证syslog格式是否正确
+6. **威胁评估服务连接失败**: 检查PostgreSQL数据库连接和HikariCP配置
+7. **数据格式错误**: 验证syslog格式是否正确
+
+### 数据库查询示例
+```bash
+# 连接到PostgreSQL
+docker-compose exec postgres psql -U threat_user -d threat_detection
+
+# 查看威胁评估结果
+SELECT id, attack_mac, risk_score, risk_level, created_at
+FROM threat_assessments
+ORDER BY risk_score DESC LIMIT 10;
+
+# 查看威胁告警统计
+SELECT COUNT(*) as total_alerts FROM threat_alerts;
+
+# 查看威胁情报
+SELECT threat_type, severity, description FROM threat_intelligence LIMIT 5;
+```
 
 ---
 
-*最后更新时间：2025年10月9日*
-*系统版本：v1.1*
-*包含增强功能：端口多样性、多设备支持、可配置时间窗口、可配置设备序列号验证、高可靠性批量摄取*</content>
+*最后更新时间：2025年1月9日*
+*系统版本：v2.0*
+*包含完整功能：数据摄取、流处理、威胁评估、端到端集成测试*
+*集成测试结果：成功处理921条威胁评估记录*</content>
 <parameter name="filePath">/home/kylecui/threat-detection-system/USAGE_GUIDE.md

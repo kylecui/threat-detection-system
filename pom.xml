@@ -125,12 +125,9 @@
   </dependencyManagement>
 
   <modules>
-    <module>services/data-ingestion</module>
+    <module>services/data-ingestion/data-ingestion-service</module>
     <module>services/stream-processing</module>
     <module>services/threat-assessment</module>
-    <module>services/alert-management</module>
-    <module>services/api-gateway</module>
-    <module>services/config-server</module>
   </modules>
 
   <build>

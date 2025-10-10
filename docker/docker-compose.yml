@@ -118,6 +118,25 @@ services:
     command: "taskmanager"
     restart: unless-stopped
 
+  threat-assessment:
+    build:
+      context: ../   # ← 仓库根目录（包含父 pom.xml）
+      dockerfile: services/threat-assessment/Dockerfile
+    hostname: threat-assessment-service
+    container_name: threat-assessment-service
+    depends_on:
+      - kafka
+      - postgres
+    ports: ["8083:8083"]
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8083/api/v1/assessment/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   topic-init:
     image: confluentinc/cp-kafka:7.4.0
     hostname: topic-init
