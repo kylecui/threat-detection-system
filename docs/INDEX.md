@@ -11,8 +11,10 @@
 ### 🚀 立即开始
 
 1. **新手入门**: 阅读 [README.md](../README.md)
-2. **实施路线图**: 阅读 [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md) (本文档)
-3. **技术分析**: 浏览 [analysis/](analysis/) 目录下的8个专项分析
+2. **🌟 MVP计划**: 阅读 [MVP_IMPLEMENTATION_PLAN.md](MVP_IMPLEMENTATION_PLAN.md) - **最小可行方案 (4个月)**
+3. **关键困难**: 阅读 [CRITICAL_CHALLENGES_ANALYSIS.md](CRITICAL_CHALLENGES_ANALYSIS.md) - 了解风险和依赖
+4. **完整路线图**: 阅读 [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md) - 完整8个月计划 (可选)
+5. **技术分析**: 浏览 [analysis/](analysis/) 目录下的9个专项分析
 
 ---
 
@@ -22,11 +24,15 @@
 
 | 文档 | 描述 | 受众 | 优先级 |
 |------|------|------|--------|
-| **[IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md)** | 总体路线图、Phase 0-1详细计划 | 全员 | ⭐⭐⭐⭐⭐ |
-| **[IMPLEMENTATION_ROADMAP_PART2.md](IMPLEMENTATION_ROADMAP_PART2.md)** | Phase 2-3详细计划 (ML、APT) | 开发团队 | ⭐⭐⭐⭐⭐ |
-| **[IMPLEMENTATION_ROADMAP_PART3.md](IMPLEMENTATION_ROADMAP_PART3.md)** | 测试策略、风险管理、团队配置 | PM、QA、DevOps | ⭐⭐⭐⭐⭐ |
+| **[MVP_IMPLEMENTATION_PLAN.md](MVP_IMPLEMENTATION_PLAN.md)** | 🌟 **最小可行方案 (4个月)** - 核心功能+3个决策点 | 全员 | ⭐⭐⭐⭐⭐ |
+| **[CRITICAL_CHALLENGES_ANALYSIS.md](CRITICAL_CHALLENGES_ANALYSIS.md)** | 关键困难与依赖分析 - 7个困难+12个依赖 | PM、架构师 | ⭐⭐⭐⭐⭐ |
+| **[IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md)** | 完整路线图 (8个月)、Phase 0-1详细计划 | 全员 | ⭐⭐⭐⭐ |
+| **[IMPLEMENTATION_ROADMAP_PART2.md](IMPLEMENTATION_ROADMAP_PART2.md)** | Phase 2-3详细计划 (ML、APT) | 开发团队 | ⭐⭐⭐⭐ |
+| **[IMPLEMENTATION_ROADMAP_PART3.md](IMPLEMENTATION_ROADMAP_PART3.md)** | 测试策略、风险管理、团队配置 | PM、QA、DevOps | ⭐⭐⭐⭐ |
 
-**阅读建议**: 按顺序阅读这3份文档，每份约30-40分钟
+**⚠️ 重要**: 建议优先阅读 **MVP_IMPLEMENTATION_PLAN.md** (最小可行方案)，然后根据决策结果决定是否实施完整计划
+
+**阅读建议**: MVP计划 (30分钟) → 关键困难分析 (20分钟) → 完整路线图 (按需)
 
 ---
 
@@ -265,6 +271,7 @@
 
 | 版本 | 日期 | 更新内容 | 更新人 |
 |------|------|---------|--------|
+| 1.1 | 2025-10-13 | 新增MVP实施计划、关键困难分析 | GitHub Copilot |
 | 1.0 | 2025-10-11 | 初始版本,完整实施路线图 | GitHub Copilot |
 
 ---
