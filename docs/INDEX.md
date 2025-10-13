@@ -42,6 +42,7 @@
 | **[analysis/06_false_positive_avoidance.md](analysis/06_false_positive_avoidance.md)** | 误报规避策略 | 规则+ML混合过滤 | ⭐⭐⭐⭐⭐ |
 | **[analysis/07_attack_persistence_representation.md](analysis/07_attack_persistence_representation.md)** | 攻击持续性表征 | 持续性评分+演化轨迹 | ⭐⭐⭐⭐ |
 | **[analysis/08_switch_flood_data_value.md](analysis/08_switch_flood_data_value.md)** | 洪泛数据价值 | ARP分析提前检测3-30分钟 | ⭐⭐⭐ |
+| **[analysis/09_reconfigurable_honeypot_network.md](analysis/09_reconfigurable_honeypot_network.md)** | 可重配置蜜罐网络 | 基于kSwitch的动态蜜罐,APT覆盖14%→84% | ⭐⭐⭐⭐⭐ |
 | **[analysis/COMPREHENSIVE_OPTIMIZATION_PLAN.md](analysis/COMPREHENSIVE_OPTIMIZATION_PLAN.md)** | 综合优化方案 | 汇总所有优化方向 | ⭐⭐⭐⭐⭐ |
 
 **阅读建议**: 根据工作职责选择性阅读

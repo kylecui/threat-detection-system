@@ -37,7 +37,10 @@ logs/
 
 # Temporary files
 tmp/
+
+# References
 old/
+references/
 
 # Python
 .venv
