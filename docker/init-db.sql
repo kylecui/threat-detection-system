@@ -72,9 +72,8 @@ GRANT USAGE, SELECT ON SEQUENCE device_customer_mapping_id_seq TO threat_user;
 -- ============================================================================
 -- Device Status History Table (log_type=2 heartbeat data)
 -- ============================================================================
-DROP TABLE IF EXISTS device_status_history CASCADE;
-
-CREATE TABLE device_status_history (
+-- ✅ 持久化表: 使用 CREATE IF NOT EXISTS 保护历史状态数据
+CREATE TABLE IF NOT EXISTS device_status_history (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     dev_serial VARCHAR(50) NOT NULL,
     customer_id VARCHAR(100) NOT NULL,
@@ -103,13 +102,13 @@ CREATE TABLE device_status_history (
 );
 
 -- 创建索引以优化查询性能
-CREATE INDEX idx_device_status_dev_serial ON device_status_history(dev_serial);
-CREATE INDEX idx_device_status_customer_id ON device_status_history(customer_id);
-CREATE INDEX idx_device_status_report_time ON device_status_history(report_time DESC);
-CREATE INDEX idx_device_status_dev_serial_time ON device_status_history(dev_serial, report_time DESC);
-CREATE INDEX idx_device_status_unhealthy ON device_status_history(is_healthy) WHERE is_healthy = false;
-CREATE INDEX idx_device_status_expiring ON device_status_history(is_expiring_soon) WHERE is_expiring_soon = true;
-CREATE INDEX idx_device_status_expired ON device_status_history(is_expired) WHERE is_expired = true;
+CREATE INDEX IF NOT EXISTS idx_device_status_dev_serial ON device_status_history(dev_serial);
+CREATE INDEX IF NOT EXISTS idx_device_status_customer_id ON device_status_history(customer_id);
+CREATE INDEX IF NOT EXISTS idx_device_status_report_time ON device_status_history(report_time DESC);
+CREATE INDEX IF NOT EXISTS idx_device_status_dev_serial_time ON device_status_history(dev_serial, report_time DESC);
+CREATE INDEX IF NOT EXISTS idx_device_status_unhealthy ON device_status_history(is_healthy) WHERE is_healthy = false;
+CREATE INDEX IF NOT EXISTS idx_device_status_expiring ON device_status_history(is_expiring_soon) WHERE is_expiring_soon = true;
+CREATE INDEX IF NOT EXISTS idx_device_status_expired ON device_status_history(is_expired) WHERE is_expired = true;
 
 -- 创建视图: 设备最新状态
 CREATE OR REPLACE VIEW device_latest_status AS
@@ -167,6 +166,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 创建触发器: 自动检测到期状态
+DROP TRIGGER IF EXISTS trigger_check_device_expiration ON device_status_history;
 CREATE TRIGGER trigger_check_device_expiration
     BEFORE INSERT OR UPDATE ON device_status_history
     FOR EACH ROW EXECUTE FUNCTION check_device_expiration();
@@ -201,6 +201,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- 创建触发器: 自动检测状态变化
+DROP TRIGGER IF EXISTS trigger_detect_status_changes ON device_status_history;
 CREATE TRIGGER trigger_detect_status_changes
     BEFORE INSERT ON device_status_history
     FOR EACH ROW EXECUTE FUNCTION detect_status_changes();
@@ -214,9 +215,8 @@ GRANT SELECT ON device_latest_status TO threat_user;
 -- 威胁评估表 (Threat Assessments)
 -- ============================================================================
 -- 存储所有威胁评分和评估结果
-DROP TABLE IF EXISTS threat_assessments CASCADE;
-
-CREATE TABLE threat_assessments (
+-- ✅ 持久化表: 使用 CREATE IF NOT EXISTS 保护历史评估数据
+CREATE TABLE IF NOT EXISTS threat_assessments (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     
     -- 客户和攻击者信息
@@ -244,12 +244,12 @@ CREATE TABLE threat_assessments (
 );
 
 -- 创建索引
-CREATE INDEX idx_threat_assessments_customer ON threat_assessments(customer_id);
-CREATE INDEX idx_threat_assessments_attack_mac ON threat_assessments(attack_mac);
-CREATE INDEX idx_threat_assessments_threat_level ON threat_assessments(threat_level);
-CREATE INDEX idx_threat_assessments_assessment_time ON threat_assessments(assessment_time DESC);
-CREATE INDEX idx_threat_assessments_customer_mac ON threat_assessments(customer_id, attack_mac);
-CREATE INDEX idx_threat_assessments_customer_time ON threat_assessments(customer_id, assessment_time DESC);
+CREATE INDEX IF NOT EXISTS idx_threat_assessments_customer ON threat_assessments(customer_id);
+CREATE INDEX IF NOT EXISTS idx_threat_assessments_attack_mac ON threat_assessments(attack_mac);
+CREATE INDEX IF NOT EXISTS idx_threat_assessments_threat_level ON threat_assessments(threat_level);
+CREATE INDEX IF NOT EXISTS idx_threat_assessments_assessment_time ON threat_assessments(assessment_time DESC);
+CREATE INDEX IF NOT EXISTS idx_threat_assessments_customer_mac ON threat_assessments(customer_id, attack_mac);
+CREATE INDEX IF NOT EXISTS idx_threat_assessments_customer_time ON threat_assessments(customer_id, assessment_time DESC);
 
 -- 授予权限
 GRANT SELECT, INSERT, UPDATE ON threat_assessments TO threat_user;
