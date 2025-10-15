@@ -1,0 +1,14 @@
+# Python dependencies for test scripts
+# Install with: pip install -r requirements.txt
+
+# Kafka client
+kafka-python==2.0.2
+
+# PostgreSQL database adapter
+psycopg2-binary==2.9.9
+
+# HTTP client for API testing
+requests==2.31.0
+
+# Snappy compression codec (for Kafka)
+python-snappy==0.7.3

@@ -1,4 +1,4 @@
-target/
+# target/  # 注释掉,因为我们需要使用本地编译的JAR
 .git/
 .gitignore
 .idea/

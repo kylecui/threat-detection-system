@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.threatdetection.stream.model.AttackEvent;
 import com.threatdetection.stream.model.StatusEvent;
+import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
@@ -43,6 +44,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+/**
+ * MVP Phase 0: 云原生威胁检测流处理作业
+ * 
+ * 重要更新: 集成3层时间窗口架构
+ * - 替换单一窗口为30s/5min/15min多层窗口
+ * - 支持不同类型威胁检测(勒索软件/主要威胁/APT)
+ * - 保持与原系统的完全对齐
+ */
 public class StreamProcessingJob {
 
     private static final Logger logger = LoggerFactory.getLogger(StreamProcessingJob.class);
@@ -115,70 +124,82 @@ public class StreamProcessingJob {
         .name("attack-event-validation")
                 .assignTimestampsAndWatermarks(
                         WatermarkStrategy.<AttackEvent>forMonotonousTimestamps()
-                                .withTimestampAssigner((event, timestamp) -> System.currentTimeMillis()) // 使用当前时间作为处理时间
+                                .withTimestampAssigner(new AttackEventTimestampAssigner()) // 使用显式类替代lambda
                 );
 
-        // Status events stream - for device status monitoring
+        // Status events stream - enabled for device health monitoring
+        logger.info("Starting Status Event Processing for Device Health Monitoring");
         DataStream<StatusEvent> statusStream = env.fromSource(statusSource, WatermarkStrategy.noWatermarks(), "status-events")
         .flatMap(new StatusEventDeserializer())
         .name("status-event-deserializer")
+        .filter(StreamProcessingJob::isStatusEventValid)
+        .name("status-event-validation")
                 .assignTimestampsAndWatermarks(
                         WatermarkStrategy.<StatusEvent>forMonotonousTimestamps()
-                                .withTimestampAssigner((event, timestamp) -> System.currentTimeMillis())
+                                .withTimestampAssigner(new StatusEventTimestampAssigner())
                 );
 
-        // Log status events for monitoring (optional - can be extended for device health monitoring)
+        // Process status events for device health monitoring
         statusStream
-                .map(event -> String.format("{\"devSerial\":\"%s\",\"logType\":%d,\"sentryCount\":%d,\"realHostCount\":%d,\"timestamp\":%d}",
-                        event.getDevSerial(), event.getLogType(), event.getSentryCount(),
-                        event.getRealHostCount(), event.getDevStartTime()))
-                .name("status-event-logger")
-                .print(); // For debugging - can be removed in production
+                .map(new DeviceHealthAnalyzer())
+                .name("device-health-analyzer")
+                .sinkTo(createDeviceStatusKafkaSink(bootstrapServers))
+                .name("device-health-kafka-sink");
 
-    // Minute-level aggregation for attack events - 按客户和攻击来源聚合
-    DataStream<String> minuteAggregations = attackStream
-        .map(event -> {
-            // 使用客户ID + 攻击MAC地址作为复合聚合键，确保多租户隔离
-            String customerId = Optional.ofNullable(event.getCustomerId()).orElse("unknown");
-            String attackMac = Optional.ofNullable(event.getAttackMac()).orElse("unknown");
-            String aggregationKey = customerId + ":" + attackMac; // 复合键格式: customerId:attackMac
-            
-            // 包含端口信息用于威胁评分
-            Tuple5<String, String, Integer, String, String> result = Tuple5.of(
-                aggregationKey,    // customerId:attackMac
-                event.getAttackIp(), // attackIp
-                event.getResponsePort(), // responsePort
-                event.getDevSerial(),   // devSerial
-                customerId             // customerId (for output)
-            );
-            logger.info("Mapping attack event {} to aggregation key (customer:source): {}", event.getId(), result.f0);
-            return result;
-        })
-        .returns(org.apache.flink.api.common.typeinfo.Types.TUPLE(
-            org.apache.flink.api.common.typeinfo.Types.STRING,  // aggregationKey (customerId:attackMac)
-            org.apache.flink.api.common.typeinfo.Types.STRING,  // attackIp
-            org.apache.flink.api.common.typeinfo.Types.INT,     // responsePort
-            org.apache.flink.api.common.typeinfo.Types.STRING,  // devSerial
-            org.apache.flink.api.common.typeinfo.Types.STRING   // customerId
-        ))
-                .keyBy(tuple -> tuple.f0) // key by composite key (customerId:attackMac)
-                .window(TumblingProcessingTimeWindows.of(Time.seconds(AGGREGATION_WINDOW_SECONDS)))
-                .process(new AttackAggregationProcessFunction());
+            // ===== MVP PHASE 0: 3层时间窗口架构 =====
+        // 替换单一窗口聚合为3层时间窗口 (30s/5min/15min)
+        logger.info("Starting Multi-Tier Window Processing for MVP Phase 0");
+        DataStream<String> threatAlerts = MultiTierWindowProcessor.processMultiTierWindows(
+            attackStream, bootstrapServers);
 
-        // 10-minute threat scoring - 按攻击来源评分
-        DataStream<String> threatScores = minuteAggregations
-                .map(new ThreatScoreCalculator())
-                .keyBy(score -> score.f0) // key by attack source (MAC)
-                .window(TumblingProcessingTimeWindows.of(Time.minutes(THREAT_SCORING_WINDOW_MINUTES)))
-                .apply(new ThreatScoreAggregator());
+        // 备份: 保留原有逻辑用于比较和验证 - 已注释禁用避免序列化问题
+        // logger.info("Starting legacy single-window processing for comparison");
+        /*
+        // 原有单窗口聚合 - 仅用于对比验证
+        DataStream<String> legacyAggregations = attackStream
+            .map(event -> {
+                // 使用客户ID + 攻击MAC地址作为复合聚合键，确保多租户隔离
+                String customerId = Optional.ofNullable(event.getCustomerId()).orElse("unknown");
+                String attackMac = Optional.ofNullable(event.getAttackMac()).orElse("unknown");
+                String aggregationKey = customerId + ":" + attackMac; // 复合键格式: customerId:attackMac
+                
+                // 包含端口信息用于威胁评分
+                Tuple5<String, String, Integer, String, String> result = Tuple5.of(
+                    aggregationKey,    // customerId:attackMac
+                    event.getAttackIp(), // attackIp
+                    event.getResponsePort(), // responsePort
+                    event.getDevSerial(),   // devSerial
+                    customerId             // customerId (for output)
+                );
+                logger.debug("Legacy: Mapping attack event {} to aggregation key: {}", event.getId(), result.f0);
+                return result;
+            })
+            .returns(org.apache.flink.api.common.typeinfo.Types.TUPLE(
+                org.apache.flink.api.common.typeinfo.Types.STRING,  // aggregationKey (customerId:attackMac)
+                org.apache.flink.api.common.typeinfo.Types.STRING,  // attackIp
+                org.apache.flink.api.common.typeinfo.Types.INT,     // responsePort
+                org.apache.flink.api.common.typeinfo.Types.STRING,  // devSerial
+                org.apache.flink.api.common.typeinfo.Types.STRING   // customerId
+            ))
+            .keyBy(tuple -> tuple.f0) // key by composite key (customerId:attackMac)
+            .window(TumblingProcessingTimeWindows.of(Time.seconds(AGGREGATION_WINDOW_SECONDS)))
+            .process(new AttackAggregationProcessFunction());
+        */
 
-        // Kafka sinks
+        // 原有威胁评分 - 仅用于对比 (注释掉避免未使用警告)
+        // DataStream<String> legacyThreatScores = legacyAggregations
+        //         .map(new ThreatScoreCalculator())
+        //         .keyBy(score -> score.f0) // key by attack source (MAC)
+        //         .window(TumblingProcessingTimeWindows.of(Time.minutes(THREAT_SCORING_WINDOW_MINUTES)))
+        //         .apply(new ThreatScoreAggregator());
+
+        // Kafka sinks - MVP优先使用3层窗口结果
         KafkaSink<String> aggregationSink = KafkaSink.<String>builder()
                 .setBootstrapServers(bootstrapServers)
                 .setRecordSerializer(KafkaRecordSerializationSchema.<String>builder()
-            .setTopic(aggregationTopic)
-                        .setValueSerializationSchema(new SimpleStringSchema())
-                        .build())
+                    .setTopic(aggregationTopic)
+                    .setValueSerializationSchema(new SimpleStringSchema())
+                    .build())
                 .build();
 
         KafkaSink<String> threatSink = KafkaSink.<String>builder()
@@ -189,8 +210,11 @@ public class StreamProcessingJob {
                         .build())
                 .build();
 
-        minuteAggregations.sinkTo(aggregationSink);
-        threatScores.sinkTo(threatSink);
+        // MVP Phase 0: 使用3层时间窗口结果作为主要输出
+        threatAlerts.sinkTo(threatSink);
+        
+        // 备份: 保留原有流用于对比 (可选，用于验证) - 已禁用
+        // legacyAggregations.sinkTo(aggregationSink);
 
         env.execute("Threat Detection Stream Processing");
     }
@@ -375,6 +399,33 @@ public class StreamProcessingJob {
             }
         }
     }
+    
+    /**
+     * 验证状态事件的有效性
+     */
+    private static boolean isStatusEventValid(StatusEvent event) {
+        if (event == null) {
+            return false;
+        }
+        if (event.getDevSerial() == null || event.getDevSerial().isEmpty()) {
+            logger.warn("Dropping status event with missing devSerial: {}", event);
+            return false;
+        }
+        // 验证计数字段必须非负
+        if (event.getSentryCount() < 0 || event.getRealHostCount() < 0) {
+            logger.warn("Dropping status event with negative counts: sentryCount={}, realHostCount={}", 
+                       event.getSentryCount(), event.getRealHostCount());
+            return false;
+        }
+        // 验证时间戳合理性
+        if (event.getDevStartTime() < 0 || (event.getDevEndTime() != -1 && event.getDevEndTime() < event.getDevStartTime())) {
+            logger.warn("Dropping status event with invalid timestamps: devStartTime={}, devEndTime={}", 
+                       event.getDevStartTime(), event.getDevEndTime());
+            return false;
+        }
+        return true;
+    }
+    
     private static boolean isAttackEventValid(AttackEvent event) {
         if (event == null) {
             return false;
@@ -431,5 +482,113 @@ public class StreamProcessingJob {
         } catch (ExecutionException | TimeoutException e) {
             throw new IllegalStateException("Failed to verify Kafka topics availability", e);
         }
+    }
+
+    /**
+     * 时间戳分配器 - 替代lambda避免序列化问题
+     */
+    public static class AttackEventTimestampAssigner implements SerializableTimestampAssigner<AttackEvent> {
+        private static final long serialVersionUID = 1L;
+        
+        @Override
+        public long extractTimestamp(AttackEvent event, long recordTimestamp) {
+            return System.currentTimeMillis(); // 使用当前时间作为处理时间
+        }
+    }
+
+    /**
+     * 状态事件时间戳分配器
+     */
+    public static class StatusEventTimestampAssigner implements SerializableTimestampAssigner<StatusEvent> {
+        private static final long serialVersionUID = 1L;
+        
+        @Override
+        public long extractTimestamp(StatusEvent event, long recordTimestamp) {
+            return System.currentTimeMillis();
+        }
+    }
+
+    /**
+     * 状态事件格式化器
+     */
+    public static class StatusEventFormatter implements MapFunction<StatusEvent, String> {
+        private static final long serialVersionUID = 1L;
+        
+        @Override
+        public String map(StatusEvent event) throws Exception {
+            return String.format("{\"devSerial\":\"%s\",\"logType\":%d,\"sentryCount\":%d,\"realHostCount\":%d,\"timestamp\":%d}",
+                    event.getDevSerial(), event.getLogType(), event.getSentryCount(),
+                    event.getRealHostCount(), event.getDevStartTime());
+        }
+    }
+    
+    /**
+     * 设备健康分析器 - 分析状态事件并生成健康报告
+     */
+    public static class DeviceHealthAnalyzer implements MapFunction<StatusEvent, String> {
+        private static final long serialVersionUID = 1L;
+        private static final long SECONDS_IN_7_DAYS = 7 * 24 * 60 * 60;
+        
+        @Override
+        public String map(StatusEvent event) throws Exception {
+            long currentEpoch = System.currentTimeMillis() / 1000;
+            
+            // 分析设备到期状态
+            boolean isExpired = false;
+            boolean isExpiringSoon = false;
+            long daysUntilExpiry = -1;
+            
+            if (event.getDevEndTime() != -1) {
+                if (event.getDevEndTime() < currentEpoch) {
+                    isExpired = true;
+                } else {
+                    long secondsUntilExpiry = event.getDevEndTime() - currentEpoch;
+                    daysUntilExpiry = secondsUntilExpiry / 86400;
+                    if (secondsUntilExpiry <= SECONDS_IN_7_DAYS) {
+                        isExpiringSoon = true;
+                    }
+                }
+            }
+            
+            // 构建JSON消息 (将发送到 device-health-alerts topic)
+            return String.format(
+                "{\"devSerial\":\"%s\"," +
+                "\"sentryCount\":%d," +
+                "\"realHostCount\":%d," +
+                "\"devStartTime\":%d," +
+                "\"devEndTime\":%d," +
+                "\"reportTime\":%d," +
+                "\"isExpired\":%b," +
+                "\"isExpiringSoon\":%b," +
+                "\"daysUntilExpiry\":%d," +
+                "\"isHealthy\":%b," +
+                "\"rawLog\":\"%s\"}",
+                event.getDevSerial(),
+                event.getSentryCount(),
+                event.getRealHostCount(),
+                event.getDevStartTime(),
+                event.getDevEndTime(),
+                currentEpoch,
+                isExpired,
+                isExpiringSoon,
+                daysUntilExpiry,
+                !isExpired,  // 未过期则认为健康
+                event.getRawLog() != null ? event.getRawLog().replace("\"", "\\\"") : ""
+            );
+        }
+    }
+    
+    /**
+     * 创建设备状态Kafka Sink
+     */
+    private static KafkaSink<String> createDeviceStatusKafkaSink(String bootstrapServers) {
+        return KafkaSink.<String>builder()
+                .setBootstrapServers(bootstrapServers)
+                .setRecordSerializer(KafkaRecordSerializationSchema.builder()
+                        .setTopic("device-health-alerts")
+                        .setValueSerializationSchema(new SimpleStringSchema())
+                        .build()
+                )
+                .build();
     }
 }

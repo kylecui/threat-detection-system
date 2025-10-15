@@ -1,20 +1,6 @@
-# Build stage
-FROM eclipse-temurin:21-jdk-alpine AS builder
-
-WORKDIR /app
-
-# Copy Maven wrapper and pom.xml
-COPY ../../.mvn /app/.mvn
-COPY ../../mvnw /app/mvnw
-COPY services/alert-management/docker-pom.xml /app/pom.xml
-
-# Copy source code
-COPY services/alert-management/src /app/src
-
-# Download dependencies and build
-RUN ./mvnw clean package -DskipTests
-
-# Runtime stage
+############################
+# Runtime stage (直接使用本地编译的JAR)
+############################
 FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
@@ -25,8 +11,8 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 # Install curl for health checks
 RUN apk add --no-cache curl
 
-# Copy the built JAR
-COPY --from=builder /app/target/*.jar app.jar
+# Copy the built JAR from local target directory
+COPY target/*.jar app.jar
 
 # Change ownership to non-root user
 RUN chown -R appuser:appgroup /app

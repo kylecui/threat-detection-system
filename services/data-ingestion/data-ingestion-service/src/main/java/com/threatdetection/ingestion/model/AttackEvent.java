@@ -64,8 +64,29 @@ public class AttackEvent {
     }
 
     private String generateDescription() {
-        return String.format("Detected potential sniffing attack from %s to %s:%d", 
-                           attackIp, responseIp, responsePort);
+        // 蜜罐机制：responseIp是诱饵IP(虚拟哨兵)，responsePort反映攻击意图
+        // attackIp是被诱捕的内网失陷主机，尝试访问不存在的诱饵服务
+        return String.format("蜜罐检测: 内网主机%s尝试访问诱饵%s:%d (攻击意图:%s)", 
+                           attackIp, responseIp, responsePort, getAttackIntentByPort(responsePort));
+    }
+    
+    /**
+     * 根据端口推断攻击意图
+     */
+    private String getAttackIntentByPort(int port) {
+        switch (port) {
+            case 22: return "SSH远程控制";
+            case 23: return "Telnet远程控制";
+            case 445: case 139: return "SMB横向移动";
+            case 3389: return "RDP远程桌面";
+            case 3306: return "MySQL数据窃取";
+            case 1433: return "SQLServer数据窃取";
+            case 135: return "RPC服务探测";
+            case 80: case 443: return "Web服务探测";
+            case 21: return "FTP文件传输";
+            case 25: return "SMTP邮件服务";
+            default: return port > 1000 ? "应用服务探测" : "系统服务探测";
+        }
     }
 
     // Getters and Setters

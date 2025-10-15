@@ -12,7 +12,9 @@ services:
       POSTGRES_PASSWORD: threat_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
+      - ./02-attack-events-storage.sql:/docker-entrypoint-initdb.d/02-attack-events-storage.sql
+      - ./port_weights_migration.sql:/docker-entrypoint-initdb.d/03-port-weights.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U threat_user -d threat_detection"]
       interval: 30s
@@ -67,8 +69,8 @@ services:
 
   data-ingestion:
     build:
-      context: ../   # ← 仓库根目录（包含父 pom.xml）
-      dockerfile: services/data-ingestion/data-ingestion-service/Dockerfile
+      context: ../services/data-ingestion/data-ingestion-service
+      dockerfile: Dockerfile
     hostname: data-ingestion-service
     container_name: data-ingestion-service
     depends_on:
@@ -133,8 +135,8 @@ services:
 
   threat-assessment:
     build:
-      context: ../   # ← 仓库根目录（包含父 pom.xml）
-      dockerfile: services/threat-assessment/Dockerfile
+      context: ../services/threat-assessment
+      dockerfile: Dockerfile
     hostname: threat-assessment-service
     container_name: threat-assessment-service
     depends_on:
@@ -152,8 +154,8 @@ services:
 
   alert-management:
     build:
-      context: ../   # ← 仓库根目录（包含父 pom.xml）
-      dockerfile: services/alert-management/Dockerfile
+      context: ../services/alert-management
+      dockerfile: Dockerfile
     hostname: alert-management-service
     container_name: alert-management-service
     depends_on:
@@ -197,7 +199,8 @@ services:
       kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic attack-events &&
       kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic status-events &&
       kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic threat-alerts &&
-      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic minute-aggregations
+      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic minute-aggregations &&
+      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic device-health-alerts
       "
     restart: "no"
 

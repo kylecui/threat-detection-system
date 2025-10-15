@@ -647,25 +647,63 @@ SELECT channel, COUNT(*) as count FROM notifications GROUP BY channel;
 4. **CI/CD**: Automated testing and deployment
 5. **Production**: Deploy via Kubernetes manifests
 
+## 📚 文档中心
+
+### 核心文档
+- **[调试与测试指南](docs/debugging_and_testing_guide.md)** ⭐ **必读** - 常见问题、调试流程、最佳实践
+- **[快速参考卡片](docs/QUICK_REFERENCE.md)** - 最常用命令速查
+- **[使用指南](USAGE_GUIDE.md)** - 详细的系统使用文档
+- **[开发规范](.github/copilot-instructions.md)** - 代码规范和架构设计
+
+### 快速工具脚本
+```bash
+# 完整重启 (代码修改后必做)
+./scripts/tools/full_restart.sh
+
+# 检查数据持久化状态
+./scripts/tools/check_persistence.sh
+
+# 实时查看多服务日志
+./scripts/tools/tail_logs.sh
+
+# 运行E2E测试
+python3 scripts/test/e2e_mvp_test.py
+```
+
 ## Troubleshooting
+
+### ⚠️ 重要提醒
+
+**代码修改后必须重新构建Docker镜像!** 容器不会自动加载新代码。
+
+```bash
+# 完整重启流程 (推荐使用自动化脚本)
+./scripts/tools/full_restart.sh
+
+# 或手动执行
+mvn clean package -DskipTests && \
+cd docker && \
+docker compose build --no-cache && \
+docker compose up -d
+```
 
 ### Common Issues
 
-1. **Port Conflicts**: Check if ports 8080-8083 are available
-2. **Memory Issues**: Ensure Docker has at least 4GB RAM allocated
-3. **Kafka Connection**: Verify Zookeeper is running before Kafka
-4. **Flink Jobs**: Check JobManager logs for submission errors
-5. **Connection Reset Errors**: Use the enhanced bulk ingestion script with built-in connection pooling:
-   ```bash
-   python3 scripts/tools/bulk_ingest_logs.py --count 5 --workers 4 --batch-size 25
-   ```
-6. **Bulk Ingestion Failures**: Monitor connection pool refresh logs and ensure batch sizes are optimized
+详细的问题排查步骤请参考 **[调试与测试指南](docs/debugging_and_testing_guide.md)**
+
+常见问题速查:
+1. **Kafka消费者未启动** → 检查配置文件优先级 (application.properties vs application-docker.yml)
+2. **数据未持久化** → 验证JSONB字段注解 (`@JdbcTypeCode(SqlTypes.JSON)`)
+3. **容器行为未改变** → 使用 `--no-cache` 重新构建镜像
+4. **E2E测试失败** → 确认数据库表名 (threat_alerts vs threat_assessments)
+5. **Port Conflicts** → 检查端口占用 `sudo lsof -i :5432`
 
 ### Getting Help
 
-- Check service logs: `docker-compose logs <service-name>`
-- Review documentation in `docs/` directory
-- Check GitHub Issues for known problems
+- **📖 查看文档**: [调试与测试指南](docs/debugging_and_testing_guide.md)
+- **📝 查看日志**: `docker logs -f data-ingestion-service`
+- **🔍 检查状态**: `./scripts/tools/check_persistence.sh`
+- **💬 GitHub Issues**: 报告新问题或查看已知问题
 
 ## Roadmap
 
