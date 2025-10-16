@@ -2,6 +2,7 @@ package com.threatdetection.alert.service.notification;
 
 import com.threatdetection.alert.model.*;
 import com.threatdetection.alert.repository.NotificationRepository;
+import com.threatdetection.alert.repository.CustomerNotificationConfigRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +18,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 通知服务 - 处理多通道通知
@@ -28,6 +30,12 @@ public class NotificationService {
 
     @Autowired
     private NotificationRepository notificationRepository;
+
+    @Autowired
+    private CustomerNotificationConfigRepository customerNotificationConfigRepository;
+
+    @Autowired
+    private DynamicMailSenderService dynamicMailSenderService;
 
     @Autowired(required = false)
     private JavaMailSender mailSender;
@@ -92,22 +100,18 @@ public class NotificationService {
     }
 
     /**
-     * 发送邮件通知
+     * 发送邮件通知 - 使用动态SMTP配置
      */
     private void sendEmail(Notification notification) {
-        if (mailSender == null) {
-            throw new IllegalStateException("Mail sender not configured");
-        }
-
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("threat_detection@163.com"); // 设置发件人地址
-        message.setTo(notification.getRecipient());
-        message.setSubject(notification.getSubject());
-        message.setText(notification.getContent());
-
         try {
-            mailSender.send(message);
-            logger.debug("Email sent to {}", notification.getRecipient());
+            // 使用DynamicMailSenderService发送邮件
+            dynamicMailSenderService.sendMail(
+                null,  // 使用配置中的默认发件人地址
+                notification.getRecipient(),
+                notification.getSubject(),
+                notification.getContent()
+            );
+            logger.debug("Email sent to {} via DynamicMailSenderService", notification.getRecipient());
         } catch (MailException e) {
             logger.error("Failed to send email: {}", e.getMessage());
             throw e;

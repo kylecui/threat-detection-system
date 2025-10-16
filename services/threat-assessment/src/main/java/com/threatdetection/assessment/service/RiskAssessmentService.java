@@ -329,7 +329,7 @@ public class RiskAssessmentService {
             String message = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(threatEvent);
 
             // Publish to Kafka
-            kafkaTemplate.send("threat-events", assessment.getAssessmentId(), message);
+            kafkaTemplate.send("threat-alerts", assessment.getAssessmentId(), message);
 
             logger.info("Published CRITICAL threat event to Kafka: {}", assessment.getAssessmentId());
 

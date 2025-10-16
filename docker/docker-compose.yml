@@ -12,9 +12,11 @@ services:
       POSTGRES_PASSWORD: threat_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
+      - ./01-init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
       - ./02-attack-events-storage.sql:/docker-entrypoint-initdb.d/02-attack-events-storage.sql
-      - ./port_weights_migration.sql:/docker-entrypoint-initdb.d/03-port-weights.sql
+      - ./03-port-weights.sql:/docker-entrypoint-initdb.d/03-port-weights.sql
+      - ./04-alert-management-tables.sql:/docker-entrypoint-initdb.d/04-alert-management-tables.sql
+      - ./05-notification-config-tables.sql:/docker-entrypoint-initdb.d/05-notification-config-tables.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U threat_user -d threat_detection"]
       interval: 30s

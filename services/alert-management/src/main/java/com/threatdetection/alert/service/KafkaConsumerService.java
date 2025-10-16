@@ -1,13 +1,14 @@
 package com.threatdetection.alert.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.threatdetection.alert.model.Alert;
-import com.threatdetection.alert.model.AlertSeverity;
-import com.threatdetection.alert.model.AlertStatus;
+import com.threatdetection.alert.model.*;
+import com.threatdetection.alert.repository.CustomerNotificationConfigRepository;
 import com.threatdetection.alert.service.alert.AlertService;
 import com.threatdetection.alert.service.alert.DeduplicationService;
+import com.threatdetection.alert.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -16,8 +17,10 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Kafka消费者服务
@@ -29,8 +32,13 @@ import java.util.Map;
 public class KafkaConsumerService {
 
     private final AlertService alertService;
+    private final NotificationService notificationService;
     private final DeduplicationService deduplicationService;
+    private final CustomerNotificationConfigRepository customerNotificationConfigRepository;
     private final ObjectMapper objectMapper;
+    
+    @Value("${integration-test.email.recipient:kylecui@outlook.com}")
+    private String defaultEmailRecipient;
 
     /**
      * 监听威胁检测事件
@@ -74,6 +82,7 @@ public class KafkaConsumerService {
             String source = (String) event.get("source");
             String message = (String) event.get("message");
             Integer severity = (Integer) event.get("severity");
+            String customerId = (String) event.get("customerId");  // 提取客户ID
             Map<String, Object> metadata = (Map<String, Object>) event.get("metadata");
 
             // 如果是threat-assessment服务发布的threat-events，使用不同的字段映射
@@ -83,8 +92,8 @@ public class KafkaConsumerService {
                 message = (String) event.get("description");
             }
 
-            log.debug("处理威胁事件: 类型={}, 来源={}, 消息={}, 严重程度={}",
-                    eventType, source, message, severity);
+            log.debug("处理威胁事件: 类型={}, 来源={}, 消息={}, 严重程度={}, 客户ID={}",
+                    eventType, source, message, severity, customerId);
 
             // 转换为告警严重程度
             AlertSeverity alertSeverity = mapToAlertSeverity(severity);
@@ -134,8 +143,132 @@ public class KafkaConsumerService {
             log.info("成功创建告警: ID={}, 标题={}, 严重程度={}",
                     savedAlert.getId(), savedAlert.getTitle(), savedAlert.getSeverity());
 
+            // 对于CRITICAL级别的告警，自动发送邮件通知
+            if (savedAlert.getSeverity() == AlertSeverity.CRITICAL) {
+                try {
+                    sendCriticalAlertNotification(savedAlert, customerId);
+                } catch (Exception e) {
+                    log.error("发送CRITICAL告警邮件通知失败: alertId={}", savedAlert.getId(), e);
+                }
+            }
+
         } catch (Exception e) {
             log.error("处理威胁事件时发生错误: {}", event, e);
+        }
+    }
+    
+    /**
+     * 发送CRITICAL告警通知
+     * 根据客户配置发送到指定的邮箱地址
+     */
+    private void sendCriticalAlertNotification(Alert alert, String customerId) {
+        // 获取客户通知配置
+        Optional<CustomerNotificationConfig> configOpt = 
+            customerNotificationConfigRepository.findByCustomerIdAndIsActive(customerId, true);
+        
+        if (configOpt.isEmpty()) {
+            log.warn("客户 {} 没有激活的通知配置，使用默认邮箱", customerId);
+            sendEmailNotification(alert, defaultEmailRecipient);
+            return;
+        }
+        
+        CustomerNotificationConfig config = configOpt.get();
+        
+        // 检查邮件通知是否启用
+        if (!Boolean.TRUE.equals(config.getEmailEnabled())) {
+            log.info("客户 {} 的邮件通知已禁用", customerId);
+            return;
+        }
+        
+        // 检查告警级别是否需要通知
+        if (!shouldNotify(config, alert.getSeverity())) {
+            log.info("告警级别 {} 不在客户 {} 的通知范围内", alert.getSeverity(), customerId);
+            return;
+        }
+        
+        // 解析邮件接收人列表
+        List<String> recipients = parseEmailRecipients(config.getEmailRecipients());
+        
+        if (recipients.isEmpty()) {
+            log.warn("客户 {} 没有配置邮件接收人", customerId);
+            return;
+        }
+        
+        // 发送给所有接收人
+        for (String recipient : recipients) {
+            sendEmailNotification(alert, recipient);
+        }
+        
+        log.info("已为CRITICAL告警发送邮件通知: alertId={}, customerId={}, recipients={}", 
+                 alert.getId(), customerId, recipients);
+    }
+    
+    /**
+     * 发送单个邮件通知
+     */
+    private void sendEmailNotification(Alert alert, String recipient) {
+        Notification notification = new Notification();
+        notification.setAlert(alert);
+        notification.setChannel(NotificationChannel.EMAIL);
+        notification.setRecipient(recipient);
+        notification.setSubject(String.format("【严重威胁】%s", alert.getTitle()));
+        notification.setContent(String.format(
+            "检测到严重威胁！\n\n" +
+            "告警ID: %d\n" +
+            "标题: %s\n" +
+            "描述: %s\n" +
+            "威胁分数: %.2f\n" +
+            "来源: %s\n" +
+            "时间: %s\n\n" +
+            "请立即处理！",
+            alert.getId(),
+            alert.getTitle(),
+            alert.getDescription(),
+            alert.getThreatScore() != null ? alert.getThreatScore() : 0.0,
+            alert.getSource(),
+            alert.getCreatedAt()
+        ));
+        
+        notificationService.sendNotification(notification);
+    }
+    
+    /**
+     * 检查是否应该发送通知
+     */
+    private boolean shouldNotify(CustomerNotificationConfig config, AlertSeverity severity) {
+        String severitiesJson = config.getNotifyOnSeverities();
+        if (severitiesJson == null || severitiesJson.isEmpty()) {
+            return true; // 默认通知所有级别
+        }
+        
+        try {
+            List<String> severities = objectMapper.readValue(
+                severitiesJson, 
+                objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)
+            );
+            return severities.contains(severity.toString());
+        } catch (Exception e) {
+            log.error("解析通知级别配置失败: {}", severitiesJson, e);
+            return true; // 解析失败时默认通知
+        }
+    }
+    
+    /**
+     * 解析邮件接收人列表（JSON数组格式）
+     */
+    private List<String> parseEmailRecipients(String recipientsJson) {
+        if (recipientsJson == null || recipientsJson.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        try {
+            return objectMapper.readValue(
+                recipientsJson,
+                objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)
+            );
+        } catch (Exception e) {
+            log.error("解析邮件接收人列表失败: {}", recipientsJson, e);
+            return new ArrayList<>();
         }
     }
 
