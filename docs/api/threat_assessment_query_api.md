@@ -2,17 +2,207 @@
 
 **服务名称**: Threat Assessment Service  
 **服务端口**: 8081  
-**文档版本**: 1.0  
-**更新日期**: 2025-01-16
+**基础路径**: `/api/v1/assessment`  
+**文档版本**: 2.0  
+**更新日期**: 2025-10-16
 
 ---
 
 ## 目录
 
-1. [API概述](#api概述)
-2. [获取评估详情](#获取评估详情)
-3. [威胁趋势分析](#威胁趋势分析)
-4. [健康检查](#健康检查)
+1. [系统概述](#1-系统概述)
+2. [核心功能](#2-核心功能)
+3. [数据模型](#3-数据模型)
+4. [API端点列表](#4-api端点列表)
+5. [API详细文档](#5-api详细文档)
+   - 5.1 [获取评估详情](#51-获取评估详情)
+   - 5.2 [查询评估列表](#52-查询评估列表)
+   - 5.3 [威胁趋势分析](#53-威胁趋势分析)
+   - 5.4 [威胁统计](#54-威胁统计)
+   - 5.5 [TOP攻击者](#55-top攻击者)
+   - 5.6 [健康检查](#56-健康检查)
+6. [使用场景](#6-使用场景)
+7. [Java客户端完整示例](#7-java客户端完整示例)
+8. [最佳实践](#8-最佳实践)
+9. [故障排查](#9-故障排查)
+10. [相关文档](#10-相关文档)
+
+---
+
+## 1. 系统概述
+
+威胁评估查询服务提供评估结果的查询、趋势分析和统计功能,支持安全分析师进行威胁态势感知。
+
+### 核心特性
+
+- ✅ **评估结果查询**: 单个/批量查询评估详情
+- ✅ **趋势分析**: 支持小时/天/周/月多种时间粒度
+- ✅ **统计报表**: 威胁等级分布、攻击源TOP N
+- ✅ **实时监控**: 实时威胁态势大屏
+- ✅ **租户隔离**: 基于customerId的数据隔离
+- ✅ **高性能查询**: 索引优化,毫秒级响应
+
+### 工作流程
+
+```
+┌─────────────────┐     查询请求    ┌──────────────────┐     SQL查询    ┌────────────────┐
+│  Web Dashboard  │  ─────────────→ │ Query API        │  ────────────→  │  PostgreSQL    │
+│  (前端)         │                 │                  │                 │  (评估记录)    │
+└─────────────────┘                 └──────────────────┘                 └────────────────┘
+                                            │                                     │
+                                            ↓                                     ↓
+                                    ┌──────────────────┐              ┌────────────────┐
+                                    │  缓存层 (Redis)  │ ←─────────── │  聚合计算      │
+                                    │  (热点数据)      │              │  (GROUP BY)    │
+                                    └──────────────────┘              └────────────────┘
+                                            │
+                                            ↓
+                                    ┌──────────────────┐
+                                    │  JSON响应        │
+                                    │  (趋势图/统计表) │
+                                    └──────────────────┘
+```
+
+### 技术栈
+
+- **框架**: Spring Boot 3.1.5
+- **数据库**: PostgreSQL 15+ (时序数据优化)
+- **缓存**: Redis 7+ (可选)
+- **查询优化**: 索引优化、分区表
+- **API风格**: RESTful
+- **数据格式**: JSON
+
+---
+
+## 2. 核心功能
+
+### 2.1 评估结果查询
+
+- **单个查询**: 根据assessmentId查询详情
+- **批量查询**: 支持多条件过滤、分页、排序
+- **全文搜索**: 支持攻击IP/MAC搜索
+
+### 2.2 趋势分析
+
+- **时间粒度**: 小时/天/周/月
+- **趋势指标**: 评估数量、平均评分、等级分布
+- **对比分析**: 同比/环比
+- **可视化**: 折线图、柱状图数据
+
+### 2.3 统计报表
+
+- **威胁等级分布**: CRITICAL/HIGH/MEDIUM/LOW/INFO占比
+- **TOP攻击者**: 按攻击次数/评分排序
+- **时段分析**: 按小时统计攻击高峰期
+- **设备分析**: 按蜜罐设备统计
+
+### 2.4 实时监控
+
+- **实时威胁数**: 当前OPEN状态威胁数量
+- **24小时趋势**: 最近24小时威胁变化
+- **告警通知**: CRITICAL威胁实时推送
+
+---
+
+## 3. 数据模型
+
+### 查询参数DTO
+
+```java
+/**
+ * 查询参数
+ */
+@Data
+@Builder
+public class AssessmentQueryParams {
+    private String customerId;
+    private String attackIp;
+    private String attackMac;
+    private String threatLevel;  // INFO/LOW/MEDIUM/HIGH/CRITICAL
+    private String startTime;    // ISO8601
+    private String endTime;      // ISO8601
+    
+    // 分页参数
+    @Builder.Default
+    private Integer page = 0;
+    
+    @Builder.Default
+    private Integer size = 20;
+    
+    @Builder.Default
+    private String sortBy = "assessmentTime";
+    
+    @Builder.Default
+    private String sortDir = "DESC";
+}
+
+/**
+ * 趋势分析参数
+ */
+@Data
+@Builder
+public class TrendAnalysisParams {
+    private String customerId;
+    private String startTime;
+    private String endTime;
+    
+    @Builder.Default
+    private String granularity = "HOURLY";  // HOURLY/DAILY/WEEKLY/MONTHLY
+    
+    private String threatLevel;  // 可选:仅统计特定等级
+}
+```
+
+### 响应DTO
+
+```java
+/**
+ * 趋势分析响应
+ */
+@Data
+public class ThreatTrendResponse {
+    private String customerId;
+    private TimeRange timeRange;
+    private String granularity;
+    private List<DataPoint> dataPoints;
+    private TrendSummary summary;
+}
+
+@Data
+public class DataPoint {
+    private String timestamp;
+    private Integer threatCount;
+    private Double averageScore;
+    private Map<String, Integer> levelDistribution;
+}
+
+@Data
+public class TrendSummary {
+    private Integer totalThreats;
+    private Double averageScore;
+    private Double highestScore;
+    private Integer criticalCount;
+}
+```
+
+---
+
+## 4. API端点列表
+
+| 方法 | 端点 | 功能 | 参数 |
+|------|------|------|------|
+| `GET` | `/api/v1/assessment/{assessmentId}` | 获取评估详情 | assessmentId (path) |
+| `GET` | `/api/v1/assessment` | 查询评估列表 | 查询参数 (query) |
+| `GET` | `/api/v1/assessment/trends` | 威胁趋势分析 | 时间范围、粒度 (query) |
+| `GET` | `/api/v1/assessment/statistics` | 威胁统计 | customerId, 时间范围 (query) |
+| `GET` | `/api/v1/assessment/top-attackers` | TOP攻击者 | customerId, topN (query) |
+| `GET` | `/api/v1/assessment/health` | 健康检查 | - |
+
+---
+
+## 5. API详细文档
+
+### 5.1 获取评估详情
 
 ---
 
@@ -336,6 +526,985 @@ public boolean checkHealth() {
   }
 }
 ```
+
+---
+
+### 5.4 威胁统计
+
+**描述**: 统计指定时间范围的威胁数据,提供等级分布、平均分、峰值等统计信息。
+
+**端点**: `GET /api/v1/assessment/statistics`
+
+#### 查询参数
+
+| 参数 | 类型 | 必需 | 说明 |
+|-----|------|------|------|
+| `customerId` | String | ✅ | 客户ID |
+| `startTime` | String | ✅ | 开始时间 (ISO8601) |
+| `endTime` | String | ✅ | 结束时间 (ISO8601) |
+
+#### 请求示例 (curl)
+
+```bash
+curl -X GET "http://localhost:8081/api/v1/assessment/statistics?customerId=customer_a&startTime=2025-01-01T00:00:00Z&endTime=2025-01-31T23:59:59Z"
+```
+
+#### 请求示例 (Java)
+
+```java
+public ThreatStatistics getStatistics(String customerId, String startTime, String endTime) {
+    String url = UriComponentsBuilder
+        .fromHttpUrl(BASE_URL + "/statistics")
+        .queryParam("customerId", customerId)
+        .queryParam("startTime", startTime)
+        .queryParam("endTime", endTime)
+        .toUriString();
+    
+    return restTemplate.getForObject(url, ThreatStatistics.class);
+}
+```
+
+#### 响应示例
+
+**HTTP 200 OK**
+
+```json
+{
+  "customerId": "customer_a",
+  "timeRange": {
+    "start": "2025-01-01T00:00:00Z",
+    "end": "2025-01-31T23:59:59Z"
+  },
+  "totalAssessments": 1250,
+  "levelDistribution": {
+    "CRITICAL": 25,
+    "HIGH": 120,
+    "MEDIUM": 450,
+    "LOW": 500,
+    "INFO": 155
+  },
+  "scoreStatistics": {
+    "averageThreatScore": 85.3,
+    "medianThreatScore": 52.0,
+    "highestThreatScore": 7290.0,
+    "lowestThreatScore": 5.2
+  },
+  "attackerStatistics": {
+    "uniqueAttackerIps": 85,
+    "uniqueAttackerMacs": 78,
+    "mostActiveHour": "02:00-03:00"
+  }
+}
+```
+
+---
+
+### 5.5 TOP攻击者
+
+**描述**: 查询威胁评分最高或攻击次数最多的TOP N攻击者。
+
+**端点**: `GET /api/v1/assessment/top-attackers`
+
+#### 查询参数
+
+| 参数 | 类型 | 必需 | 默认值 | 说明 |
+|-----|------|------|--------|------|
+| `customerId` | String | ✅ | - | 客户ID |
+| `startTime` | String | ❌ | 7天前 | 开始时间 (ISO8601) |
+| `endTime` | String | ❌ | 现在 | 结束时间 (ISO8601) |
+| `topN` | Integer | ❌ | 10 | TOP N数量 (1-100) |
+| `sortBy` | String | ❌ | totalScore | 排序依据 (totalScore/assessmentCount) |
+
+#### 请求示例 (curl)
+
+```bash
+# 查询TOP 10威胁得分最高的攻击者
+curl -X GET "http://localhost:8081/api/v1/assessment/top-attackers?customerId=customer_a&topN=10"
+
+# 查询TOP 20攻击次数最多的攻击者
+curl -X GET "http://localhost:8081/api/v1/assessment/top-attackers?customerId=customer_a&topN=20&sortBy=assessmentCount"
+
+# 查询过去30天TOP 5攻击者
+curl -X GET "http://localhost:8081/api/v1/assessment/top-attackers?customerId=customer_a&startTime=2024-12-16T00:00:00Z&endTime=2025-01-15T23:59:59Z&topN=5"
+```
+
+#### 请求示例 (Java)
+
+```java
+public TopAttackersResponse getTopAttackers(
+        String customerId,
+        String startTime,
+        String endTime,
+        Integer topN,
+        String sortBy) {
+    
+    UriComponentsBuilder builder = UriComponentsBuilder
+        .fromHttpUrl(BASE_URL + "/top-attackers")
+        .queryParam("customerId", customerId);
+    
+    if (startTime != null) {
+        builder.queryParam("startTime", startTime);
+    }
+    if (endTime != null) {
+        builder.queryParam("endTime", endTime);
+    }
+    if (topN != null) {
+        builder.queryParam("topN", topN);
+    }
+    if (sortBy != null) {
+        builder.queryParam("sortBy", sortBy);
+    }
+    
+    return restTemplate.getForObject(
+        builder.toUriString(),
+        TopAttackersResponse.class
+    );
+}
+```
+
+#### 响应示例
+
+**HTTP 200 OK**
+
+```json
+{
+  "customerId": "customer_a",
+  "timeRange": {
+    "start": "2025-01-08T00:00:00Z",
+    "end": "2025-01-15T23:59:59Z"
+  },
+  "topN": 10,
+  "sortBy": "totalScore",
+  "attackers": [
+    {
+      "rank": 1,
+      "attackIp": "192.168.75.188",
+      "attackMac": "04:42:1a:8e:e3:65",
+      "assessmentCount": 45,
+      "totalThreatScore": 15000.0,
+      "averageThreatScore": 333.3,
+      "maxThreatLevel": "CRITICAL",
+      "firstSeenAt": "2025-01-08T05:30:00Z",
+      "lastSeenAt": "2025-01-15T02:30:00Z"
+    },
+    {
+      "rank": 2,
+      "attackIp": "10.0.1.50",
+      "attackMac": "aa:bb:cc:dd:ee:ff",
+      "assessmentCount": 30,
+      "totalThreatScore": 5000.0,
+      "averageThreatScore": 166.7,
+      "maxThreatLevel": "HIGH",
+      "firstSeenAt": "2025-01-10T12:15:00Z",
+      "lastSeenAt": "2025-01-14T18:45:00Z"
+    },
+    {
+      "rank": 3,
+      "attackIp": "172.16.10.20",
+      "attackMac": "11:22:33:44:55:66",
+      "assessmentCount": 25,
+      "totalThreatScore": 3200.0,
+      "averageThreatScore": 128.0,
+      "maxThreatLevel": "HIGH",
+      "firstSeenAt": "2025-01-09T08:00:00Z",
+      "lastSeenAt": "2025-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## 6. 使用场景
+
+### 场景1: 安全仪表板实时查询
+
+**需求**: 安全运营中心(SOC)仪表板需要实时展示威胁评估数据。
+
+**实现**:
+
+```java
+public class SecurityDashboard {
+    
+    private final ThreatAssessmentQueryClient queryClient;
+    
+    /**
+     * 加载仪表板数据
+     */
+    public DashboardData loadDashboard(String customerId) {
+        Instant now = Instant.now();
+        Instant last24Hours = now.minus(24, ChronoUnit.HOURS);
+        
+        // 1. 获取过去24小时统计
+        ThreatStatistics stats = queryClient.getStatistics(
+            customerId,
+            last24Hours.toString(),
+            now.toString()
+        );
+        
+        // 2. 获取TOP 10攻击者
+        TopAttackersResponse topAttackers = queryClient.getTopAttackers(
+            customerId,
+            last24Hours.toString(),
+            now.toString(),
+            10,
+            "totalScore"
+        );
+        
+        // 3. 获取小时级趋势
+        ThreatTrendResponse trends = queryClient.getThreatTrends(
+            customerId,
+            last24Hours.toString(),
+            now.toString(),
+            "HOURLY",
+            null
+        );
+        
+        // 4. 查询最新CRITICAL威胁
+        AssessmentQueryParams params = AssessmentQueryParams.builder()
+            .customerId(customerId)
+            .threatLevel("CRITICAL")
+            .startTime(last24Hours.toString())
+            .endTime(now.toString())
+            .sortBy("assessmentTime")
+            .sortDir("DESC")
+            .page(0)
+            .size(5)
+            .build();
+        
+        Page<AssessmentResponse> criticalThreats = queryClient.queryAssessments(params);
+        
+        // 5. 构建仪表板数据
+        return DashboardData.builder()
+            .statistics(stats)
+            .topAttackers(topAttackers.getAttackers())
+            .trends(trends.getDataPoints())
+            .latestCriticalThreats(criticalThreats.getContent())
+            .lastUpdateTime(now)
+            .build();
+    }
+    
+    /**
+     * 定时刷新仪表板 (每30秒)
+     */
+    @Scheduled(fixedDelay = 30000)
+    public void refreshDashboard() {
+        try {
+            DashboardData data = loadDashboard("customer_a");
+            // 推送到前端WebSocket
+            websocketService.broadcast("/topic/dashboard", data);
+            log.info("Dashboard refreshed: {} threats in last 24h", 
+                    data.getStatistics().getTotalAssessments());
+        } catch (Exception e) {
+            log.error("Failed to refresh dashboard", e);
+        }
+    }
+}
+```
+
+---
+
+### 场景2: 威胁趋势分析和报表生成
+
+**需求**: 每周生成威胁分析报表,识别攻击趋势和异常模式。
+
+**实现**:
+
+```java
+public class ThreatReportGenerator {
+    
+    private final ThreatAssessmentQueryClient queryClient;
+    
+    /**
+     * 生成周报
+     */
+    public WeeklyReport generateWeeklyReport(String customerId, LocalDate weekStart) {
+        Instant start = weekStart.atStartOfDay(ZoneId.systemDefault()).toInstant();
+        Instant end = start.plus(7, ChronoUnit.DAYS);
+        
+        // 1. 获取每日趋势
+        ThreatTrendResponse dailyTrends = queryClient.getThreatTrends(
+            customerId,
+            start.toString(),
+            end.toString(),
+            "DAILY",
+            null
+        );
+        
+        // 2. 获取统计数据
+        ThreatStatistics stats = queryClient.getStatistics(
+            customerId,
+            start.toString(),
+            end.toString()
+        );
+        
+        // 3. 获取TOP 20攻击者
+        TopAttackersResponse topAttackers = queryClient.getTopAttackers(
+            customerId,
+            start.toString(),
+            end.toString(),
+            20,
+            "totalScore"
+        );
+        
+        // 4. 分析趋势
+        TrendAnalysis analysis = analyzeTrends(dailyTrends);
+        
+        // 5. 生成报表
+        WeeklyReport report = WeeklyReport.builder()
+            .customerId(customerId)
+            .weekStart(weekStart)
+            .weekEnd(weekStart.plusDays(6))
+            .totalThreats(stats.getTotalAssessments())
+            .criticalThreats(stats.getLevelDistribution().get("CRITICAL"))
+            .averageScore(stats.getScoreStatistics().getAverageThreatScore())
+            .trendAnalysis(analysis)
+            .topAttackers(topAttackers.getAttackers())
+            .generatedAt(Instant.now())
+            .build();
+        
+        // 6. 保存报表并发送通知
+        reportRepository.save(report);
+        emailService.sendWeeklyReport(report);
+        
+        log.info("Weekly report generated: customerId={}, threats={}, critical={}", 
+                customerId, report.getTotalThreats(), report.getCriticalThreats());
+        
+        return report;
+    }
+    
+    /**
+     * 分析趋势变化
+     */
+    private TrendAnalysis analyzeTrends(ThreatTrendResponse trends) {
+        List<DataPoint> points = trends.getDataPoints();
+        
+        // 计算日环比增长率
+        double dayOverDayGrowth = calculateGrowthRate(points);
+        
+        // 识别异常峰值
+        List<DataPoint> peaks = identifyPeaks(points);
+        
+        // 分析威胁等级变化
+        Map<String, Double> levelTrends = analyzeLevelDistributionTrends(points);
+        
+        return TrendAnalysis.builder()
+            .dayOverDayGrowth(dayOverDayGrowth)
+            .anomalyPeaks(peaks)
+            .levelTrends(levelTrends)
+            .build();
+    }
+}
+```
+
+---
+
+### 场景3: 实时攻击者追踪
+
+**需求**: 追踪特定攻击者的历史行为和威胁演变。
+
+**实现**:
+
+```java
+public class AttackerTracker {
+    
+    private final ThreatAssessmentQueryClient queryClient;
+    
+    /**
+     * 追踪攻击者行为
+     */
+    public AttackerProfile trackAttacker(String customerId, String attackIp) {
+        Instant now = Instant.now();
+        Instant past30Days = now.minus(30, ChronoUnit.DAYS);
+        
+        // 1. 查询该攻击者的所有评估记录
+        AssessmentQueryParams params = AssessmentQueryParams.builder()
+            .customerId(customerId)
+            .attackIp(attackIp)
+            .startTime(past30Days.toString())
+            .endTime(now.toString())
+            .sortBy("assessmentTime")
+            .sortDir("ASC")  // 时间升序,分析演变过程
+            .page(0)
+            .size(1000)
+            .build();
+        
+        Page<AssessmentResponse> assessments = queryClient.queryAssessments(params);
+        
+        // 2. 分析行为模式
+        BehaviorPattern pattern = analyzeBehavior(assessments.getContent());
+        
+        // 3. 计算威胁趋势
+        List<Double> threatScoreTimeline = assessments.getContent().stream()
+            .map(AssessmentResponse::getThreatScore)
+            .collect(Collectors.toList());
+        
+        double averageScore = threatScoreTimeline.stream()
+            .mapToDouble(Double::doubleValue)
+            .average()
+            .orElse(0.0);
+        
+        double maxScore = threatScoreTimeline.stream()
+            .mapToDouble(Double::doubleValue)
+            .max()
+            .orElse(0.0);
+        
+        // 4. 识别攻击目标
+        Set<String> targetIps = assessments.getContent().stream()
+            .flatMap(a -> a.getTargetIps().stream())
+            .collect(Collectors.toSet());
+        
+        Set<Integer> targetPorts = assessments.getContent().stream()
+            .flatMap(a -> a.getTargetPorts().stream())
+            .collect(Collectors.toSet());
+        
+        // 5. 构建攻击者画像
+        return AttackerProfile.builder()
+            .attackIp(attackIp)
+            .totalAssessments(assessments.getTotalElements())
+            .averageThreatScore(averageScore)
+            .maxThreatScore(maxScore)
+            .threatScoreTimeline(threatScoreTimeline)
+            .behaviorPattern(pattern)
+            .targetIps(targetIps)
+            .targetPorts(targetPorts)
+            .firstSeenAt(assessments.getContent().get(0).getAssessmentTime())
+            .lastSeenAt(assessments.getContent().get(assessments.getContent().size() - 1).getAssessmentTime())
+            .build();
+    }
+}
+```
+
+---
+
+## 7. Java客户端完整示例
+
+### ThreatAssessmentQueryClient
+
+```java
+package com.threatdetection.client;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.data.domain.Page;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
+
+/**
+ * 威胁评估查询API客户端
+ * 
+ * <p>提供以下查询功能:
+ * <ul>
+ *   <li>评估详情查询</li>
+ *   <li>评估列表分页查询</li>
+ *   <li>威胁趋势分析</li>
+ *   <li>威胁统计</li>
+ *   <li>TOP攻击者查询</li>
+ *   <li>健康检查</li>
+ * </ul>
+ * 
+ * @author ThreatDetection Team
+ * @version 1.0
+ */
+@Slf4j
+@Component
+public class ThreatAssessmentQueryClient {
+    
+    private static final String BASE_URL = "http://localhost:8081/api/v1/assessment";
+    private final RestTemplate restTemplate;
+    
+    public ThreatAssessmentQueryClient(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
+    
+    /**
+     * 获取评估详情
+     * 
+     * @param assessmentId 评估ID
+     * @return 评估详情
+     */
+    public AssessmentResponse getAssessmentDetails(String assessmentId) {
+        String url = BASE_URL + "/" + assessmentId;
+        log.info("Getting assessment details: assessmentId={}", assessmentId);
+        
+        return restTemplate.getForObject(url, AssessmentResponse.class);
+    }
+    
+    /**
+     * 查询评估列表
+     * 
+     * @param params 查询参数
+     * @return 分页结果
+     */
+    public Page<AssessmentResponse> queryAssessments(AssessmentQueryParams params) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(BASE_URL);
+        
+        // 添加查询条件
+        if (params.getCustomerId() != null) {
+            builder.queryParam("customerId", params.getCustomerId());
+        }
+        if (params.getThreatLevel() != null) {
+            builder.queryParam("threatLevel", params.getThreatLevel());
+        }
+        if (params.getAttackIp() != null) {
+            builder.queryParam("attackIp", params.getAttackIp());
+        }
+        if (params.getAttackMac() != null) {
+            builder.queryParam("attackMac", params.getAttackMac());
+        }
+        if (params.getStartTime() != null) {
+            builder.queryParam("startTime", params.getStartTime());
+        }
+        if (params.getEndTime() != null) {
+            builder.queryParam("endTime", params.getEndTime());
+        }
+        
+        // 分页和排序
+        builder.queryParam("page", params.getPage());
+        builder.queryParam("size", params.getSize());
+        builder.queryParam("sortBy", params.getSortBy());
+        builder.queryParam("sortDir", params.getSortDir());
+        
+        String url = builder.toUriString();
+        log.info("Querying assessments: customerId={}, level={}, page={}", 
+                params.getCustomerId(), params.getThreatLevel(), params.getPage());
+        
+        ResponseEntity<RestResponsePage<AssessmentResponse>> response = restTemplate.exchange(
+            url,
+            HttpMethod.GET,
+            null,
+            new ParameterizedTypeReference<RestResponsePage<AssessmentResponse>>() {}
+        );
+        
+        return response.getBody();
+    }
+    
+    /**
+     * 威胁趋势分析
+     * 
+     * @param customerId 客户ID
+     * @param startTime 开始时间
+     * @param endTime 结束时间
+     * @param granularity 时间粒度 (HOURLY/DAILY/WEEKLY/MONTHLY)
+     * @param riskLevel 威胁等级过滤 (可选)
+     * @return 趋势分析结果
+     */
+    public ThreatTrendResponse getThreatTrends(
+            String customerId,
+            String startTime,
+            String endTime,
+            String granularity,
+            String riskLevel) {
+        
+        UriComponentsBuilder builder = UriComponentsBuilder
+            .fromHttpUrl(BASE_URL + "/trends")
+            .queryParam("startTime", startTime)
+            .queryParam("endTime", endTime);
+        
+        if (customerId != null) {
+            builder.queryParam("customerId", customerId);
+        }
+        if (granularity != null) {
+            builder.queryParam("granularity", granularity);
+        }
+        if (riskLevel != null) {
+            builder.queryParam("riskLevel", riskLevel);
+        }
+        
+        log.info("Analyzing threat trends: customerId={}, granularity={}, range=[{} to {}]", 
+                customerId, granularity, startTime, endTime);
+        
+        return restTemplate.getForObject(
+            builder.toUriString(),
+            ThreatTrendResponse.class
+        );
+    }
+    
+    /**
+     * 威胁统计
+     * 
+     * @param customerId 客户ID
+     * @param startTime 开始时间
+     * @param endTime 结束时间
+     * @return 统计结果
+     */
+    public ThreatStatistics getStatistics(String customerId, String startTime, String endTime) {
+        String url = UriComponentsBuilder
+            .fromHttpUrl(BASE_URL + "/statistics")
+            .queryParam("customerId", customerId)
+            .queryParam("startTime", startTime)
+            .queryParam("endTime", endTime)
+            .toUriString();
+        
+        log.info("Getting threat statistics: customerId={}, range=[{} to {}]", 
+                customerId, startTime, endTime);
+        
+        return restTemplate.getForObject(url, ThreatStatistics.class);
+    }
+    
+    /**
+     * 查询TOP攻击者
+     * 
+     * @param customerId 客户ID
+     * @param startTime 开始时间 (可选)
+     * @param endTime 结束时间 (可选)
+     * @param topN TOP N数量 (可选,默认10)
+     * @param sortBy 排序依据 (可选,默认totalScore)
+     * @return TOP攻击者列表
+     */
+    public TopAttackersResponse getTopAttackers(
+            String customerId,
+            String startTime,
+            String endTime,
+            Integer topN,
+            String sortBy) {
+        
+        UriComponentsBuilder builder = UriComponentsBuilder
+            .fromHttpUrl(BASE_URL + "/top-attackers")
+            .queryParam("customerId", customerId);
+        
+        if (startTime != null) {
+            builder.queryParam("startTime", startTime);
+        }
+        if (endTime != null) {
+            builder.queryParam("endTime", endTime);
+        }
+        if (topN != null) {
+            builder.queryParam("topN", topN);
+        }
+        if (sortBy != null) {
+            builder.queryParam("sortBy", sortBy);
+        }
+        
+        log.info("Getting top attackers: customerId={}, topN={}, sortBy={}", 
+                customerId, topN, sortBy);
+        
+        return restTemplate.getForObject(
+            builder.toUriString(),
+            TopAttackersResponse.class
+        );
+    }
+    
+    /**
+     * 健康检查
+     * 
+     * @return 健康状态
+     */
+    public HealthStatus checkHealth() {
+        try {
+            HealthStatus status = restTemplate.getForObject(
+                BASE_URL + "/health",
+                HealthStatus.class
+            );
+            log.info("Health check: status={}", status.getStatus());
+            return status;
+        } catch (Exception e) {
+            log.error("Health check failed", e);
+            return HealthStatus.builder()
+                .status("DOWN")
+                .build();
+        }
+    }
+    
+    /**
+     * 查询指定攻击者的历史评估
+     * 
+     * @param customerId 客户ID
+     * @param attackIp 攻击源IP
+     * @param days 查询天数
+     * @return 历史评估列表
+     */
+    public List<AssessmentResponse> getAttackerHistory(String customerId, String attackIp, int days) {
+        Instant now = Instant.now();
+        Instant start = now.minus(days, ChronoUnit.DAYS);
+        
+        AssessmentQueryParams params = AssessmentQueryParams.builder()
+            .customerId(customerId)
+            .attackIp(attackIp)
+            .startTime(start.toString())
+            .endTime(now.toString())
+            .sortBy("assessmentTime")
+            .sortDir("DESC")
+            .page(0)
+            .size(1000)
+            .build();
+        
+        Page<AssessmentResponse> page = queryAssessments(params);
+        return page.getContent();
+    }
+}
+```
+
+---
+
+## 8. 最佳实践
+
+### ✅ 推荐做法
+
+#### 8.1 使用分页查询
+
+```java
+// ✅ 正确: 使用分页,避免一次性加载大量数据
+AssessmentQueryParams params = AssessmentQueryParams.builder()
+    .customerId("customer_a")
+    .page(0)
+    .size(50)  // 每页50条
+    .build();
+
+Page<AssessmentResponse> page = client.queryAssessments(params);
+```
+
+```java
+// ❌ 错误: 不设置分页大小,可能导致性能问题
+AssessmentQueryParams params = AssessmentQueryParams.builder()
+    .customerId("customer_a")
+    .size(10000)  // 过大
+    .build();
+```
+
+#### 8.2 使用缓存减少查询
+
+```java
+// ✅ 正确: 缓存统计数据
+@Cacheable(value = "threat-statistics", key = "#customerId + ':' + #startTime")
+public ThreatStatistics getStatistics(String customerId, String startTime, String endTime) {
+    return queryClient.getStatistics(customerId, startTime, endTime);
+}
+```
+
+#### 8.3 合理使用时间粒度
+
+```java
+// ✅ 正确: 根据时间范围选择合适的粒度
+public ThreatTrendResponse analyzeTrends(String customerId, int days) {
+    Instant now = Instant.now();
+    Instant start = now.minus(days, ChronoUnit.DAYS);
+    
+    String granularity;
+    if (days <= 2) {
+        granularity = "HOURLY";  // 2天内用小时级
+    } else if (days <= 30) {
+        granularity = "DAILY";   // 30天内用天级
+    } else {
+        granularity = "WEEKLY";  // 超过30天用周级
+    }
+    
+    return queryClient.getThreatTrends(
+        customerId, start.toString(), now.toString(), granularity, null);
+}
+```
+
+#### 8.4 异常处理和重试
+
+```java
+// ✅ 正确: 实现重试机制
+@Retryable(
+    value = {RestClientException.class},
+    maxAttempts = 3,
+    backoff = @Backoff(delay = 1000, multiplier = 2)
+)
+public AssessmentResponse getAssessmentWithRetry(String assessmentId) {
+    try {
+        return queryClient.getAssessmentDetails(assessmentId);
+    } catch (HttpClientErrorException.NotFound e) {
+        log.warn("Assessment not found: {}", assessmentId);
+        return null;
+    } catch (Exception e) {
+        log.error("Failed to get assessment: {}", assessmentId, e);
+        throw e;
+    }
+}
+```
+
+---
+
+### ❌ 避免的做法
+
+#### 8.5 避免频繁轮询
+
+```java
+// ❌ 错误: 每秒轮询一次
+@Scheduled(fixedDelay = 1000)
+public void pollThreatData() {
+    List<AssessmentResponse> threats = queryAllThreats();  // 性能问题
+}
+
+// ✅ 正确: 使用WebSocket或合理的轮询间隔
+@Scheduled(fixedDelay = 30000)  // 30秒轮询一次
+public void refreshDashboard() {
+    DashboardData data = loadDashboardData();
+    websocketService.broadcast(data);
+}
+```
+
+#### 8.6 避免未过滤的查询
+
+```java
+// ❌ 错误: 查询所有客户的数据 (多租户违规)
+AssessmentQueryParams params = AssessmentQueryParams.builder()
+    // 缺少 customerId 过滤
+    .startTime(startTime)
+    .endTime(endTime)
+    .build();
+
+// ✅ 正确: 必须指定 customerId
+AssessmentQueryParams params = AssessmentQueryParams.builder()
+    .customerId("customer_a")  // 必需
+    .startTime(startTime)
+    .endTime(endTime)
+    .build();
+```
+
+---
+
+## 9. 故障排查
+
+### 9.1 查询速度慢
+
+**症状**: 查询耗时超过5秒
+
+**诊断步骤**:
+
+1. **检查查询参数**:
+```bash
+# 检查是否缺少索引过滤条件
+curl -X GET "http://localhost:8081/api/v1/assessment?customerId=customer_a&startTime=2025-01-01T00:00:00Z&endTime=2025-01-31T23:59:59Z"
+```
+
+2. **检查数据库索引**:
+```sql
+-- 查看表索引
+\d+ threat_assessments
+
+-- 检查是否有以下索引:
+-- idx_customer_time (customer_id, assessment_time)
+-- idx_attack_ip (attack_ip)
+-- idx_attack_mac (attack_mac)
+-- idx_threat_level (threat_level)
+```
+
+3. **查看执行计划**:
+```sql
+EXPLAIN ANALYZE
+SELECT * FROM threat_assessments
+WHERE customer_id = 'customer_a'
+  AND assessment_time BETWEEN '2025-01-01' AND '2025-01-31'
+ORDER BY assessment_time DESC
+LIMIT 20;
+```
+
+**解决方案**:
+
+```sql
+-- 创建复合索引
+CREATE INDEX idx_customer_time_level ON threat_assessments(customer_id, assessment_time, threat_level);
+
+-- 创建部分索引 (只索引CRITICAL和HIGH)
+CREATE INDEX idx_high_priority_threats ON threat_assessments(customer_id, assessment_time) 
+WHERE threat_level IN ('CRITICAL', 'HIGH');
+```
+
+---
+
+### 9.2 数据不一致
+
+**症状**: 查询结果与预期不符,缺少最新数据
+
+**诊断步骤**:
+
+1. **检查服务健康状态**:
+```bash
+curl -X GET http://localhost:8081/api/v1/assessment/health
+```
+
+2. **检查Kafka消费延迟**:
+```bash
+# 检查consumer lag
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+  --describe --group threat-assessment-consumer
+```
+
+3. **检查数据库连接**:
+```bash
+# 检查PostgreSQL连接数
+psql -U postgres -d threat_detection -c "SELECT count(*) FROM pg_stat_activity WHERE datname='threat_detection';"
+```
+
+**解决方案**:
+
+```java
+// 1. 强制刷新缓存
+@CacheEvict(value = "threat-statistics", allEntries = true)
+public void clearCache() {
+    log.info("Threat statistics cache cleared");
+}
+
+// 2. 重启Kafka消费者
+public void restartConsumer() {
+    kafkaListenerEndpointRegistry.stop();
+    Thread.sleep(5000);
+    kafkaListenerEndpointRegistry.start();
+    log.info("Kafka consumer restarted");
+}
+```
+
+---
+
+### 9.3 趋势分析返回空数据
+
+**症状**: `GET /api/v1/assessment/trends` 返回空 `dataPoints`
+
+**诊断步骤**:
+
+1. **检查时间范围参数**:
+```bash
+# 确认时间格式正确 (ISO8601)
+curl -X GET "http://localhost:8081/api/v1/assessment/trends?customerId=customer_a&startTime=2025-01-15T00:00:00Z&endTime=2025-01-15T23:59:59Z&granularity=HOURLY"
+```
+
+2. **检查原始数据**:
+```sql
+-- 检查该时间范围是否有数据
+SELECT count(*), min(assessment_time), max(assessment_time)
+FROM threat_assessments
+WHERE customer_id = 'customer_a'
+  AND assessment_time BETWEEN '2025-01-15 00:00:00' AND '2025-01-15 23:59:59';
+```
+
+**解决方案**:
+
+```java
+// 时间范围回退策略
+public ThreatTrendResponse getTrendsWithFallback(String customerId, Instant start, Instant end) {
+    ThreatTrendResponse response = client.getThreatTrends(
+        customerId, start.toString(), end.toString(), "HOURLY", null);
+    
+    // 如果数据为空,尝试扩大时间范围
+    if (response.getDataPoints().isEmpty()) {
+        log.warn("No trend data found, expanding time range");
+        Instant expandedStart = start.minus(7, ChronoUnit.DAYS);
+        response = client.getThreatTrends(
+            customerId, expandedStart.toString(), end.toString(), "DAILY", null);
+    }
+    
+    return response;
+}
+```
+
+---
+
+## 10. 相关文档
+
+| 文档 | 说明 |
+|------|------|
+| [威胁评估操作API](./threat_assessment_evaluation_api.md) | 威胁评估和缓解操作 |
+| [告警管理API](./alert_crud_api.md) | 告警CRUD操作 |
+| [告警生命周期API](./alert_lifecycle_api.md) | 告警状态管理 |
+| [数据结构定义](../data_structures.md) | 详细数据模型 |
+| [系统架构](../cloud_native_architecture.md) | 云原生架构设计 |
 
 ---
 

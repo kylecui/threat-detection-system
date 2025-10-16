@@ -134,7 +134,30 @@ curl -X POST http://localhost:8082/api/v1/alerts/12345/resolve \
 
 ---
 
-## 🔗 相关文档
+## � 文档补充计划
+
+**当前状态**: 部分API文档为精简版,完整版补充工作正在进行中。
+
+**详细信息**:
+- 📋 **[API文档补充计划](./API_DOCUMENTATION_ENHANCEMENT_PLAN.md)** - 完整补充计划和标准化规范
+- 📊 **[补充工作总结](./API_ENHANCEMENT_SUMMARY.md)** - 当前进度和下一步行动
+
+**补充进度**:
+| 状态 | 数量 | 说明 |
+|------|------|------|
+| ✅ 详细版 | 2 | `email_notification_configuration.md`, `data_ingestion_api.md` |
+| ⏳ 待补充 | 10 | P0/P1/P2/P3优先级,预计16.5小时 |
+| ✅ 概述版 | 2 | 无需补充 |
+
+**参考标准**: 所有补充文档将参考 `email_notification_configuration.md` 的详细格式,包含:
+- ✅ 完整的curl和Java示例
+- ✅ 真实使用场景 (至少3个)
+- ✅ 最佳实践和性能优化建议
+- ✅ 故障排查指南
+
+---
+
+## �🔗 相关文档
 
 - **[系统架构](../design/new_system_architecture_spec.md)** - 了解整体架构
 - **[蜜罐评分算法](../design/honeypot_based_threat_scoring.md)** - 理解威胁评分机制
@@ -143,4 +166,5 @@ curl -X POST http://localhost:8082/api/v1/alerts/12345/resolve \
 
 ---
 
-**最后更新**: 2025-01-16
+**最后更新**: 2025-10-16  
+**下一步**: 开始执行 Phase 1 (P0优先级文档补充)
