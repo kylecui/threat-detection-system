@@ -1,0 +1,28 @@
+# Logstash配置文件
+# 威胁检测系统 - 日志摄取服务
+
+# HTTP API配置
+http.host: "0.0.0.0"
+http.port: 9600
+
+# 日志配置
+log.level: info
+path.logs: /usr/share/logstash/logs
+
+# 管道配置
+pipeline.workers: 4
+pipeline.batch.size: 125
+pipeline.batch.delay: 50
+
+# 监控配置
+monitoring.enabled: false
+
+# 队列配置
+queue.type: persisted
+queue.max_bytes: 1gb
+path.queue: /usr/share/logstash/data/queue
+
+# 性能优化
+pipeline.ordered: false
+config.reload.automatic: true
+config.reload.interval: 10s
