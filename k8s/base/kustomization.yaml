@@ -8,11 +8,18 @@ namespace: threat-detection
 
 resources:
   - namespace.yaml
+  - postgres.yaml
+  - redis.yaml
   - zookeeper.yaml
   - kafka.yaml
   - kafka-topic-init.yaml
+  - logstash.yaml
   - data-ingestion.yaml
   - stream-processing.yaml
+  - taskmanager.yaml
+  - customer-management.yaml
+  - threat-assessment.yaml
+  - alert-management.yaml
 
 commonLabels:
   app.kubernetes.io/name: threat-detection-system

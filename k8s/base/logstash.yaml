@@ -1,0 +1,263 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-config
+  namespace: threat-detection
+data:
+  logstash.yml: |
+    http.host: "0.0.0.0"
+    path.config: /usr/share/logstash/pipeline
+    pipeline.workers: 4
+    pipeline.batch.size: 125
+    pipeline.batch.delay: 50
+    queue.type: persisted
+    queue.max_bytes: 1gb
+    log.level: info
+    
+  attack-events.conf: |
+    # Logstash Pipeline配置 - 威胁检测系统
+    # 完整配置见: infrastructure/logging/logstash/pipeline/attack-events.conf
+    
+    input {
+      tcp {
+        port => 9080
+        codec => plain
+        type => "syslog-raw"
+        tags => ["rsyslog"]
+      }
+    }
+    
+    filter {
+      if [type] == "syslog-raw" {
+        kv {
+          source => "message"
+          field_split => ","
+          value_split => "="
+          trim_key => " "
+          trim_value => " "
+        }
+        mutate {
+          remove_field => ["message"]
+        }
+      }
+      
+      # 攻击日志处理 (log_type=1)
+      if [log_type] == "1" {
+        mutate {
+          add_tag => ["attack-log"]
+          rename => {
+            "dev_serial" => "deviceSerial"
+            "attack_mac" => "attackMac"
+            "attack_ip" => "attackIp"
+            "response_ip" => "responseIp"
+            "response_port" => "responsePort"
+            "log_time" => "logTime"
+            "sub_type" => "subType"
+            "line_id" => "lineId"
+            "Iface_type" => "ifaceType"
+            "Vlan_id" => "vlanId"
+            "syslog_version" => "syslogVersion"
+          }
+        }
+        
+        if [logTime] {
+          date {
+            match => ["logTime", "UNIX"]
+            target => "@timestamp"
+          }
+          ruby {
+            code => "event.set('timestamp', Time.at(event.get('logTime').to_i).utc.iso8601)"
+          }
+        }
+        
+        if [attackMac] {
+          mutate {
+            uppercase => ["attackMac"]
+            gsub => ["attackMac", "-", ":"]
+          }
+        }
+        
+        if [responsePort] {
+          mutate {
+            convert => { "responsePort" => "integer" }
+          }
+        }
+      }
+      
+      # 心跳日志处理 (log_type=2)
+      else if [log_type] == "2" {
+        mutate {
+          add_tag => ["heartbeat-log"]
+          rename => {
+            "dev_serial" => "deviceSerial"
+            "sentry_count" => "sentryCount"
+            "real_host_count" => "realHostCount"
+            "dev_start_time" => "devStartTime"
+            "dev_end_time" => "devEndTime"
+            "syslog_version" => "syslogVersion"
+          }
+        }
+        
+        if [time] {
+          date {
+            match => ["time", "yyyy-MM-dd HH:mm:ss"]
+            target => "@timestamp"
+          }
+          mutate {
+            rename => { "time" => "heartbeatTime" }
+          }
+        }
+        
+        mutate {
+          convert => {
+            "sentryCount" => "integer"
+            "realHostCount" => "integer"
+            "devStartTime" => "integer"
+            "devEndTime" => "integer"
+          }
+        }
+      }
+      
+      ruby {
+        code => "event.set('logstashProcessedAt', Time.now.iso8601)"
+      }
+    }
+    
+    output {
+      # 攻击日志 → attack-events topic
+      if "attack-log" in [tags] {
+        kafka {
+          bootstrap_servers => "${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}"
+          topic_id => "attack-events"
+          codec => json
+          compression_type => "snappy"
+          message_key => "%{deviceSerial}"
+          batch_size => 16384
+          linger_ms => 10
+          acks => "1"
+          retries => 3
+          client_id => "logstash-attack-events"
+        }
+      }
+      
+      # 心跳日志 → status-events topic
+      if "heartbeat-log" in [tags] {
+        kafka {
+          bootstrap_servers => "${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}"
+          topic_id => "status-events"
+          codec => json
+          compression_type => "snappy"
+          message_key => "%{deviceSerial}"
+          batch_size => 16384
+          linger_ms => 10
+          acks => "1"
+          retries => 3
+          client_id => "logstash-status-events"
+        }
+      }
+    }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash
+  namespace: threat-detection
+  labels:
+    app: logstash
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 9080
+      targetPort: 9080
+      protocol: TCP
+      name: rsyslog-tcp
+    - port: 9600
+      targetPort: 9600
+      protocol: TCP
+      name: monitoring
+  selector:
+    app: logstash
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+  namespace: threat-detection
+  labels:
+    app: logstash
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: logstash
+  template:
+    metadata:
+      labels:
+        app: logstash
+    spec:
+      containers:
+      - name: logstash
+        image: docker.elastic.co/logstash/logstash:8.11.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9080
+          name: rsyslog-tcp
+          protocol: TCP
+        - containerPort: 9600
+          name: monitoring
+          protocol: TCP
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka:9092"
+        - name: LS_JAVA_OPTS
+          value: "-Xmx512m -Xms512m"
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/logstash/config/logstash.yml
+          subPath: logstash.yml
+        - name: pipeline
+          mountPath: /usr/share/logstash/pipeline/attack-events.conf
+          subPath: attack-events.conf
+        - name: logs
+          mountPath: /tmp/production_test_logs
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /_node/stats
+            port: 9600
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /_node/stats
+            port: 9600
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: config
+        configMap:
+          name: logstash-config
+          items:
+          - key: logstash.yml
+            path: logstash.yml
+      - name: pipeline
+        configMap:
+          name: logstash-config
+          items:
+          - key: attack-events.conf
+            path: attack-events.conf
+      - name: logs
+        emptyDir: {}
