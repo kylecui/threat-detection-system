@@ -1,0 +1,214 @@
+#!/bin/bash
+
+# Device Management API Test Script
+# Tests all device binding and management endpoints
+
+set -e
+
+BASE_URL="http://localhost:8084/api/v1"
+CUSTOMER_ID="customer_a"
+
+echo "======================================"
+echo "Device Management API Test"
+echo "======================================"
+echo
+
+# Colors for output
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+print_test() {
+    echo -e "${BLUE}[TEST]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Test 1: Get Device Quota (初始状态)
+print_test "1. Get initial device quota for $CUSTOMER_ID"
+QUOTA=$(curl -s "$BASE_URL/customers/$CUSTOMER_ID/devices/quota")
+echo "$QUOTA" | jq '.'
+INITIAL_COUNT=$(echo "$QUOTA" | jq -r '.currentDevices')
+MAX_DEVICES=$(echo "$QUOTA" | jq -r '.maxDevices')
+print_success "Initial devices: $INITIAL_COUNT / $MAX_DEVICES"
+echo
+
+# Test 2: Bind Single Device
+print_test "2. Bind single device to $CUSTOMER_ID"
+BIND_RESPONSE=$(curl -s -X POST "$BASE_URL/customers/$CUSTOMER_ID/devices" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dev_serial": "test-device-001",
+    "description": "Test Device 001"
+  }')
+echo "$BIND_RESPONSE" | jq '.'
+if echo "$BIND_RESPONSE" | jq -e '.dev_serial' > /dev/null; then
+    print_success "Device bound successfully"
+else
+    print_error "Failed to bind device"
+fi
+echo
+
+# Test 3: List Customer Devices
+print_test "3. List all devices for $CUSTOMER_ID"
+DEVICES=$(curl -s "$BASE_URL/customers/$CUSTOMER_ID/devices?size=10")
+echo "$DEVICES" | jq '.content[] | {devSerial, customerId, isActive, description}'
+DEVICE_COUNT=$(echo "$DEVICES" | jq '.content | length')
+print_success "Found $DEVICE_COUNT devices"
+echo
+
+# Test 4: Get Single Device Details
+print_test "4. Get details for test-device-001"
+DEVICE_DETAIL=$(curl -s "$BASE_URL/customers/$CUSTOMER_ID/devices/test-device-001")
+echo "$DEVICE_DETAIL" | jq '.'
+print_success "Retrieved device details"
+echo
+
+# Test 5: Batch Bind Devices
+print_test "5. Batch bind 3 devices to $CUSTOMER_ID"
+BATCH_BIND=$(curl -s -X POST "$BASE_URL/customers/$CUSTOMER_ID/devices/batch" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "devices": [
+      {"dev_serial": "test-device-002", "description": "Test Device 002"},
+      {"dev_serial": "test-device-003", "description": "Test Device 003"},
+      {"dev_serial": "test-device-004", "description": "Test Device 004"}
+    ]
+  }')
+echo "$BATCH_BIND" | jq '.'
+SUCCEEDED=$(echo "$BATCH_BIND" | jq -r '.succeeded')
+FAILED=$(echo "$BATCH_BIND" | jq -r '.failed')
+print_success "Batch binding: $SUCCEEDED succeeded, $FAILED failed"
+echo
+
+# Test 6: Get Updated Device Quota
+print_test "6. Get updated device quota"
+UPDATED_QUOTA=$(curl -s "$BASE_URL/customers/$CUSTOMER_ID/devices/quota")
+echo "$UPDATED_QUOTA" | jq '.'
+CURRENT_COUNT=$(echo "$UPDATED_QUOTA" | jq -r '.currentDevices')
+AVAILABLE=$(echo "$UPDATED_QUOTA" | jq -r '.availableDevices')
+USAGE_RATE=$(echo "$UPDATED_QUOTA" | jq -r '.usageRate')
+print_success "Current: $CURRENT_COUNT, Available: $AVAILABLE, Usage: $USAGE_RATE"
+echo
+
+# Test 7: List Active Devices Only
+print_test "7. List only active devices"
+ACTIVE_DEVICES=$(curl -s "$BASE_URL/customers/$CUSTOMER_ID/devices?isActive=true&size=10")
+echo "$ACTIVE_DEVICES" | jq '.content[] | {devSerial, isActive}'
+ACTIVE_COUNT=$(echo "$ACTIVE_DEVICES" | jq '.content | length')
+print_success "Found $ACTIVE_COUNT active devices"
+echo
+
+# Test 8: Toggle Device Status (Deactivate)
+print_test "8. Deactivate test-device-002"
+TOGGLE_RESPONSE=$(curl -s -X PATCH "$BASE_URL/customers/$CUSTOMER_ID/devices/test-device-002/status?isActive=false")
+echo "$TOGGLE_RESPONSE" | jq '.'
+IS_ACTIVE=$(echo "$TOGGLE_RESPONSE" | jq -r '.is_active')
+if [ "$IS_ACTIVE" = "false" ]; then
+    print_success "Device deactivated successfully"
+else
+    print_error "Failed to deactivate device"
+fi
+echo
+
+# Test 9: Sync Device Count
+print_test "9. Sync device count for $CUSTOMER_ID"
+SYNC_RESPONSE=$(curl -s -X POST "$BASE_URL/customers/$CUSTOMER_ID/devices/sync")
+echo "$SYNC_RESPONSE" | jq '.'
+SYNCED_COUNT=$(echo "$SYNC_RESPONSE" | jq -r '.currentDevices')
+print_success "Synced device count: $SYNCED_COUNT"
+echo
+
+# Test 10: Unbind Single Device
+print_test "10. Unbind test-device-004"
+UNBIND_RESPONSE=$(curl -s -X DELETE "$BASE_URL/customers/$CUSTOMER_ID/devices/test-device-004")
+echo "$UNBIND_RESPONSE" | jq '.'
+print_success "Device unbound successfully"
+echo
+
+# Test 11: Batch Unbind Devices
+print_test "11. Batch unbind test-device-002 and test-device-003"
+BATCH_UNBIND=$(curl -s -X DELETE "$BASE_URL/customers/$CUSTOMER_ID/devices/batch" \
+  -H "Content-Type: application/json" \
+  -d '["test-device-002", "test-device-003"]')
+echo "$BATCH_UNBIND" | jq '.'
+UNBIND_SUCCEEDED=$(echo "$BATCH_UNBIND" | jq -r '.succeeded')
+print_success "Batch unbinding: $UNBIND_SUCCEEDED succeeded"
+echo
+
+# Test 12: Final Device Quota Check
+print_test "12. Final device quota check"
+FINAL_QUOTA=$(curl -s "$BASE_URL/customers/$CUSTOMER_ID/devices/quota")
+echo "$FINAL_QUOTA" | jq '.'
+FINAL_COUNT=$(echo "$FINAL_QUOTA" | jq -r '.currentDevices')
+print_success "Final device count: $FINAL_COUNT"
+echo
+
+# Test 13: Test Quota Exceeded (try to bind more than maxDevices)
+print_test "13. Test quota exceeded scenario (customer_test has maxDevices=5)"
+CUSTOMER_TEST="customer_test"
+TEST_QUOTA=$(curl -s "$BASE_URL/customers/$CUSTOMER_TEST/devices/quota")
+echo "$TEST_QUOTA" | jq '.'
+TEST_MAX=$(echo "$TEST_QUOTA" | jq -r '.maxDevices')
+print_success "customer_test max devices: $TEST_MAX"
+
+# Try to bind 6 devices (should fail when quota exceeded)
+print_test "14. Try binding 6 devices to customer_test (max=5)"
+QUOTA_TEST=$(curl -s -X POST "$BASE_URL/customers/$CUSTOMER_TEST/devices/batch" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "devices": [
+      {"dev_serial": "quota-test-001", "description": "Quota Test 1"},
+      {"dev_serial": "quota-test-002", "description": "Quota Test 2"},
+      {"dev_serial": "quota-test-003", "description": "Quota Test 3"},
+      {"dev_serial": "quota-test-004", "description": "Quota Test 4"},
+      {"dev_serial": "quota-test-005", "description": "Quota Test 5"},
+      {"dev_serial": "quota-test-006", "description": "Quota Test 6 - Should Fail"}
+    ]
+  }')
+echo "$QUOTA_TEST" | jq '.'
+QUOTA_SUCCEEDED=$(echo "$QUOTA_TEST" | jq -r '.succeeded')
+QUOTA_FAILED=$(echo "$QUOTA_TEST" | jq -r '.failed')
+print_success "Quota test: $QUOTA_SUCCEEDED succeeded, $QUOTA_FAILED failed (expected: 5 succeeded, 1 failed)"
+echo
+
+# Test 15: Test Duplicate Device Binding
+print_test "15. Test duplicate device binding (should fail)"
+DUPLICATE_TEST=$(curl -s -X POST "$BASE_URL/customers/$CUSTOMER_ID/devices" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dev_serial": "test-device-001",
+    "description": "Duplicate Test"
+  }')
+echo "$DUPLICATE_TEST" | jq '.'
+if echo "$DUPLICATE_TEST" | jq -e '.error' > /dev/null; then
+    print_success "Duplicate binding correctly rejected"
+else
+    print_error "Duplicate binding should have failed"
+fi
+echo
+
+# Cleanup: Remove test devices
+print_test "16. Cleanup: Remove all test devices"
+CLEANUP=$(curl -s -X DELETE "$BASE_URL/customers/$CUSTOMER_ID/devices/batch" \
+  -H "Content-Type: application/json" \
+  -d '["test-device-001"]')
+echo "$CLEANUP" | jq '.'
+
+CLEANUP_TEST=$(curl -s -X DELETE "$BASE_URL/customers/$CUSTOMER_TEST/devices/batch" \
+  -H "Content-Type: application/json" \
+  -d '["quota-test-001", "quota-test-002", "quota-test-003", "quota-test-004", "quota-test-005"]')
+echo "$CLEANUP_TEST" | jq '.'
+print_success "Cleanup completed"
+echo
+
+echo "======================================"
+echo "All Tests Completed!"
+echo "======================================"

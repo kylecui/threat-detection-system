@@ -1,0 +1,65 @@
+spring:
+  application:
+    name: customer-management-service
+
+  # MVC Configuration - 启用新的路径匹配器以正确处理路径冲突
+  # Spring Boot 3.x默认使用PathPatternParser，但显式配置确保一致性
+  mvc:
+    pathmatch:
+      matching-strategy: PATH_PATTERN_PARSER
+
+  # Database Configuration (Docker environment)
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/threat_detection}
+    username: ${SPRING_DATASOURCE_USERNAME:threat_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:threat_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+    open-in-view: false
+
+# Server Configuration
+server:
+  port: ${SERVER_PORT:8084}
+  shutdown: graceful
+
+# Management & Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,mappings
+  endpoint:
+    health:
+      show-details: always
+    mappings:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.threatdetection: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping: TRACE
+    org.hibernate: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

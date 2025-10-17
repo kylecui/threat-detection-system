@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: threat-detection-postgres
+    environment:
+      POSTGRES_DB: threat_detection
+      POSTGRES_USER: threat_user
+      POSTGRES_PASSWORD: threat_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
+      - ./services/customer-management/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/02-customer-schema.sql
+    networks:
+      - threat-detection-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U threat_user -d threat_detection"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Customer Management Service
+  customer-management:
+    build:
+      context: ./services/customer-management
+      dockerfile: Dockerfile
+    container_name: customer-management-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
+      SPRING_DATASOURCE_USERNAME: threat_user
+      SPRING_DATASOURCE_PASSWORD: threat_password
+      SERVER_PORT: 8084
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - threat-detection-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  threat-detection-network:
+    driver: bridge

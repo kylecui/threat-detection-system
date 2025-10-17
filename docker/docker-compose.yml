@@ -188,6 +188,31 @@ services:
       retries: 5
       start_period: 60s
 
+  customer-management:
+    build:
+      context: ../services/customer-management
+      dockerfile: Dockerfile
+    hostname: customer-management-service
+    container_name: customer-management-service
+    depends_on:
+      - postgres
+    ports: ["8084:8084"]
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
+      SPRING_DATASOURCE_USERNAME: threat_user
+      SPRING_DATASOURCE_PASSWORD: threat_password
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics,prometheus,mappings
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   topic-init:
     image: confluentinc/cp-kafka:7.4.0
     hostname: topic-init

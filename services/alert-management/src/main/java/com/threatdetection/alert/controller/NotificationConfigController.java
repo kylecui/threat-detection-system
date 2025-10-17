@@ -18,7 +18,38 @@ import java.util.Optional;
 
 /**
  * 通知配置管理API
- * 支持动态管理SMTP配置和客户通知配置
+ * 
+ * <p><strong>重要更新 (2025-10-16):</strong>
+ * 客户通知配置管理功能已迁移至 Customer-Management Service (端口8084)
+ * 
+ * <p><strong>职责分离:</strong>
+ * <ul>
+ *   <li><strong>Alert-Management (本服务)</strong>: 负责通知发送和SMTP配置管理，对客户通知配置具有<strong>只读权限</strong></li>
+ *   <li><strong>Customer-Management (8084)</strong>: 负责客户通知配置的完整管理 (CRUD)</li>
+ * </ul>
+ * 
+ * <p><strong>废弃的客户配置API:</strong>
+ * <ul>
+ *   <li>❌ POST /api/notification-config/customer - 已废弃，返回403</li>
+ *   <li>❌ PUT /api/notification-config/customer/{customerId} - 已废弃，返回403</li>
+ *   <li>❌ DELETE /api/notification-config/customer/{customerId} - 已废弃，返回403</li>
+ * </ul>
+ * 
+ * <p><strong>保留的只读API:</strong>
+ * <ul>
+ *   <li>✅ GET /api/notification-config/customer - 查询所有配置 (内部使用)</li>
+ *   <li>✅ GET /api/notification-config/customer/{customerId} - 查询单个配置 (内部使用)</li>
+ * </ul>
+ * 
+ * <p><strong>新API (Customer-Management):</strong>
+ * <ul>
+ *   <li>GET/PUT/PATCH/DELETE /api/v1/customers/{customerId}/notification-config</li>
+ *   <li>端口: 8084</li>
+ *   <li>文档: docs/api/customer_management_api.md</li>
+ * </ul>
+ * 
+ * <p><strong>SMTP配置管理:</strong>
+ * 保留在本服务，支持完整的CRUD操作
  */
 @RestController
 @RequestMapping("/api/notification-config")
@@ -187,81 +218,74 @@ public class NotificationConfigController {
     
     /**
      * 创建客户通知配置
+     * 
+     * @deprecated 该功能已迁移至 Customer-Management Service
+     * 请使用: PUT /api/v1/customers/{customerId}/notification-config (端口8084)
      */
+    @Deprecated
     @PostMapping("/customer")
-    public ResponseEntity<CustomerNotificationConfig> createCustomerConfig(
-            @RequestBody CustomerNotificationConfig config) {
+    public ResponseEntity<?> createCustomerConfig() {
         
-        config.setCreatedAt(Instant.now());
-        config.setUpdatedAt(Instant.now());
+        logger.warn("DEPRECATED API called: POST /api/notification-config/customer - " +
+                   "This endpoint is deprecated. Please use Customer-Management service.");
         
-        CustomerNotificationConfig savedConfig = customerNotificationConfigRepository.save(config);
-        logger.info("Created notification config for customer: {}", savedConfig.getCustomerId());
-        
-        return ResponseEntity.ok(savedConfig);
+        return ResponseEntity.status(403).body(Map.of(
+            "error", "Forbidden",
+            "message", "此API已废弃。通知配置管理已迁移至 Customer-Management Service (端口8084)",
+            "deprecated", true,
+            "newEndpoint", "PUT http://localhost:8084/api/v1/customers/{customerId}/notification-config",
+            "documentation", "请参考 Customer-Management API 文档",
+            "reason", "职责分离: Alert-Management 只负责通知发送，配置管理由 Customer-Management 负责"
+        ));
     }
     
     /**
      * 更新客户通知配置
+     * 
+     * @deprecated 该功能已迁移至 Customer-Management Service
+     * 请使用: PUT /api/v1/customers/{customerId}/notification-config (端口8084)
      */
+    @Deprecated
     @PutMapping("/customer/{customerId}")
-    public ResponseEntity<CustomerNotificationConfig> updateCustomerConfig(
+    public ResponseEntity<?> updateCustomerConfig(
             @PathVariable String customerId,
             @RequestBody CustomerNotificationConfig config) {
         
-        Optional<CustomerNotificationConfig> existingOpt = 
-            customerNotificationConfigRepository.findByCustomerId(customerId);
+        logger.warn("DEPRECATED API called: PUT /api/notification-config/customer/{} - " +
+                   "This endpoint is deprecated. Please use Customer-Management service.", customerId);
         
-        if (existingOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        
-        CustomerNotificationConfig existing = existingOpt.get();
-        
-        // 更新字段
-        existing.setEmailEnabled(config.getEmailEnabled());
-        existing.setEmailRecipients(config.getEmailRecipients());
-        existing.setSmsEnabled(config.getSmsEnabled());
-        existing.setSmsRecipients(config.getSmsRecipients());
-        existing.setSlackEnabled(config.getSlackEnabled());
-        existing.setSlackWebhookUrl(config.getSlackWebhookUrl());
-        existing.setSlackChannel(config.getSlackChannel());
-        existing.setWebhookEnabled(config.getWebhookEnabled());
-        existing.setWebhookUrl(config.getWebhookUrl());
-        existing.setWebhookHeaders(config.getWebhookHeaders());
-        existing.setMinSeverityLevel(config.getMinSeverityLevel());
-        existing.setNotifyOnSeverities(config.getNotifyOnSeverities());
-        existing.setMaxNotificationsPerHour(config.getMaxNotificationsPerHour());
-        existing.setEnableRateLimiting(config.getEnableRateLimiting());
-        existing.setQuietHoursEnabled(config.getQuietHoursEnabled());
-        existing.setQuietHoursStart(config.getQuietHoursStart());
-        existing.setQuietHoursEnd(config.getQuietHoursEnd());
-        existing.setQuietHoursTimezone(config.getQuietHoursTimezone());
-        existing.setIsActive(config.getIsActive());
-        existing.setDescription(config.getDescription());
-        existing.setUpdatedAt(Instant.now());
-        
-        CustomerNotificationConfig updated = customerNotificationConfigRepository.save(existing);
-        logger.info("Updated notification config for customer: {}", customerId);
-        
-        return ResponseEntity.ok(updated);
+        return ResponseEntity.status(403).body(Map.of(
+            "error", "Forbidden",
+            "message", "此API已废弃。通知配置管理已迁移至 Customer-Management Service (端口8084)",
+            "deprecated", true,
+            "customerId", customerId,
+            "newEndpoint", String.format("PUT http://localhost:8084/api/v1/customers/%s/notification-config", customerId),
+            "documentation", "请参考 Customer-Management API 文档",
+            "reason", "职责分离: Alert-Management 只负责通知发送，配置管理由 Customer-Management 负责"
+        ));
     }
     
     /**
      * 删除客户通知配置
+     * 
+     * @deprecated 该功能已迁移至 Customer-Management Service
+     * 请使用: DELETE /api/v1/customers/{customerId}/notification-config (端口8084)
      */
+    @Deprecated
     @DeleteMapping("/customer/{customerId}")
-    public ResponseEntity<Map<String, String>> deleteCustomerConfig(@PathVariable String customerId) {
-        Optional<CustomerNotificationConfig> config = 
-            customerNotificationConfigRepository.findByCustomerId(customerId);
+    public ResponseEntity<?> deleteCustomerConfig(@PathVariable String customerId) {
         
-        if (config.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
+        logger.warn("DEPRECATED API called: DELETE /api/notification-config/customer/{} - " +
+                   "This endpoint is deprecated. Please use Customer-Management service.", customerId);
         
-        customerNotificationConfigRepository.delete(config.get());
-        logger.info("Deleted notification config for customer: {}", customerId);
-        
-        return ResponseEntity.ok(Map.of("message", "配置已删除"));
+        return ResponseEntity.status(403).body(Map.of(
+            "error", "Forbidden",
+            "message", "此API已废弃。通知配置管理已迁移至 Customer-Management Service (端口8084)",
+            "deprecated", true,
+            "customerId", customerId,
+            "newEndpoint", String.format("DELETE http://localhost:8084/api/v1/customers/%s/notification-config", customerId),
+            "documentation", "请参考 Customer-Management API 文档",
+            "reason", "职责分离: Alert-Management 只负责通知发送，配置管理由 Customer-Management 负责"
+        ));
     }
 }

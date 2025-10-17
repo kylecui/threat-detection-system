@@ -1,8 +1,96 @@
 # 邮件通知配置系统文档
 
-**版本**: 1.0  
+**版本**: 1.1  
 **更新日期**: 2025-10-16  
 **作者**: 威胁检测系统开发团队
+
+---
+
+## ⚠️ 重要更新 (2025-10-16)
+
+### 客户通知配置管理迁移
+
+客户通知配置的**创建/更新/删除**功能已迁移至 **Customer-Management Service (端口8084)**。
+
+#### 职责分离
+
+| 服务 | 职责 | 权限 | 端口 |
+|------|------|------|------|
+| **Alert-Management** | 告警通知发送 + SMTP配置管理 | **只读**客户通知配置 | 8082 |
+| **Customer-Management** | 客户信息 + 通知配置管理 | **读写**客户通知配置 | 8084 |
+
+#### 新API端点 (推荐使用)
+
+**服务地址**: `http://localhost:8084`  
+**文档**: `docs/api/customer_management_api.md`
+
+```bash
+# 获取配置
+GET /api/v1/customers/{customerId}/notification-config
+
+# 创建或更新配置
+PUT /api/v1/customers/{customerId}/notification-config
+
+# 部分更新配置
+PATCH /api/v1/customers/{customerId}/notification-config
+
+# 删除配置
+DELETE /api/v1/customers/{customerId}/notification-config
+
+# 快速开关
+PATCH /api/v1/customers/{customerId}/notification-config/email/toggle?enabled=true
+PATCH /api/v1/customers/{customerId}/notification-config/slack/toggle?enabled=true
+
+# 测试配置
+POST /api/v1/customers/{customerId}/notification-config/test
+```
+
+#### 旧API端点 (已废弃)
+
+**服务地址**: `http://localhost:8082`
+
+```bash
+❌ POST   /api/notification-config/customer           # 已废弃，返回403
+❌ PUT    /api/notification-config/customer/{id}      # 已废弃，返回403
+❌ DELETE /api/notification-config/customer/{id}      # 已废弃，返回403
+
+✅ GET    /api/notification-config/customer           # 保留，内部只读访问
+✅ GET    /api/notification-config/customer/{id}      # 保留，内部只读访问
+```
+
+#### 迁移指南
+
+**场景1**: 创建新配置
+```bash
+# 旧方式 (已废弃)
+curl -X POST http://localhost:8082/api/notification-config/customer \
+  -H "Content-Type: application/json" \
+  -d '{...}'
+
+# 新方式 (推荐)
+curl -X PUT http://localhost:8084/api/v1/customers/customer-001/notification-config \
+  -H "Content-Type: application/json" \
+  -d '{...}'
+```
+
+**场景2**: 更新配置
+```bash
+# 旧方式 (已废弃)
+curl -X PUT http://localhost:8082/api/notification-config/customer/customer-001 \
+  -H "Content-Type: application/json" \
+  -d '{...}'
+
+# 新方式 (推荐)
+curl -X PUT http://localhost:8084/api/v1/customers/customer-001/notification-config \
+  -H "Content-Type: application/json" \
+  -d '{...}'
+```
+
+**场景3**: 快速开关
+```bash
+# 新增功能 (仅Customer-Management支持)
+curl -X PATCH "http://localhost:8084/api/v1/customers/customer-001/notification-config/email/toggle?enabled=true"
+```
 
 ---
 
@@ -24,19 +112,19 @@
 本系统实现了基于数据库的动态邮件通知配置，支持以下功能：
 
 ✅ **动态SMTP配置** - 从数据库读取SMTP服务器配置，无需重启应用  
-✅ **客户级配置** - 每个客户独立配置通知邮箱和规则  
+✅ **客户级配置** - 每个客户独立配置通知邮箱和规则 (**管理功能已迁移至Customer-Management**)  
 ✅ **多收件人支持** - 单个客户可配置多个邮箱接收告警  
 ✅ **告警级别过滤** - 灵活配置哪些告警级别触发通知  
 ✅ **频率限制** - 防止告警风暴，每小时通知数量可控  
 ✅ **静默时段** - 支持配置静默时段，避免非工作时间打扰  
-✅ **RESTful API** - 完整的配置管理接口  
+✅ **RESTful API** - SMTP配置管理接口 (客户配置管理已迁移)  
 
 ### 工作流程
 
 ```
 威胁检测 → Kafka (threat-alerts) → Alert Management Service
                                             ↓
-                                    读取客户通知配置
+                            读取客户通知配置 (只读，从customer_notification_configs表)
                                             ↓
                                     检查告警级别 + 频率限制
                                             ↓
@@ -45,6 +133,13 @@
                                     发送邮件到配置的收件人
                                             ↓
                                     记录通知状态到 notifications 表
+```
+
+**配置管理流程** (新增):
+```
+管理员/客户 → Customer-Management (8084) → customer_notification_configs表 (写入)
+                                                    ↓
+Alert-Management (8082) → customer_notification_configs表 (只读) → 执行通知发送
 ```
 
 ---
