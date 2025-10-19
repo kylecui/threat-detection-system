@@ -1,0 +1,9 @@
+target/
+!target/*.jar
+*.md
+.git
+.gitignore
+Dockerfile
+.dockerignore
+*.log
+logs/

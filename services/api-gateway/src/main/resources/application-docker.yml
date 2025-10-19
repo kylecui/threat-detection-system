@@ -1,0 +1,17 @@
+spring:
+  data:
+    redis:
+      host: redis
+      port: 6379
+
+# 服务器配置
+server:
+  port: 8080
+
+# 日志配置 (容器环境)
+logging:
+  file:
+    name: /app/logs/api-gateway.log
+  level:
+    root: INFO
+    com.threatdetection.gateway: INFO

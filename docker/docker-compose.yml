@@ -94,7 +94,7 @@ services:
     build:
       context: ../services/data-ingestion/data-ingestion-service
       dockerfile: Dockerfile
-    hostname: data-ingestion-service
+    hostname: data-ingestion
     container_name: data-ingestion-service
     depends_on:
       - kafka
@@ -160,7 +160,7 @@ services:
     build:
       context: ../services/threat-assessment
       dockerfile: Dockerfile
-    hostname: threat-assessment-service
+    hostname: threat-assessment
     container_name: threat-assessment-service
     depends_on:
       - kafka
@@ -179,7 +179,7 @@ services:
     build:
       context: ../services/alert-management
       dockerfile: Dockerfile
-    hostname: alert-management-service
+    hostname: alert-management
     container_name: alert-management-service
     depends_on:
       - kafka
@@ -213,7 +213,7 @@ services:
     build:
       context: ../services/customer-management
       dockerfile: Dockerfile
-    hostname: customer-management-service
+    hostname: customer-management
     container_name: customer-management-service
     depends_on:
       - postgres
@@ -233,6 +233,35 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+
+  api-gateway:
+    build:
+      context: ../services/api-gateway
+      dockerfile: Dockerfile
+    hostname: api-gateway
+    container_name: api-gateway
+    depends_on:
+      - redis
+      - customer-management
+      - data-ingestion
+      - threat-assessment
+      - alert-management
+    ports: ["8888:8080"]
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVER_PORT: 8080
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_CAPACITY: 100
+      RATE_LIMIT_REFILL_RATE: 10
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
 
   topic-init:
     image: confluentinc/cp-kafka:7.4.0
