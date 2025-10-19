@@ -316,7 +316,7 @@ curl -X GET "http://localhost:8082/api/v1/alerts/analytics/summary?customerId=cu
 ```java
 public AlertStatistics getSummary(String customerId, LocalDateTime start, LocalDateTime end) {
     String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/alerts/analytics/summary")
-        .queryParam("customer_id", customerId)
+        .queryParam("customerId", customerId)
         .queryParam("startTime", start.toString())
         .queryParam("endTime", end.toString())
         .toUriString();
@@ -329,7 +329,7 @@ public AlertStatistics getSummary(String customerId, LocalDateTime start, LocalD
 
 ```json
 {
-  "customer_id": "customer-001",
+  "customerId": "customer-001",
   "totalAlerts": 1250,
   "openAlerts": 35,
   "inProgressAlerts": 18,
@@ -387,7 +387,7 @@ curl -X GET "http://localhost:8082/api/v1/alerts/analytics/trend?customerId=cust
 ```java
 public TrendAnalysis getDailyTrend(String customerId, LocalDate start, LocalDate end) {
     String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/alerts/analytics/trend")
-        .queryParam("customer_id", customerId)
+        .queryParam("customerId", customerId)
         .queryParam("dimension", "DAILY")
         .queryParam("startDate", start.toString())
         .queryParam("endDate", end.toString())
@@ -401,7 +401,7 @@ public TrendAnalysis getDailyTrend(String customerId, LocalDate start, LocalDate
 
 ```json
 {
-  "customer_id": "customer-001",
+  "customerId": "customer-001",
   "dimension": "DAILY",
   "startDate": "2024-01-08",
   "endDate": "2024-01-15",
@@ -482,7 +482,7 @@ public PerformanceMetrics getPerformanceMetrics(String customerId) {
 
 ```json
 {
-  "customer_id": "customer-001",
+  "customerId": "customer-001",
   "meanTimeToDetect": 3.5,
   "meanTimeToRespond": 15.2,
   "meanTimeToResolve": 152.5,
@@ -523,7 +523,7 @@ curl -X GET "http://localhost:8082/api/v1/alerts/analytics/notifications?custome
 ```java
 public NotificationAnalytics getNotificationStats(String customerId, String channel) {
     String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/alerts/analytics/notifications")
-        .queryParam("customer_id", customerId)
+        .queryParam("customerId", customerId)
         .queryParamIfPresent("channel", Optional.ofNullable(channel))
         .toUriString();
     
@@ -535,7 +535,7 @@ public NotificationAnalytics getNotificationStats(String customerId, String chan
 
 ```json
 {
-  "customer_id": "customer-001",
+  "customerId": "customer-001",
   "totalNotifications": 5680,
   "sentNotifications": 5650,
   "failedNotifications": 30,
@@ -581,7 +581,7 @@ public EscalationAnalytics getEscalationStats(String customerId) {
 
 ```json
 {
-  "customer_id": "customer-001",
+  "customerId": "customer-001",
   "totalEscalations": 125,
   "autoEscalations": 98,
   "manualEscalations": 27,
@@ -619,7 +619,7 @@ curl -X GET "http://localhost:8082/api/v1/alerts/analytics/attackers/top?custome
 ```java
 public List<AttackerProfile> getTopAttackers(String customerId, int limit) {
     String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/alerts/analytics/attackers/top")
-        .queryParam("customer_id", customerId)
+        .queryParam("customerId", customerId)
         .queryParam("limit", limit)
         .toUriString();
     
@@ -637,9 +637,9 @@ public List<AttackerProfile> getTopAttackers(String customerId, int limit) {
 ```json
 [
   {
-    "customer_id": "customer-001",
-    "attack_mac": "00:11:22:33:44:55",
-    "attack_ip": "192.168.1.100",
+    "customerId": "customer-001",
+    "attackMac": "00:11:22:33:44:55",
+    "attackIp": "192.168.1.100",
     "totalAlerts": 385,
     "criticalAlerts": 45,
     "averageThreatScore": 125.8,
@@ -649,9 +649,9 @@ public List<AttackerProfile> getTopAttackers(String customerId, int limit) {
     "lastSeen": "2024-01-15T16:45:00Z"
   },
   {
-    "customer_id": "customer-001",
-    "attack_mac": "AA:BB:CC:DD:EE:FF",
-    "attack_ip": "192.168.1.105",
+    "customerId": "customer-001",
+    "attackMac": "AA:BB:CC:DD:EE:FF",
+    "attackIp": "192.168.1.105",
     "totalAlerts": 267,
     "criticalAlerts": 32,
     "averageThreatScore": 98.3,
@@ -693,7 +693,7 @@ curl -X GET "http://localhost:8082/api/v1/alerts/analytics/export?customerId=cus
 ```java
 public byte[] exportReport(String customerId, String format, String reportType) {
     String url = UriComponentsBuilder.fromHttpUrl(baseUrl + "/alerts/analytics/export")
-        .queryParam("customer_id", customerId)
+        .queryParam("customerId", customerId)
         .queryParam("format", format)
         .queryParam("reportType", reportType)
         .toUriString();
@@ -1125,7 +1125,7 @@ public class AlertAnalyticsClient {
             LocalDateTime endTime) {
         
         String url = UriComponentsBuilder.fromHttpUrl(BASE_URL + "/summary")
-            .queryParam("customer_id", customerId)
+            .queryParam("customerId", customerId)
             .queryParam("startTime", startTime.toString())
             .queryParam("endTime", endTime.toString())
             .toUriString();
@@ -1171,7 +1171,7 @@ public class AlertAnalyticsClient {
             LocalDate endDate) {
         
         String url = UriComponentsBuilder.fromHttpUrl(BASE_URL + "/trend")
-            .queryParam("customer_id", customerId)
+            .queryParam("customerId", customerId)
             .queryParam("dimension", dimension)
             .queryParam("startDate", startDate.toString())
             .queryParam("endDate", endDate.toString())
@@ -1228,7 +1228,7 @@ public class AlertAnalyticsClient {
      */
     public NotificationAnalytics getNotificationStats(String customerId, String channel) {
         String url = UriComponentsBuilder.fromHttpUrl(BASE_URL + "/notifications")
-            .queryParam("customer_id", customerId)
+            .queryParam("customerId", customerId)
             .queryParamIfPresent("channel", Optional.ofNullable(channel))
             .toUriString();
         
@@ -1270,7 +1270,7 @@ public class AlertAnalyticsClient {
      */
     public List<AttackerProfile> getTopAttackers(String customerId, int limit) {
         String url = UriComponentsBuilder.fromHttpUrl(BASE_URL + "/attackers/top")
-            .queryParam("customer_id", customerId)
+            .queryParam("customerId", customerId)
             .queryParam("limit", limit)
             .toUriString();
         
@@ -1297,7 +1297,7 @@ public class AlertAnalyticsClient {
             String reportType) {
         
         String url = UriComponentsBuilder.fromHttpUrl(BASE_URL + "/export")
-            .queryParam("customer_id", customerId)
+            .queryParam("customerId", customerId)
             .queryParam("format", format)
             .queryParam("reportType", reportType)
             .toUriString();

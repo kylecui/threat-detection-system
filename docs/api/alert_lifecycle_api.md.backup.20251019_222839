@@ -335,8 +335,8 @@ public Alert updateAlertStatus(Long alertId, AlertStatus newStatus) {
   "id": 12345,
   "title": "CRITICAL: 检测到横向移动攻击",
   "status": "IN_PROGRESS",
-  "assigned_to": "security-analyst@company.com",
-  "updated_at": "2025-10-16T04:15:00Z"
+  "assignedTo": "security-analyst@company.com",
+  "updatedAt": "2025-10-16T04:15:00Z"
 }
 ```
 
@@ -378,7 +378,7 @@ public Alert updateAlertStatus(Long alertId, AlertStatus newStatus) {
 ```json
 {
   "resolution": "已隔离攻击源主机并清除恶意软件,加固防火墙规则",
-  "resolved_by": "security-analyst@company.com"
+  "resolvedBy": "security-analyst@company.com"
 }
 ```
 
@@ -387,7 +387,7 @@ public Alert updateAlertStatus(Long alertId, AlertStatus newStatus) {
 | 字段 | 类型 | 必需 | 说明 |
 |-----|------|------|------|
 | `resolution` | String | ✅ | 解决方案描述 (10-2000字符) |
-| `resolved_by` | String | ✅ | 解决人邮箱 |
+| `resolvedBy` | String | ✅ | 解决人邮箱 |
 
 #### 请求示例 (curl)
 
@@ -396,7 +396,7 @@ curl -X POST http://localhost:8082/api/v1/alerts/12345/resolve \
   -H "Content-Type: application/json" \
   -d '{
     "resolution": "已隔离攻击源主机并清除恶意软件,加固防火墙规则",
-    "resolved_by": "security-analyst@company.com"
+    "resolvedBy": "security-analyst@company.com"
   }'
 ```
 
@@ -444,9 +444,9 @@ public static class ResolveAlertRequest {
   "title": "CRITICAL: 检测到横向移动攻击",
   "status": "RESOLVED",
   "resolution": "已隔离攻击源主机并清除恶意软件,加固防火墙规则",
-  "resolved_by": "security-analyst@company.com",
-  "resolved_at": "2025-10-16T05:30:00Z",
-  "updated_at": "2025-10-16T05:30:00Z"
+  "resolvedBy": "security-analyst@company.com",
+  "resolvedAt": "2025-10-16T05:30:00Z",
+  "updatedAt": "2025-10-16T05:30:00Z"
 }
 ```
 
@@ -542,7 +542,7 @@ curl -X POST http://localhost:8082/api/v1/alerts/12345/escalate \
 
 ```json
 {
-  "assigned_to": "security-analyst@company.com"
+  "assignedTo": "security-analyst@company.com"
 }
 ```
 
@@ -552,7 +552,7 @@ curl -X POST http://localhost:8082/api/v1/alerts/12345/escalate \
 curl -X POST http://localhost:8082/api/v1/alerts/12345/assign \
   -H "Content-Type: application/json" \
   -d '{
-    "assigned_to": "security-analyst@company.com"
+    "assignedTo": "security-analyst@company.com"
   }'
 ```
 

@@ -246,13 +246,13 @@ IP权重 (5个) = 1.5
 
 ```json
 {
-  "customer_id": "customer_a",
-  "attack_mac": "04:42:1a:8e:e3:65",
-  "attack_ip": "192.168.75.188",
-  "attack_count": 150,
-  "unique_ips": 5,
-  "unique_ports": 3,
-  "unique_devices": 2,
+  "customerId": "customer_a",
+  "attackMac": "04:42:1a:8e:e3:65",
+  "attackIp": "192.168.75.188",
+  "attackCount": 150,
+  "uniqueIps": 5,
+  "uniquePorts": 3,
+  "uniqueDevices": 2,
   "timestamp": "2025-01-15T02:30:00Z"
 }
 ```
@@ -261,13 +261,13 @@ IP权重 (5个) = 1.5
 
 | 字段 | 类型 | 必需 | 说明 |
 |-----|------|------|------|
-| `customer_id` | String | ✅ | 客户ID (租户隔离) |
-| `attack_mac` | String | ✅ | 被诱捕者MAC地址 |
-| `attack_ip` | String | ✅ | 被诱捕者IP地址 |
-| `attack_count` | Integer | ✅ | 探测次数 |
-| `unique_ips` | Integer | ✅ | 访问的诱饵IP数量 |
-| `unique_ports` | Integer | ✅ | 尝试的端口种类 |
-| `unique_devices` | Integer | ✅ | 检测到的蜜罐设备数 |
+| `customerId` | String | ✅ | 客户ID (租户隔离) |
+| `attackMac` | String | ✅ | 被诱捕者MAC地址 |
+| `attackIp` | String | ✅ | 被诱捕者IP地址 |
+| `attackCount` | Integer | ✅ | 探测次数 |
+| `uniqueIps` | Integer | ✅ | 访问的诱饵IP数量 |
+| `uniquePorts` | Integer | ✅ | 尝试的端口种类 |
+| `uniqueDevices` | Integer | ✅ | 检测到的蜜罐设备数 |
 | `timestamp` | String (ISO8601) | ✅ | 评估时间 |
 
 ### AssessmentResponse (评估响应)
@@ -275,16 +275,16 @@ IP权重 (5个) = 1.5
 ```json
 {
   "assessmentId": "12345",
-  "customer_id": "customer_a",
-  "attack_mac": "04:42:1a:8e:e3:65",
-  "attack_ip": "192.168.75.188",
-  "threat_score": 7290.0,
-  "threat_level": "CRITICAL",
+  "customerId": "customer_a",
+  "attackMac": "04:42:1a:8e:e3:65",
+  "attackIp": "192.168.75.188",
+  "threatScore": 7290.0,
+  "threatLevel": "CRITICAL",
   "riskFactors": {
-    "attack_count": 150,
-    "unique_ips": 5,
-    "unique_ports": 3,
-    "unique_devices": 2,
+    "attackCount": 150,
+    "uniqueIps": 5,
+    "uniquePorts": 3,
+    "uniqueDevices": 2,
     "timeWeight": 1.2,
     "ipWeight": 1.5,
     "portWeight": 1.2,
@@ -297,7 +297,7 @@ IP权重 (5个) = 1.5
     "启动应急响应流程"
   ],
   "assessmentTime": "2025-01-15T02:30:00Z",
-  "created_at": "2025-01-15T02:30:05Z"
+  "createdAt": "2025-01-15T02:30:05Z"
 }
 ```
 
@@ -306,21 +306,21 @@ IP权重 (5个) = 1.5
 | 字段 | 类型 | 说明 |
 |-----|------|------|
 | `assessmentId` | String | 评估记录ID |
-| `customer_id` | String | 客户ID |
-| `attack_mac` | String | 攻击者MAC |
-| `attack_ip` | String | 攻击者IP |
-| `threat_score` | Double | 威胁评分 |
+| `customerId` | String | 客户ID |
+| `attackMac` | String | 攻击者MAC |
+| `attackIp` | String | 攻击者IP |
+| `threatScore` | Double | 威胁评分 |
 | `threatLevel` | String | 威胁等级 (INFO/LOW/MEDIUM/HIGH/CRITICAL) |
 | `riskFactors` | Object | 风险因素详情 (各维度权重) |
 | `mitigationRecommendations` | String[] | 缓解建议列表 |
 | `assessmentTime` | String | 评估时间 |
-| `created_at` | String | 记录创建时间 |
+| `createdAt` | String | 记录创建时间 |
 
 ### ThreatTrend (威胁趋势)
 
 ```json
 {
-  "customer_id": "customer_a",
+  "customerId": "customer_a",
   "timeRange": {
     "start": "2025-01-15T00:00:00Z",
     "end": "2025-01-15T23:59:59Z"

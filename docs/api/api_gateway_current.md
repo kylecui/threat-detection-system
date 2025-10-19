@@ -100,12 +100,12 @@ curl http://localhost:8888/actuator/gateway/routes | jq
 curl -X POST http://localhost:8888/api/v1/customers \
   -H "Content-Type: application/json" \
   -d '{
-    "customerId": "customer-001",
-    "companyName": "示例公司",
-    "contactName": "张三",
-    "contactEmail": "admin@example.com",
-    "contactPhone": "13800138000",
-    "subscriptionTier": "PROFESSIONAL"
+    "customer_id": "customer-001",
+    "company_name": "示例公司",
+    "contact_name": "张三",
+    "contact_email": "admin@example.com",
+    "contact_phone": "13800138000",
+    "subscription_tier": "PROFESSIONAL"
   }'
 ```
 
@@ -113,13 +113,13 @@ curl -X POST http://localhost:8888/api/v1/customers \
 ```json
 {
   "id": 1,
-  "customerId": "customer-001",
-  "companyName": "示例公司",
-  "contactName": "张三",
-  "contactEmail": "admin@example.com",
-  "subscriptionTier": "PROFESSIONAL",
-  "isActive": true,
-  "createdAt": "2025-10-19T12:00:00Z"
+  "customer_id": "customer-001",
+  "company_name": "示例公司",
+  "contact_name": "张三",
+  "contact_email": "admin@example.com",
+  "subscription_tier": "PROFESSIONAL",
+  "is_active": true,
+  "created_at": 1697723200.0
 }
 ```
 
@@ -137,8 +137,8 @@ curl http://localhost:8888/api/v1/customers
 curl -X PUT http://localhost:8888/api/v1/customers/customer-001 \
   -H "Content-Type: application/json" \
   -d '{
-    "companyName": "更新后的公司名",
-    "contactEmail": "newemail@example.com"
+    "company_name": "更新后的公司名",
+    "contact_email": "newemail@example.com"
   }'
 ```
 
@@ -149,9 +149,9 @@ curl -X PUT http://localhost:8888/api/v1/customers/customer-001 \
 curl -X POST http://localhost:8888/api/v1/devices/bind \
   -H "Content-Type: application/json" \
   -d '{
-    "customerId": "customer-001",
-    "deviceSerial": "DEV-001",
-    "deviceName": "办公室1号设备",
+    "customer_id": "customer-001",
+    "dev_serial": "DEV-001",
+    "device_name": "办公室1号设备",
     "location": "北京办公室"
   }'
 ```
@@ -168,9 +168,9 @@ curl http://localhost:8888/api/v1/devices/customer/customer-001
 curl -X POST http://localhost:8888/api/v1/notifications \
   -H "Content-Type: application/json" \
   -d '{
-    "customerId": "customer-001",
-    "notificationType": "EMAIL",
-    "minSeverity": "HIGH",
+    "customer_id": "customer-001",
+    "notification_type": "EMAIL",
+    "min_severity": "HIGH",
     "recipients": ["admin@example.com", "security@example.com"],
     "enabled": true
   }'
@@ -186,10 +186,10 @@ curl http://localhost:8888/api/v1/logs/stats
 **响应**:
 ```json
 {
-  "totalProcessed": 150000,
-  "parsedSuccessfully": 148500,
-  "parsingFailed": 1500,
-  "lastUpdated": "2025-10-19T12:00:00Z"
+  "total_processed": 150000,
+  "parsed_successfully": 148500,
+  "parsing_failed": 1500,
+  "last_updated": "2025-10-19T12:00:00Z"
 }
 ```
 
@@ -223,7 +223,7 @@ curl "http://localhost:8888/api/v1/alerts?status=OPEN&page=0&size=20"
 ```bash
 curl -X PUT http://localhost:8888/api/v1/alerts/123/status \
   -H "Content-Type: application/json" \
-  -d '{"status": "RESOLVED", "resolvedBy": "admin"}'
+  -d '{"status": "RESOLVED", "resolved_by": "admin"}'
 ```
 
 ---

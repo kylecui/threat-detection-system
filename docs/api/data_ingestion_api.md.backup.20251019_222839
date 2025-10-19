@@ -723,8 +723,8 @@ public class CustomerMappingExample {
 
 ```json
 {
-  "dev_serial": "GSFB2204200410007425",
-  "customer_id": "customer_a"
+  "devSerial": "GSFB2204200410007425",
+  "customerId": "customer_a"
 }
 ```
 
@@ -732,8 +732,8 @@ public class CustomerMappingExample {
 
 ```json
 {
-  "dev_serial": "UNKNOWN_DEVICE",
-  "customer_id": null,
+  "devSerial": "UNKNOWN_DEVICE",
+  "customerId": null,
   "error": "No customer mapping found for device"
 }
 ```

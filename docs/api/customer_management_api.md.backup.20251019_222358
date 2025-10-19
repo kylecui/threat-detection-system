@@ -541,14 +541,14 @@ ON DELETE CASCADE;
 **CreateCustomerRequest**:
 ```java
 {
-  "customer_id": "customer-001",      // 必填
-  "company_name": "示例科技公司",       // 必填
-  "contact_name": "张三",
-  "contact_email": "zhangsan@example.com",
-  "contact_phone": "+86-13800138000",
-  "subscription_tier": "PROFESSIONAL",
-  "subscription_start_date": "2025-01-01",
-  "subscription_end_date": "2025-12-31",
+  "customerId": "customer-001",      // 必填
+  "companyName": "示例科技公司",       // 必填
+  "contactName": "张三",
+  "contactEmail": "zhangsan@example.com",
+  "contactPhone": "+86-13800138000",
+  "subscriptionTier": "PROFESSIONAL",
+  "subscriptionStartDate": "2025-01-01",
+  "subscriptionEndDate": "2025-12-31",
   "notes": "VIP客户"
 }
 ```
@@ -556,12 +556,12 @@ ON DELETE CASCADE;
 **UpdateCustomerRequest**:
 ```java
 {
-  "company_name": "示例科技有限公司",   // 选填
-  "contact_name": "李四",
-  "contact_email": "lisi@example.com",
-  "contact_phone": "+86-13900139000",
+  "companyName": "示例科技有限公司",   // 选填
+  "contactName": "李四",
+  "contactEmail": "lisi@example.com",
+  "contactPhone": "+86-13900139000",
   "status": "ACTIVE",
-  "subscription_tier": "ENTERPRISE",
+  "subscriptionTier": "ENTERPRISE",
   "notes": "升级为企业版"
 }
 ```
@@ -570,21 +570,21 @@ ON DELETE CASCADE;
 ```java
 {
   "id": 1,
-  "customer_id": "customer-001",
-  "company_name": "示例科技公司",
-  "contact_name": "张三",
-  "contact_email": "zhangsan@example.com",
-  "contact_phone": "+86-13800138000",
+  "customerId": "customer-001",
+  "companyName": "示例科技公司",
+  "contactName": "张三",
+  "contactEmail": "zhangsan@example.com",
+  "contactPhone": "+86-13800138000",
   "status": "ACTIVE",
-  "subscription_tier": "PROFESSIONAL",
-  "max_devices": 100,
-  "current_devices": 45,
-  "subscription_start_date": "2025-01-01",
-  "subscription_end_date": "2025-12-31",
+  "subscriptionTier": "PROFESSIONAL",
+  "maxDevices": 100,
+  "currentDevices": 45,
+  "subscriptionStartDate": "2025-01-01",
+  "subscriptionEndDate": "2025-12-31",
   "notes": "VIP客户",
-  "is_active": true,
-  "created_at": "2025-01-01T00:00:00Z",
-  "updated_at": "2025-10-16T10:30:00Z"
+  "isActive": true,
+  "createdAt": "2025-01-01T00:00:00Z",
+  "updatedAt": "2025-10-16T10:30:00Z"
 }
 ```
 
@@ -593,9 +593,9 @@ ON DELETE CASCADE;
 **DeviceMappingRequest**:
 ```java
 {
-  "dev_serial": "DEV-001",           // 必填
-  "device_name": "网关设备01",
-  "device_type": "Gateway",
+  "devSerial": "DEV-001",           // 必填
+  "deviceName": "网关设备01",
+  "deviceType": "Gateway",
   "location": "北京办公室"
 }
 ```
@@ -605,15 +605,15 @@ ON DELETE CASCADE;
 {
   "devices": [
     {
-      "dev_serial": "DEV-001",
-      "device_name": "网关设备01",
-      "device_type": "Gateway",
+      "devSerial": "DEV-001",
+      "deviceName": "网关设备01",
+      "deviceType": "Gateway",
       "location": "北京办公室"
     },
     {
-      "dev_serial": "DEV-002",
-      "device_name": "网关设备02",
-      "device_type": "Gateway",
+      "devSerial": "DEV-002",
+      "deviceName": "网关设备02",
+      "deviceType": "Gateway",
       "location": "上海办公室"
     }
   ]
@@ -624,28 +624,28 @@ ON DELETE CASCADE;
 ```java
 {
   "id": 1,
-  "customer_id": "customer-001",
-  "dev_serial": "DEV-001",
-  "device_name": "网关设备01",
-  "device_type": "Gateway",
+  "customerId": "customer-001",
+  "devSerial": "DEV-001",
+  "deviceName": "网关设备01",
+  "deviceType": "Gateway",
   "location": "北京办公室",
-  "is_active": true,
-  "bind_time": "2025-01-01T08:00:00Z",
-  "unbind_time": null,
-  "created_at": "2025-01-01T08:00:00Z",
-  "updated_at": "2025-01-01T08:00:00Z"
+  "isActive": true,
+  "bindTime": "2025-01-01T08:00:00Z",
+  "unbindTime": null,
+  "createdAt": "2025-01-01T08:00:00Z",
+  "updatedAt": "2025-01-01T08:00:00Z"
 }
 ```
 
 **DeviceQuotaResponse**:
 ```java
 {
-  "customer_id": "customer-001",
-  "subscription_tier": "PROFESSIONAL",
-  "max_devices": 100,
-  "current_devices": 45,
-  "available_devices": 55,
-  "usage_percentage": 45.0
+  "customerId": "customer-001",
+  "subscriptionTier": "PROFESSIONAL",
+  "maxDevices": 100,
+  "currentDevices": 45,
+  "availableDevices": 55,
+  "usagePercentage": 45.0
 }
 ```
 
@@ -657,12 +657,12 @@ ON DELETE CASCADE;
   "failureCount": 2,
   "results": [
     {
-      "dev_serial": "DEV-001",
+      "devSerial": "DEV-001",
       "success": true,
       "message": "Device bound successfully"
     },
     {
-      "dev_serial": "DEV-002",
+      "devSerial": "DEV-002",
       "success": false,
       "message": "Device already bound to another customer"
     }
@@ -675,26 +675,26 @@ ON DELETE CASCADE;
 **NotificationConfigRequest**:
 ```java
 {
-  "email_enabled": true,
-  "email_recipients": ["admin@example.com", "security@example.com"],
-  "sms_enabled": false,
-  "sms_recipients": ["+86-13800138000"],
-  "slack_enabled": true,
-  "slack_webhook_url": "https://hooks.slack.com/services/xxx",
-  "slack_channel": "#security-alerts",
-  "webhook_enabled": false,
-  "webhook_url": "https://api.example.com/webhook",
-  "webhook_headers": {
+  "emailEnabled": true,
+  "emailRecipients": ["admin@example.com", "security@example.com"],
+  "smsEnabled": false,
+  "smsRecipients": ["+86-13800138000"],
+  "slackEnabled": true,
+  "slackWebhookUrl": "https://hooks.slack.com/services/xxx",
+  "slackChannel": "#security-alerts",
+  "webhookEnabled": false,
+  "webhookUrl": "https://api.example.com/webhook",
+  "webhookHeaders": {
     "Authorization": "Bearer token123"
   },
-  "min_severity_level": "MEDIUM",
-  "notify_on_severities": ["HIGH", "CRITICAL"],
-  "max_notifications_per_hour": 20,
-  "enable_rate_limiting": true,
-  "quiet_hours_enabled": true,
-  "quiet_hours_start": "22:00:00",
-  "quiet_hours_end": "08:00:00",
-  "quiet_hours_timezone": "Asia/Shanghai"
+  "minSeverityLevel": "MEDIUM",
+  "notifyOnSeverities": ["HIGH", "CRITICAL"],
+  "maxNotificationsPerHour": 20,
+  "enableRateLimiting": true,
+  "quietHoursEnabled": true,
+  "quietHoursStart": "22:00:00",
+  "quietHoursEnd": "08:00:00",
+  "quietHoursTimezone": "Asia/Shanghai"
 }
 ```
 
@@ -702,30 +702,30 @@ ON DELETE CASCADE;
 ```java
 {
   "id": 1,
-  "customer_id": "customer-001",
-  "email_enabled": true,
-  "email_recipients": ["admin@example.com", "security@example.com"],
-  "sms_enabled": false,
-  "sms_recipients": ["+86-13800138000"],
-  "slack_enabled": true,
-  "slack_webhook_url": "https://hooks.slack.com/services/xxx",
-  "slack_channel": "#security-alerts",
-  "webhook_enabled": false,
-  "webhook_url": "https://api.example.com/webhook",
-  "webhook_headers": {
+  "customerId": "customer-001",
+  "emailEnabled": true,
+  "emailRecipients": ["admin@example.com", "security@example.com"],
+  "smsEnabled": false,
+  "smsRecipients": ["+86-13800138000"],
+  "slackEnabled": true,
+  "slackWebhookUrl": "https://hooks.slack.com/services/xxx",
+  "slackChannel": "#security-alerts",
+  "webhookEnabled": false,
+  "webhookUrl": "https://api.example.com/webhook",
+  "webhookHeaders": {
     "Authorization": "Bearer token123"
   },
-  "min_severity_level": "MEDIUM",
-  "notify_on_severities": ["HIGH", "CRITICAL"],
-  "max_notifications_per_hour": 20,
-  "enable_rate_limiting": true,
-  "quiet_hours_enabled": true,
-  "quiet_hours_start": "22:00:00",
-  "quiet_hours_end": "08:00:00",
-  "quiet_hours_timezone": "Asia/Shanghai",
-  "is_active": true,
-  "created_at": "2025-01-01T00:00:00Z",
-  "updated_at": "2025-10-16T10:30:00Z"
+  "minSeverityLevel": "MEDIUM",
+  "notifyOnSeverities": ["HIGH", "CRITICAL"],
+  "maxNotificationsPerHour": 20,
+  "enableRateLimiting": true,
+  "quietHoursEnabled": true,
+  "quietHoursStart": "22:00:00",
+  "quietHoursEnd": "08:00:00",
+  "quietHoursTimezone": "Asia/Shanghai",
+  "isActive": true,
+  "createdAt": "2025-01-01T00:00:00Z",
+  "updatedAt": "2025-10-16T10:30:00Z"
 }
 ```
 
@@ -765,14 +765,14 @@ Host: localhost:8084
 Content-Type: application/json
 
 {
-  "customer_id": "customer-001",
-  "company_name": "示例科技公司",
-  "contact_name": "张三",
-  "contact_email": "zhangsan@example.com",
-  "contact_phone": "+86-13800138000",
-  "subscription_tier": "PROFESSIONAL",
-  "subscription_start_date": "2025-01-01",
-  "subscription_end_date": "2025-12-31",
+  "customerId": "customer-001",
+  "companyName": "示例科技公司",
+  "contactName": "张三",
+  "contactEmail": "zhangsan@example.com",
+  "contactPhone": "+86-13800138000",
+  "subscriptionTier": "PROFESSIONAL",
+  "subscriptionStartDate": "2025-01-01",
+  "subscriptionEndDate": "2025-12-31",
   "notes": "VIP客户"
 }
 ```
@@ -781,12 +781,12 @@ Content-Type: application/json
 
 | 字段 | 类型 | 必填 | 说明 | 示例 |
 |------|------|------|------|------|
-| `customer_id` | String | ✅ | 客户唯一标识，长度1-50 | "customer-001" |
-| `company_name` | String | ✅ | 公司名称，长度1-255 | "示例科技公司" |
-| `contact_name` | String | ❌ | 联系人姓名 | "张三" |
-| `contact_email` | String | ❌ | 联系邮箱，需符合邮箱格式 | "zhangsan@example.com" |
+| `customerId` | String | ✅ | 客户唯一标识，长度1-50 | "customer-001" |
+| `companyName` | String | ✅ | 公司名称，长度1-255 | "示例科技公司" |
+| `contactName` | String | ❌ | 联系人姓名 | "张三" |
+| `contactEmail` | String | ❌ | 联系邮箱，需符合邮箱格式 | "zhangsan@example.com" |
 | `contactPhone` | String | ❌ | 联系电话 | "+86-13800138000" |
-| `subscription_tier` | String | ❌ | 订阅套餐，默认FREE | "PROFESSIONAL" |
+| `subscriptionTier` | String | ❌ | 订阅套餐，默认FREE | "PROFESSIONAL" |
 | `subscriptionStartDate` | String | ❌ | 订阅开始日期 (YYYY-MM-DD) | "2025-01-01" |
 | `subscriptionEndDate` | String | ❌ | 订阅结束日期 (YYYY-MM-DD) | "2025-12-31" |
 | `notes` | String | ❌ | 备注信息 | "VIP客户" |
@@ -803,23 +803,23 @@ Content-Type: application/json
 ```json
 {
   "id": 1,
-  "customer_id": "customer-001",
-  "company_name": "示例科技公司",
-  "contact_name": "张三",
-  "contact_email": "zhangsan@example.com",
-  "contact_phone": "+86-13800138000",
+  "customerId": "customer-001",
+  "companyName": "示例科技公司",
+  "contactName": "张三",
+  "contactEmail": "zhangsan@example.com",
+  "contactPhone": "+86-13800138000",
   "status": "ACTIVE",
-  "subscription_tier": "PROFESSIONAL",
-  "max_devices": 100,
-  "current_devices": 0,
-  "subscription_start_date": "2025-01-01",
-  "subscription_end_date": "2025-12-31",
+  "subscriptionTier": "PROFESSIONAL",
+  "maxDevices": 100,
+  "currentDevices": 0,
+  "subscriptionStartDate": "2025-01-01",
+  "subscriptionEndDate": "2025-12-31",
   "notes": "VIP客户",
-  "is_active": true,
-  "created_at": "2025-10-16T10:30:00Z",
-  "updated_at": "2025-10-16T10:30:00Z",
-  "created_by": null,
-  "updated_by": null
+  "isActive": true,
+  "createdAt": "2025-10-16T10:30:00Z",
+  "updatedAt": "2025-10-16T10:30:00Z",
+  "createdBy": null,
+  "updatedBy": null
 }
 ```
 
@@ -840,11 +840,11 @@ Content-Type: application/json
 curl -X POST http://localhost:8084/api/v1/customers \
   -H "Content-Type: application/json" \
   -d '{
-    "customer_id": "customer-001",
-    "company_name": "示例科技公司",
-    "contact_name": "张三",
-    "contact_email": "zhangsan@example.com",
-    "subscription_tier": "PROFESSIONAL"
+    "customerId": "customer-001",
+    "companyName": "示例科技公司",
+    "contactName": "张三",
+    "contactEmail": "zhangsan@example.com",
+    "subscriptionTier": "PROFESSIONAL"
   }'
 ```
 
@@ -865,7 +865,7 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 响应
 
@@ -873,21 +873,21 @@ Host: localhost:8084
 ```json
 {
   "id": 1,
-  "customer_id": "customer-001",
-  "company_name": "示例科技公司",
-  "contact_name": "张三",
-  "contact_email": "zhangsan@example.com",
-  "contact_phone": "+86-13800138000",
+  "customerId": "customer-001",
+  "companyName": "示例科技公司",
+  "contactName": "张三",
+  "contactEmail": "zhangsan@example.com",
+  "contactPhone": "+86-13800138000",
   "status": "ACTIVE",
-  "subscription_tier": "PROFESSIONAL",
-  "max_devices": 100,
-  "current_devices": 45,
-  "subscription_start_date": "2025-01-01",
-  "subscription_end_date": "2025-12-31",
+  "subscriptionTier": "PROFESSIONAL",
+  "maxDevices": 100,
+  "currentDevices": 45,
+  "subscriptionStartDate": "2025-01-01",
+  "subscriptionEndDate": "2025-12-31",
   "notes": "VIP客户",
-  "is_active": true,
-  "created_at": "2025-01-01T00:00:00Z",
-  "updated_at": "2025-10-16T10:30:00Z"
+  "isActive": true,
+  "createdAt": "2025-01-01T00:00:00Z",
+  "updatedAt": "2025-10-16T10:30:00Z"
 }
 ```
 
@@ -943,23 +943,23 @@ Host: localhost:8084
   "content": [
     {
       "id": 1,
-      "customer_id": "customer-001",
-      "company_name": "示例科技公司",
+      "customerId": "customer-001",
+      "companyName": "示例科技公司",
       "status": "ACTIVE",
-      "subscription_tier": "PROFESSIONAL",
-      "max_devices": 100,
-      "current_devices": 45,
-      "created_at": "2025-01-01T00:00:00Z"
+      "subscriptionTier": "PROFESSIONAL",
+      "maxDevices": 100,
+      "currentDevices": 45,
+      "createdAt": "2025-01-01T00:00:00Z"
     },
     {
       "id": 2,
-      "customer_id": "customer-002",
-      "company_name": "测试公司",
+      "customerId": "customer-002",
+      "companyName": "测试公司",
       "status": "ACTIVE",
-      "subscription_tier": "BASIC",
-      "max_devices": 20,
-      "current_devices": 8,
-      "created_at": "2025-01-02T00:00:00Z"
+      "subscriptionTier": "BASIC",
+      "maxDevices": 20,
+      "currentDevices": 8,
+      "createdAt": "2025-01-02T00:00:00Z"
     }
   ],
   "pageable": {
@@ -1029,14 +1029,14 @@ Host: localhost:8084
   "content": [
     {
       "id": 1,
-      "customer_id": "customer-001",
-      "company_name": "示例科技公司",
-      "contact_name": "张三",
-      "contact_email": "zhangsan@example.com",
+      "customerId": "customer-001",
+      "companyName": "示例科技公司",
+      "contactName": "张三",
+      "contactEmail": "zhangsan@example.com",
       "status": "ACTIVE",
-      "subscription_tier": "PROFESSIONAL",
-      "max_devices": 100,
-      "current_devices": 45
+      "subscriptionTier": "PROFESSIONAL",
+      "maxDevices": 100,
+      "currentDevices": 45
     }
   ],
   "totalElements": 1,
@@ -1086,12 +1086,12 @@ Host: localhost:8084
   "content": [
     {
       "id": 1,
-      "customer_id": "customer-001",
-      "company_name": "示例科技公司",
+      "customerId": "customer-001",
+      "companyName": "示例科技公司",
       "status": "ACTIVE",
-      "subscription_tier": "PROFESSIONAL",
-      "max_devices": 100,
-      "current_devices": 45
+      "subscriptionTier": "PROFESSIONAL",
+      "maxDevices": 100,
+      "currentDevices": 45
     }
   ],
   "totalElements": 1,
@@ -1119,12 +1119,12 @@ Host: localhost:8084
 Content-Type: application/json
 
 {
-  "company_name": "示例科技有限公司",
-  "contact_name": "李四",
-  "contact_email": "lisi@example.com",
-  "contact_phone": "+86-13900139000",
+  "companyName": "示例科技有限公司",
+  "contactName": "李四",
+  "contactEmail": "lisi@example.com",
+  "contactPhone": "+86-13900139000",
   "status": "ACTIVE",
-  "subscription_tier": "ENTERPRISE",
+  "subscriptionTier": "ENTERPRISE",
   "notes": "升级为企业版"
 }
 ```
@@ -1133,7 +1133,7 @@ Content-Type: application/json
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 请求参数
 
@@ -1141,12 +1141,12 @@ Content-Type: application/json
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `company_name` | String | 公司名称 |
-| `contact_name` | String | 联系人姓名 |
-| `contact_email` | String | 联系邮箱 |
+| `companyName` | String | 公司名称 |
+| `contactName` | String | 联系人姓名 |
+| `contactEmail` | String | 联系邮箱 |
 | `contactPhone` | String | 联系电话 |
 | `status` | String | 客户状态: ACTIVE, INACTIVE, SUSPENDED |
-| `subscription_tier` | String | 订阅套餐 (会自动更新maxDevices) |
+| `subscriptionTier` | String | 订阅套餐 (会自动更新maxDevices) |
 | `subscriptionStartDate` | String | 订阅开始日期 |
 | `subscriptionEndDate` | String | 订阅结束日期 |
 | `notes` | String | 备注信息 |
@@ -1161,17 +1161,17 @@ Content-Type: application/json
 ```json
 {
   "id": 1,
-  "customer_id": "customer-001",
-  "company_name": "示例科技有限公司",
-  "contact_name": "李四",
-  "contact_email": "lisi@example.com",
-  "contact_phone": "+86-13900139000",
+  "customerId": "customer-001",
+  "companyName": "示例科技有限公司",
+  "contactName": "李四",
+  "contactEmail": "lisi@example.com",
+  "contactPhone": "+86-13900139000",
   "status": "ACTIVE",
-  "subscription_tier": "ENTERPRISE",
-  "max_devices": 10000,
-  "current_devices": 45,
+  "subscriptionTier": "ENTERPRISE",
+  "maxDevices": 10000,
+  "currentDevices": 45,
   "notes": "升级为企业版",
-  "updated_at": "2025-10-16T11:00:00Z"
+  "updatedAt": "2025-10-16T11:00:00Z"
 }
 ```
 
@@ -1192,7 +1192,7 @@ Content-Type: application/json
 curl -X PUT http://localhost:8084/api/v1/customers/customer-001 \
   -H "Content-Type: application/json" \
   -d '{
-    "subscription_tier": "ENTERPRISE",
+    "subscriptionTier": "ENTERPRISE",
     "notes": "升级为企业版"
   }'
 ```
@@ -1214,7 +1214,7 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 响应
 
@@ -1222,7 +1222,7 @@ Host: localhost:8084
 ```json
 {
   "message": "Customer deactivated successfully",
-  "customer_id": "customer-001"
+  "customerId": "customer-001"
 }
 ```
 
@@ -1260,7 +1260,7 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 响应
 
@@ -1268,7 +1268,7 @@ Host: localhost:8084
 ```json
 {
   "message": "Customer permanently deleted",
-  "customer_id": "customer-001"
+  "customerId": "customer-001"
 }
 ```
 
@@ -1377,15 +1377,15 @@ curl -X GET http://localhost:8084/api/v1/customers/statistics
   "message": "Validation failed",
   "errors": [
     {
-      "field": "customer_id",
+      "field": "customerId",
       "message": "must not be blank"
     },
     {
-      "field": "company_name",
+      "field": "companyName",
       "message": "must not be blank"
     },
     {
-      "field": "contact_email",
+      "field": "contactEmail",
       "message": "must be a well-formed email address"
     }
   ],
@@ -1429,9 +1429,9 @@ Host: localhost:8084
 Content-Type: application/json
 
 {
-  "dev_serial": "DEV-001",
-  "device_name": "网关设备01",
-  "device_type": "Gateway",
+  "devSerial": "DEV-001",
+  "deviceName": "网关设备01",
+  "deviceType": "Gateway",
   "location": "北京办公室"
 }
 ```
@@ -1440,7 +1440,7 @@ Content-Type: application/json
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 请求参数
 
@@ -1457,16 +1457,16 @@ Content-Type: application/json
 ```json
 {
   "id": 1,
-  "customer_id": "customer-001",
-  "dev_serial": "DEV-001",
-  "device_name": "网关设备01",
-  "device_type": "Gateway",
+  "customerId": "customer-001",
+  "devSerial": "DEV-001",
+  "deviceName": "网关设备01",
+  "deviceType": "Gateway",
   "location": "北京办公室",
-  "is_active": true,
-  "bind_time": "2025-10-16T10:30:00Z",
-  "unbind_time": null,
-  "created_at": "2025-10-16T10:30:00Z",
-  "updated_at": "2025-10-16T10:30:00Z"
+  "isActive": true,
+  "bindTime": "2025-10-16T10:30:00Z",
+  "unbindTime": null,
+  "createdAt": "2025-10-16T10:30:00Z",
+  "updatedAt": "2025-10-16T10:30:00Z"
 }
 ```
 
@@ -1498,9 +1498,9 @@ Content-Type: application/json
 curl -X POST http://localhost:8084/api/v1/customers/customer-001/devices \
   -H "Content-Type: application/json" \
   -d '{
-    "dev_serial": "DEV-001",
-    "device_name": "网关设备01",
-    "device_type": "Gateway",
+    "devSerial": "DEV-001",
+    "deviceName": "网关设备01",
+    "deviceType": "Gateway",
     "location": "北京办公室"
   }'
 ```
@@ -1521,21 +1521,21 @@ Content-Type: application/json
 {
   "devices": [
     {
-      "dev_serial": "DEV-001",
-      "device_name": "网关设备01",
-      "device_type": "Gateway",
+      "devSerial": "DEV-001",
+      "deviceName": "网关设备01",
+      "deviceType": "Gateway",
       "location": "北京办公室"
     },
     {
-      "dev_serial": "DEV-002",
-      "device_name": "网关设备02",
-      "device_type": "Gateway",
+      "devSerial": "DEV-002",
+      "deviceName": "网关设备02",
+      "deviceType": "Gateway",
       "location": "上海办公室"
     },
     {
-      "dev_serial": "DEV-003",
-      "device_name": "传感器01",
-      "device_type": "Sensor",
+      "devSerial": "DEV-003",
+      "deviceName": "传感器01",
+      "deviceType": "Sensor",
       "location": "深圳办公室"
     }
   ]
@@ -1546,7 +1546,7 @@ Content-Type: application/json
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 请求参数
 
@@ -1568,31 +1568,31 @@ Content-Type: application/json
   "failureCount": 1,
   "results": [
     {
-      "dev_serial": "DEV-001",
+      "devSerial": "DEV-001",
       "success": true,
       "message": "Device bound successfully",
       "device": {
         "id": 1,
-        "customer_id": "customer-001",
-        "dev_serial": "DEV-001",
-        "device_name": "网关设备01",
-        "is_active": true
+        "customerId": "customer-001",
+        "devSerial": "DEV-001",
+        "deviceName": "网关设备01",
+        "isActive": true
       }
     },
     {
-      "dev_serial": "DEV-002",
+      "devSerial": "DEV-002",
       "success": true,
       "message": "Device bound successfully",
       "device": {
         "id": 2,
-        "customer_id": "customer-001",
-        "dev_serial": "DEV-002",
-        "device_name": "网关设备02",
-        "is_active": true
+        "customerId": "customer-001",
+        "devSerial": "DEV-002",
+        "deviceName": "网关设备02",
+        "isActive": true
       }
     },
     {
-      "dev_serial": "DEV-003",
+      "devSerial": "DEV-003",
       "success": false,
       "message": "Device quota exceeded",
       "device": null
@@ -1619,8 +1619,8 @@ curl -X POST http://localhost:8084/api/v1/customers/customer-001/devices/batch \
   -H "Content-Type: application/json" \
   -d '{
     "devices": [
-      {"dev_serial": "DEV-001", "device_name": "网关设备01"},
-      {"dev_serial": "DEV-002", "device_name": "网关设备02"}
+      {"devSerial": "DEV-001", "deviceName": "网关设备01"},
+      {"devSerial": "DEV-002", "deviceName": "网关设备02"}
     ]
   }'
 ```
@@ -1642,7 +1642,7 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 查询参数
 
@@ -1660,29 +1660,29 @@ Host: localhost:8084
   "content": [
     {
       "id": 1,
-      "customer_id": "customer-001",
-      "dev_serial": "DEV-001",
-      "device_name": "网关设备01",
-      "device_type": "Gateway",
+      "customerId": "customer-001",
+      "devSerial": "DEV-001",
+      "deviceName": "网关设备01",
+      "deviceType": "Gateway",
       "location": "北京办公室",
-      "is_active": true,
-      "bind_time": "2025-01-01T08:00:00Z",
-      "unbind_time": null,
-      "created_at": "2025-01-01T08:00:00Z",
-      "updated_at": "2025-01-01T08:00:00Z"
+      "isActive": true,
+      "bindTime": "2025-01-01T08:00:00Z",
+      "unbindTime": null,
+      "createdAt": "2025-01-01T08:00:00Z",
+      "updatedAt": "2025-01-01T08:00:00Z"
     },
     {
       "id": 2,
-      "customer_id": "customer-001",
-      "dev_serial": "DEV-002",
-      "device_name": "网关设备02",
-      "device_type": "Gateway",
+      "customerId": "customer-001",
+      "devSerial": "DEV-002",
+      "deviceName": "网关设备02",
+      "deviceType": "Gateway",
       "location": "上海办公室",
-      "is_active": true,
-      "bind_time": "2025-01-02T09:00:00Z",
-      "unbind_time": null,
-      "created_at": "2025-01-02T09:00:00Z",
-      "updated_at": "2025-01-02T09:00:00Z"
+      "isActive": true,
+      "bindTime": "2025-01-02T09:00:00Z",
+      "unbindTime": null,
+      "createdAt": "2025-01-02T09:00:00Z",
+      "updatedAt": "2025-01-02T09:00:00Z"
     }
   ],
   "pageable": {
@@ -1727,7 +1727,7 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 | `devSerial` | String | 设备序列号 |
 
 #### 响应
@@ -1736,16 +1736,16 @@ Host: localhost:8084
 ```json
 {
   "id": 1,
-  "customer_id": "customer-001",
-  "dev_serial": "DEV-001",
-  "device_name": "网关设备01",
-  "device_type": "Gateway",
+  "customerId": "customer-001",
+  "devSerial": "DEV-001",
+  "deviceName": "网关设备01",
+  "deviceType": "Gateway",
   "location": "北京办公室",
-  "is_active": true,
-  "bind_time": "2025-01-01T08:00:00Z",
-  "unbind_time": null,
-  "created_at": "2025-01-01T08:00:00Z",
-  "updated_at": "2025-01-01T08:00:00Z"
+  "isActive": true,
+  "bindTime": "2025-01-01T08:00:00Z",
+  "unbindTime": null,
+  "createdAt": "2025-01-01T08:00:00Z",
+  "updatedAt": "2025-01-01T08:00:00Z"
 }
 ```
 
@@ -1783,7 +1783,7 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 | `devSerial` | String | 设备序列号 |
 
 #### 响应
@@ -1792,8 +1792,8 @@ Host: localhost:8084
 ```json
 {
   "message": "Device unbound successfully",
-  "customer_id": "customer-001",
-  "dev_serial": "DEV-001"
+  "customerId": "customer-001",
+  "devSerial": "DEV-001"
 }
 ```
 
@@ -1834,7 +1834,7 @@ Content-Type: application/json
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 请求参数
 
@@ -1850,17 +1850,17 @@ Content-Type: application/json
   "failureCount": 1,
   "results": [
     {
-      "dev_serial": "DEV-001",
+      "devSerial": "DEV-001",
       "success": true,
       "message": "Device unbound successfully"
     },
     {
-      "dev_serial": "DEV-002",
+      "devSerial": "DEV-002",
       "success": true,
       "message": "Device unbound successfully"
     },
     {
-      "dev_serial": "DEV-003",
+      "devSerial": "DEV-003",
       "success": false,
       "message": "Device not found"
     }
@@ -1893,20 +1893,20 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 响应
 
 **成功 (200 OK)**:
 ```json
 {
-  "customer_id": "customer-001",
-  "subscription_tier": "PROFESSIONAL",
-  "max_devices": 100,
-  "current_devices": 45,
-  "available_devices": 55,
-  "usage_percentage": 45.0,
-  "is_quota_exceeded": false
+  "customerId": "customer-001",
+  "subscriptionTier": "PROFESSIONAL",
+  "maxDevices": 100,
+  "currentDevices": 45,
+  "availableDevices": 55,
+  "usagePercentage": 45.0,
+  "isQuotaExceeded": false
 }
 ```
 
@@ -1914,10 +1914,10 @@ Host: localhost:8084
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户ID |
-| `subscription_tier` | String | 订阅套餐 |
-| `max_devices` | Integer | 最大设备数 |
-| `current_devices` | Integer | 当前设备数 |
+| `customerId` | String | 客户ID |
+| `subscriptionTier` | String | 订阅套餐 |
+| `maxDevices` | Integer | 最大设备数 |
+| `currentDevices` | Integer | 当前设备数 |
 | `availableDevices` | Integer | 可用设备数 (maxDevices - currentDevices) |
 | `usagePercentage` | Double | 使用率 (0-100) |
 | `isQuotaExceeded` | Boolean | 是否超出配额 |
@@ -1945,20 +1945,20 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 响应
 
 **成功 (200 OK)**:
 ```json
 {
-  "customer_id": "customer-001",
-  "subscription_tier": "PROFESSIONAL",
-  "max_devices": 100,
-  "current_devices": 45,
-  "available_devices": 55,
-  "usage_percentage": 45.0,
-  "synced_at": "2025-10-16T10:30:00Z"
+  "customerId": "customer-001",
+  "subscriptionTier": "PROFESSIONAL",
+  "maxDevices": 100,
+  "currentDevices": 45,
+  "availableDevices": 55,
+  "usagePercentage": 45.0,
+  "syncedAt": "2025-10-16T10:30:00Z"
 }
 ```
 
@@ -1990,7 +1990,7 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 | `devSerial` | String | 设备序列号 |
 
 #### 查询参数
@@ -2005,16 +2005,16 @@ Host: localhost:8084
 ```json
 {
   "id": 1,
-  "customer_id": "customer-001",
-  "dev_serial": "DEV-001",
-  "device_name": "网关设备01",
-  "device_type": "Gateway",
+  "customerId": "customer-001",
+  "devSerial": "DEV-001",
+  "deviceName": "网关设备01",
+  "deviceType": "Gateway",
   "location": "北京办公室",
-  "is_active": false,
-  "bind_time": "2025-01-01T08:00:00Z",
-  "unbind_time": null,
-  "created_at": "2025-01-01T08:00:00Z",
-  "updated_at": "2025-10-16T10:30:00Z"
+  "isActive": false,
+  "bindTime": "2025-01-01T08:00:00Z",
+  "unbindTime": null,
+  "createdAt": "2025-01-01T08:00:00Z",
+  "updatedAt": "2025-10-16T10:30:00Z"
 }
 ```
 
@@ -2133,7 +2133,7 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 响应
 
@@ -2141,59 +2141,59 @@ Host: localhost:8084
 ```json
 {
   "id": 1,
-  "customer_id": "customer-001",
-  "email_enabled": true,
-  "email_recipients": ["admin@example.com", "security@example.com"],
-  "sms_enabled": false,
-  "sms_recipients": ["+86-13800138000"],
-  "slack_enabled": true,
-  "slack_webhook_url": "https://hooks.slack.com/services/T00/B00/xxxx",
-  "slack_channel": "#security-alerts",
-  "webhook_enabled": false,
-  "webhook_url": "https://api.example.com/webhook",
-  "webhook_headers": {
+  "customerId": "customer-001",
+  "emailEnabled": true,
+  "emailRecipients": ["admin@example.com", "security@example.com"],
+  "smsEnabled": false,
+  "smsRecipients": ["+86-13800138000"],
+  "slackEnabled": true,
+  "slackWebhookUrl": "https://hooks.slack.com/services/T00/B00/xxxx",
+  "slackChannel": "#security-alerts",
+  "webhookEnabled": false,
+  "webhookUrl": "https://api.example.com/webhook",
+  "webhookHeaders": {
     "Authorization": "Bearer token123",
     "Content-Type": "application/json"
   },
-  "min_severity_level": "MEDIUM",
-  "notify_on_severities": ["HIGH", "CRITICAL"],
-  "max_notifications_per_hour": 20,
-  "enable_rate_limiting": true,
-  "quiet_hours_enabled": true,
-  "quiet_hours_start": "22:00:00",
-  "quiet_hours_end": "08:00:00",
-  "quiet_hours_timezone": "Asia/Shanghai",
-  "is_active": true,
-  "created_at": "2025-01-01T00:00:00Z",
-  "updated_at": "2025-10-16T10:30:00Z",
-  "created_by": "admin",
-  "updated_by": "admin"
+  "minSeverityLevel": "MEDIUM",
+  "notifyOnSeverities": ["HIGH", "CRITICAL"],
+  "maxNotificationsPerHour": 20,
+  "enableRateLimiting": true,
+  "quietHoursEnabled": true,
+  "quietHoursStart": "22:00:00",
+  "quietHoursEnd": "08:00:00",
+  "quietHoursTimezone": "Asia/Shanghai",
+  "isActive": true,
+  "createdAt": "2025-01-01T00:00:00Z",
+  "updatedAt": "2025-10-16T10:30:00Z",
+  "createdBy": "admin",
+  "updatedBy": "admin"
 }
 ```
 
 **默认配置** (客户无自定义配置时):
 ```json
 {
-  "customer_id": "customer-001",
-  "email_enabled": true,
-  "email_recipients": [],
-  "sms_enabled": false,
-  "sms_recipients": [],
-  "slack_enabled": false,
-  "slack_webhook_url": null,
-  "slack_channel": null,
-  "webhook_enabled": false,
-  "webhook_url": null,
-  "webhook_headers": {},
-  "min_severity_level": "MEDIUM",
-  "notify_on_severities": ["CRITICAL", "HIGH", "MEDIUM"],
-  "max_notifications_per_hour": 10,
-  "enable_rate_limiting": true,
-  "quiet_hours_enabled": false,
-  "quiet_hours_start": null,
-  "quiet_hours_end": null,
-  "quiet_hours_timezone": "UTC",
-  "is_active": true
+  "customerId": "customer-001",
+  "emailEnabled": true,
+  "emailRecipients": [],
+  "smsEnabled": false,
+  "smsRecipients": [],
+  "slackEnabled": false,
+  "slackWebhookUrl": null,
+  "slackChannel": null,
+  "webhookEnabled": false,
+  "webhookUrl": null,
+  "webhookHeaders": {},
+  "minSeverityLevel": "MEDIUM",
+  "notifyOnSeverities": ["CRITICAL", "HIGH", "MEDIUM"],
+  "maxNotificationsPerHour": 10,
+  "enableRateLimiting": true,
+  "quietHoursEnabled": false,
+  "quietHoursStart": null,
+  "quietHoursEnd": null,
+  "quietHoursTimezone": "UTC",
+  "isActive": true
 }
 ```
 
@@ -2217,26 +2217,26 @@ Host: localhost:8084
 Content-Type: application/json
 
 {
-  "email_enabled": true,
-  "email_recipients": ["admin@example.com", "security@example.com"],
-  "sms_enabled": false,
-  "sms_recipients": ["+86-13800138000"],
-  "slack_enabled": true,
-  "slack_webhook_url": "https://hooks.slack.com/services/T00/B00/xxxx",
-  "slack_channel": "#security-alerts",
-  "webhook_enabled": false,
-  "webhook_url": "https://api.example.com/webhook",
-  "webhook_headers": {
+  "emailEnabled": true,
+  "emailRecipients": ["admin@example.com", "security@example.com"],
+  "smsEnabled": false,
+  "smsRecipients": ["+86-13800138000"],
+  "slackEnabled": true,
+  "slackWebhookUrl": "https://hooks.slack.com/services/T00/B00/xxxx",
+  "slackChannel": "#security-alerts",
+  "webhookEnabled": false,
+  "webhookUrl": "https://api.example.com/webhook",
+  "webhookHeaders": {
     "Authorization": "Bearer token123"
   },
-  "min_severity_level": "MEDIUM",
-  "notify_on_severities": ["HIGH", "CRITICAL"],
-  "max_notifications_per_hour": 20,
-  "enable_rate_limiting": true,
-  "quiet_hours_enabled": true,
-  "quiet_hours_start": "22:00:00",
-  "quiet_hours_end": "08:00:00",
-  "quiet_hours_timezone": "Asia/Shanghai"
+  "minSeverityLevel": "MEDIUM",
+  "notifyOnSeverities": ["HIGH", "CRITICAL"],
+  "maxNotificationsPerHour": 20,
+  "enableRateLimiting": true,
+  "quietHoursEnabled": true,
+  "quietHoursStart": "22:00:00",
+  "quietHoursEnd": "08:00:00",
+  "quietHoursTimezone": "Asia/Shanghai"
 }
 ```
 
@@ -2244,7 +2244,7 @@ Content-Type: application/json
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 请求参数
 
@@ -2318,21 +2318,21 @@ Content-Type: application/json
 ```json
 {
   "id": 1,
-  "customer_id": "customer-001",
-  "email_enabled": true,
-  "email_recipients": ["admin@example.com", "security@example.com"],
-  "slack_enabled": true,
-  "slack_webhook_url": "https://hooks.slack.com/services/T00/B00/xxxx",
-  "slack_channel": "#security-alerts",
-  "min_severity_level": "MEDIUM",
-  "notify_on_severities": ["HIGH", "CRITICAL"],
-  "max_notifications_per_hour": 20,
-  "quiet_hours_enabled": true,
-  "quiet_hours_start": "22:00:00",
-  "quiet_hours_end": "08:00:00",
-  "quiet_hours_timezone": "Asia/Shanghai",
-  "is_active": true,
-  "updated_at": "2025-10-16T10:30:00Z"
+  "customerId": "customer-001",
+  "emailEnabled": true,
+  "emailRecipients": ["admin@example.com", "security@example.com"],
+  "slackEnabled": true,
+  "slackWebhookUrl": "https://hooks.slack.com/services/T00/B00/xxxx",
+  "slackChannel": "#security-alerts",
+  "minSeverityLevel": "MEDIUM",
+  "notifyOnSeverities": ["HIGH", "CRITICAL"],
+  "maxNotificationsPerHour": 20,
+  "quietHoursEnabled": true,
+  "quietHoursStart": "22:00:00",
+  "quietHoursEnd": "08:00:00",
+  "quietHoursTimezone": "Asia/Shanghai",
+  "isActive": true,
+  "updatedAt": "2025-10-16T10:30:00Z"
 }
 ```
 
@@ -2353,10 +2353,10 @@ Content-Type: application/json
 curl -X PUT http://localhost:8084/api/v1/customers/customer-001/notification-config \
   -H "Content-Type: application/json" \
   -d '{
-    "email_enabled": true,
-    "email_recipients": ["admin@example.com"],
-    "min_severity_level": "HIGH",
-    "max_notifications_per_hour": 20
+    "emailEnabled": true,
+    "emailRecipients": ["admin@example.com"],
+    "minSeverityLevel": "HIGH",
+    "maxNotificationsPerHour": 20
   }'
 ```
 
@@ -2374,8 +2374,8 @@ Host: localhost:8084
 Content-Type: application/json
 
 {
-  "email_enabled": true,
-  "max_notifications_per_hour": 30
+  "emailEnabled": true,
+  "maxNotificationsPerHour": 30
 }
 ```
 
@@ -2389,8 +2389,8 @@ Content-Type: application/json
 curl -X PATCH http://localhost:8084/api/v1/customers/customer-001/notification-config \
   -H "Content-Type: application/json" \
   -d '{
-    "email_enabled": true,
-    "max_notifications_per_hour": 30
+    "emailEnabled": true,
+    "maxNotificationsPerHour": 30
   }'
 ```
 
@@ -2411,7 +2411,7 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 响应
 
@@ -2419,7 +2419,7 @@ Host: localhost:8084
 ```json
 {
   "message": "Notification config deleted successfully",
-  "customer_id": "customer-001"
+  "customerId": "customer-001"
 }
 ```
 
@@ -2450,14 +2450,14 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 响应
 
 **成功 (200 OK)**:
 ```json
 {
-  "customer_id": "customer-001",
+  "customerId": "customer-001",
   "testTimestamp": "2025-10-16T10:30:00Z",
   "results": {
     "email": {
@@ -2478,14 +2478,14 @@ Host: localhost:8084
       "enabled": true,
       "valid": true,
       "message": "Slack webhook URL is valid",
-      "webhook_url": "https://hooks.slack.com/services/T00/B00/xxxx",
+      "webhookUrl": "https://hooks.slack.com/services/T00/B00/xxxx",
       "channel": "#security-alerts"
     },
     "webhook": {
       "enabled": false,
       "valid": true,
       "message": "Webhook disabled, no validation needed",
-      "webhook_url": null
+      "webhookUrl": null
     }
   },
   "overallValid": true,
@@ -2497,7 +2497,7 @@ Host: localhost:8084
 **配置错误 (200 OK，但包含错误信息)**:
 ```json
 {
-  "customer_id": "customer-001",
+  "customerId": "customer-001",
   "testTimestamp": "2025-10-16T10:30:00Z",
   "results": {
     "email": {
@@ -2551,7 +2551,7 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 查询参数
 
@@ -2565,10 +2565,10 @@ Host: localhost:8084
 ```json
 {
   "id": 1,
-  "customer_id": "customer-001",
-  "email_enabled": true,
-  "email_recipients": ["admin@example.com"],
-  "updated_at": "2025-10-16T10:30:00Z"
+  "customerId": "customer-001",
+  "emailEnabled": true,
+  "emailRecipients": ["admin@example.com"],
+  "updatedAt": "2025-10-16T10:30:00Z"
 }
 ```
 
@@ -2599,7 +2599,7 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 查询参数
 
@@ -2630,7 +2630,7 @@ Host: localhost:8084
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| `customer_id` | String | 客户唯一标识 |
+| `customerId` | String | 客户唯一标识 |
 
 #### 查询参数
 
@@ -2660,28 +2660,28 @@ curl -X PATCH "http://localhost:8084/api/v1/customers/customer-001/notification-
 curl -X POST http://localhost:8084/api/v1/customers \
   -H "Content-Type: application/json" \
   -d '{
-    "customer_id": "new-customer-001",
-    "company_name": "新客户公司",
-    "contact_email": "admin@newcustomer.com",
-    "subscription_tier": "BASIC"
+    "customerId": "new-customer-001",
+    "companyName": "新客户公司",
+    "contactEmail": "admin@newcustomer.com",
+    "subscriptionTier": "BASIC"
   }'
 
 # 2. 绑定设备
 curl -X POST http://localhost:8084/api/v1/customers/new-customer-001/devices \
   -H "Content-Type: application/json" \
   -d '{
-    "dev_serial": "DEV-101",
-    "device_name": "主网关",
-    "device_type": "Gateway"
+    "devSerial": "DEV-101",
+    "deviceName": "主网关",
+    "deviceType": "Gateway"
   }'
 
 # 3. 配置邮件通知
 curl -X PUT http://localhost:8084/api/v1/customers/new-customer-001/notification-config \
   -H "Content-Type: application/json" \
   -d '{
-    "email_enabled": true,
-    "email_recipients": ["admin@newcustomer.com"],
-    "min_severity_level": "HIGH"
+    "emailEnabled": true,
+    "emailRecipients": ["admin@newcustomer.com"],
+    "minSeverityLevel": "HIGH"
   }'
 ```
 
@@ -2699,7 +2699,7 @@ curl -X PUT http://localhost:8084/api/v1/customers/new-customer-001/notification
 curl -X PUT http://localhost:8084/api/v1/customers/customer-001 \
   -H "Content-Type: application/json" \
   -d '{
-    "subscription_tier": "PROFESSIONAL"
+    "subscriptionTier": "PROFESSIONAL"
   }'
 
 # 2. 批量绑定50个新设备
@@ -2707,8 +2707,8 @@ curl -X POST http://localhost:8084/api/v1/customers/customer-001/devices/batch \
   -H "Content-Type: application/json" \
   -d '{
     "devices": [
-      {"dev_serial": "DEV-101", "device_name": "设备101"},
-      {"dev_serial": "DEV-102", "device_name": "设备102"},
+      {"devSerial": "DEV-101", "deviceName": "设备101"},
+      {"devSerial": "DEV-102", "deviceName": "设备102"},
       ...
     ]
   }'
@@ -2717,7 +2717,7 @@ curl -X POST http://localhost:8084/api/v1/customers/customer-001/devices/batch \
 curl -X PATCH http://localhost:8084/api/v1/customers/customer-001/notification-config \
   -H "Content-Type: application/json" \
   -d '{
-    "max_notifications_per_hour": 50
+    "maxNotificationsPerHour": 50
   }'
 ```
 
@@ -2735,17 +2735,17 @@ curl -X PATCH http://localhost:8084/api/v1/customers/customer-001/notification-c
 curl -X PUT http://localhost:8084/api/v1/customers/customer-001/notification-config \
   -H "Content-Type: application/json" \
   -d '{
-    "email_enabled": true,
-    "email_recipients": ["admin@example.com", "security@example.com"],
-    "slack_enabled": true,
-    "slack_webhook_url": "https://hooks.slack.com/services/T00/B00/xxxx",
-    "slack_channel": "#security-alerts",
-    "min_severity_level": "MEDIUM",
-    "max_notifications_per_hour": 30,
-    "quiet_hours_enabled": true,
-    "quiet_hours_start": "22:00:00",
-    "quiet_hours_end": "08:00:00",
-    "quiet_hours_timezone": "Asia/Shanghai"
+    "emailEnabled": true,
+    "emailRecipients": ["admin@example.com", "security@example.com"],
+    "slackEnabled": true,
+    "slackWebhookUrl": "https://hooks.slack.com/services/T00/B00/xxxx",
+    "slackChannel": "#security-alerts",
+    "minSeverityLevel": "MEDIUM",
+    "maxNotificationsPerHour": 30,
+    "quietHoursEnabled": true,
+    "quietHoursStart": "22:00:00",
+    "quietHoursEnd": "08:00:00",
+    "quietHoursTimezone": "Asia/Shanghai"
   }'
 ```
 
@@ -2829,19 +2829,19 @@ curl -X PATCH "http://localhost:8084/api/v1/customers/customer-001/notification-
 **分级通知**:
 ```json
 {
-  "min_severity_level": "MEDIUM",  // 最低通知MEDIUM级别
-  "notify_on_severities": ["HIGH", "CRITICAL"],  // 实际只通知这两个级别
-  "max_notifications_per_hour": 20,  // 每小时最多20条
-  "quiet_hours_enabled": true,  // 启用静默时段
-  "quiet_hours_start": "22:00:00",
-  "quiet_hours_end": "08:00:00"
+  "minSeverityLevel": "MEDIUM",  // 最低通知MEDIUM级别
+  "notifyOnSeverities": ["HIGH", "CRITICAL"],  // 实际只通知这两个级别
+  "maxNotificationsPerHour": 20,  // 每小时最多20条
+  "quietHoursEnabled": true,  // 启用静默时段
+  "quietHoursStart": "22:00:00",
+  "quietHoursEnd": "08:00:00"
 }
 ```
 
 **多收件人策略**:
 ```json
 {
-  "email_recipients": [
+  "emailRecipients": [
     "security-team@example.com",  // 安全团队
     "ops@example.com",            // 运维团队
     "manager@example.com"         // 管理层

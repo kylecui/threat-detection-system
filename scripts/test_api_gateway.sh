@@ -38,11 +38,11 @@ echo "创建测试客户..."
 response=$(curl -s -w "\n%{http_code}" -X POST "$GATEWAY_URL/api/v1/customers" \
   -H "Content-Type: application/json" \
   -d '{
-    "customerId": "test-customer-001",
-    "companyName": "测试公司",
-    "contactName": "张三",
-    "contactEmail": "test@example.com",
-    "subscriptionTier": "PROFESSIONAL"
+    "customer_id": "test-customer-001",
+    "company_name": "测试公司",
+    "contact_name": "张三",
+    "contact_email": "test@example.com",
+    "subscription_tier": "PROFESSIONAL"
   }')
 http_code=$(echo "$response" | tail -n1)
 body=$(echo "$response" | head -n-1)

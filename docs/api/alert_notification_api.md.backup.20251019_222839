@@ -374,7 +374,7 @@ public class NotificationResponse {
 | `recipient` | String | ✅ | 收件人邮箱 |
 | `subject` | String | ✅ | 邮件主题 |
 | `content` | String | ✅ | 邮件内容 (支持HTML) |
-| `alert_id` | Long | ❌ | 关联告警ID |
+| `alertId` | Long | ❌ | 关联告警ID |
 | `cc` | List<String> | ❌ | 抄送列表 |
 | `bcc` | List<String> | ❌ | 密送列表 |
 | `variables` | Map | ❌ | 模板变量 |
@@ -397,7 +397,7 @@ curl -X POST http://localhost:8082/api/v1/alerts/notify/email \
     "recipient": "security-team@company.com",
     "subject": "🚨 CRITICAL: 检测到严重威胁",
     "content": "检测到CRITICAL级别威胁,请立即处理!",
-    "alert_id": 12345
+    "alertId": 12345
   }'
 
 # 带抄送的邮件
@@ -407,7 +407,7 @@ curl -X POST http://localhost:8082/api/v1/alerts/notify/email \
     "recipient": "security-lead@company.com",
     "subject": "威胁告警通知",
     "content": "<h1>威胁检测告警</h1><p>攻击源IP: 192.168.75.188</p>",
-    "alert_id": 12345,
+    "alertId": 12345,
     "cc": ["team-lead@company.com"],
     "bcc": ["audit@company.com"]
   }'
@@ -478,7 +478,7 @@ public NotificationResponse sendEmailNotification(
 |-----|------|------|------|
 | `phoneNumber` | String | ✅ | 手机号码 |
 | `message` | String | ✅ | 短信内容 (最多70字符) |
-| `alert_id` | Long | ❌ | 关联告警ID |
+| `alertId` | Long | ❌ | 关联告警ID |
 
 ### 请求示例 (curl)
 
@@ -488,7 +488,7 @@ curl -X POST http://localhost:8082/api/v1/alerts/notify/sms \
   -d '{
     "phoneNumber": "+86138****8888",
     "message": "CRITICAL告警: 检测到攻击源192.168.75.188,请立即处理!",
-    "alert_id": 12345
+    "alertId": 12345
   }'
 ```
 
@@ -547,7 +547,7 @@ public NotificationResponse sendSmsNotification(
 | `method` | String | ❌ | HTTP方法 (默认POST) |
 | `headers` | Map | ❌ | 自定义HTTP头 |
 | `payload` | Map | ✅ | 请求体数据 |
-| `alert_id` | Long | ❌ | 关联告警ID |
+| `alertId` | Long | ❌ | 关联告警ID |
 
 ### 请求示例 (curl)
 
@@ -570,7 +570,7 @@ curl -X POST http://localhost:8082/api/v1/alerts/notify/webhook \
         }
       ]
     },
-    "alert_id": 12345
+    "alertId": 12345
   }'
 ```
 
@@ -658,7 +658,7 @@ curl -X POST http://localhost:8082/api/v1/alerts/notify/templates \
     "channel": "EMAIL",
     "subjectTemplate": "🚨 CRITICAL: {{customerId}} - 告警 #{{alertId}}",
     "contentTemplate": "<h1>CRITICAL级别威胁告警</h1><p>威胁评分: {{threatScore}}</p><p>攻击源: {{attackIp}}</p><p>检测时间: {{detectedAt}}</p>",
-    "variables": ["alertId", "severity", "threatScore", "attackIp", "customer_id", "detectedAt"]
+    "variables": ["alertId", "severity", "threatScore", "attackIp", "customerId", "detectedAt"]
   }'
 ```
 
@@ -730,34 +730,34 @@ public List<NotificationHistory> getNotificationHistory(Long alertId) {
 [
   {
     "id": 1001,
-    "alert_id": 12345,
+    "alertId": 12345,
     "channel": "EMAIL",
     "recipient": "security-team@company.com",
     "subject": "🚨 CRITICAL威胁告警",
     "status": "SENT",
     "retryCount": 0,
     "sentAt": "2025-01-15T10:30:00Z",
-    "created_at": "2025-01-15T10:29:55Z"
+    "createdAt": "2025-01-15T10:29:55Z"
   },
   {
     "id": 1002,
-    "alert_id": 12345,
+    "alertId": 12345,
     "channel": "SMS",
     "recipient": "+86138****8888",
     "status": "SENT",
     "retryCount": 0,
     "sentAt": "2025-01-15T10:30:05Z",
-    "created_at": "2025-01-15T10:29:55Z"
+    "createdAt": "2025-01-15T10:29:55Z"
   },
   {
     "id": 1003,
-    "alert_id": 12345,
+    "alertId": 12345,
     "channel": "WEBHOOK",
     "recipient": "https://hooks.slack.com/...",
     "status": "FAILED",
     "errorMessage": "Connection timeout",
     "retryCount": 3,
-    "created_at": "2025-01-15T10:29:55Z"
+    "createdAt": "2025-01-15T10:29:55Z"
   }
 ]
 ```

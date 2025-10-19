@@ -356,13 +356,13 @@ public enum ThreatLevel {
 
 ```json
 {
-  "customer_id": "customer_a",
-  "attack_mac": "04:42:1a:8e:e3:65",
-  "attack_ip": "192.168.75.188",
-  "attack_count": 150,
-  "unique_ips": 5,
-  "unique_ports": 3,
-  "unique_devices": 2,
+  "customerId": "customer_a",
+  "attackMac": "04:42:1a:8e:e3:65",
+  "attackIp": "192.168.75.188",
+  "attackCount": 150,
+  "uniqueIps": 5,
+  "uniquePorts": 3,
+  "uniqueDevices": 2,
   "timestamp": "2025-01-15T02:30:00Z"
 }
 ```
@@ -371,13 +371,13 @@ public enum ThreatLevel {
 
 | 字段 | 类型 | 必需 | 验证规则 | 说明 |
 |-----|------|------|---------|------|
-| `customer_id` | String | ✅ | @NotBlank | 客户ID (租户隔离) |
-| `attack_mac` | String | ✅ | @NotBlank | 被诱捕者MAC地址 |
-| `attack_ip` | String | ✅ | @NotBlank | 被诱捕者IP地址 |
-| `attack_count` | Integer | ✅ | @Min(1) | 探测次数 (≥1) |
-| `unique_ips` | Integer | ✅ | @Min(1) | 访问的诱饵IP数量 |
-| `unique_ports` | Integer | ✅ | @Min(1) | 尝试的端口种类 |
-| `unique_devices` | Integer | ✅ | @Min(1) | 检测到的蜜罐设备数 |
+| `customerId` | String | ✅ | @NotBlank | 客户ID (租户隔离) |
+| `attackMac` | String | ✅ | @NotBlank | 被诱捕者MAC地址 |
+| `attackIp` | String | ✅ | @NotBlank | 被诱捕者IP地址 |
+| `attackCount` | Integer | ✅ | @Min(1) | 探测次数 (≥1) |
+| `uniqueIps` | Integer | ✅ | @Min(1) | 访问的诱饵IP数量 |
+| `uniquePorts` | Integer | ✅ | @Min(1) | 尝试的端口种类 |
+| `uniqueDevices` | Integer | ✅ | @Min(1) | 检测到的蜜罐设备数 |
 | `timestamp` | String | ✅ | ISO8601 | 评估时间 |
 
 ### 请求示例 (curl)
@@ -388,13 +388,13 @@ public enum ThreatLevel {
 curl -X POST http://localhost:8081/api/v1/assessment/evaluate \
   -H "Content-Type: application/json" \
   -d '{
-    "customer_id": "customer_a",
-    "attack_mac": "04:42:1a:8e:e3:65",
-    "attack_ip": "192.168.75.188",
-    "attack_count": 150,
-    "unique_ips": 5,
-    "unique_ports": 3,
-    "unique_devices": 2,
+    "customerId": "customer_a",
+    "attackMac": "04:42:1a:8e:e3:65",
+    "attackIp": "192.168.75.188",
+    "attackCount": 150,
+    "uniqueIps": 5,
+    "uniquePorts": 3,
+    "uniqueDevices": 2,
     "timestamp": "2025-01-15T02:30:00Z"
   }'
 ```
@@ -405,13 +405,13 @@ curl -X POST http://localhost:8081/api/v1/assessment/evaluate \
 curl -X POST http://localhost:8081/api/v1/assessment/evaluate \
   -H "Content-Type: application/json" \
   -d '{
-    "customer_id": "customer_a",
-    "attack_mac": "aa:bb:cc:dd:ee:ff",
-    "attack_ip": "10.0.1.50",
-    "attack_count": 30,
-    "unique_ips": 2,
-    "unique_ports": 1,
-    "unique_devices": 1,
+    "customerId": "customer_a",
+    "attackMac": "aa:bb:cc:dd:ee:ff",
+    "attackIp": "10.0.1.50",
+    "attackCount": 30,
+    "uniqueIps": 2,
+    "uniquePorts": 1,
+    "uniqueDevices": 1,
     "timestamp": "2025-01-15T14:30:00Z"
   }'
 ```
@@ -586,16 +586,16 @@ public class ThreatAssessmentExample {
 ```json
 {
   "assessmentId": "12345",
-  "customer_id": "customer_a",
-  "attack_mac": "04:42:1a:8e:e3:65",
-  "attack_ip": "192.168.75.188",
-  "threat_score": 7290.0,
-  "threat_level": "CRITICAL",
+  "customerId": "customer_a",
+  "attackMac": "04:42:1a:8e:e3:65",
+  "attackIp": "192.168.75.188",
+  "threatScore": 7290.0,
+  "threatLevel": "CRITICAL",
   "riskFactors": {
-    "attack_count": 150,
-    "unique_ips": 5,
-    "unique_ports": 3,
-    "unique_devices": 2,
+    "attackCount": 150,
+    "uniqueIps": 5,
+    "uniquePorts": 3,
+    "uniqueDevices": 2,
     "timeWeight": 1.2,
     "ipWeight": 1.5,
     "portWeight": 1.2,
@@ -609,7 +609,7 @@ public class ThreatAssessmentExample {
     "通知安全团队进行深度分析"
   ],
   "assessmentTime": "2025-01-15T02:30:00Z",
-  "created_at": "2025-01-15T02:30:05Z"
+  "createdAt": "2025-01-15T02:30:05Z"
 }
 ```
 
@@ -629,7 +629,7 @@ public class ThreatAssessmentExample {
       "message": "must be greater than or equal to 1"
     },
     {
-      "field": "customer_id",
+      "field": "customerId",
       "message": "must not be blank"
     }
   ]
@@ -1084,23 +1084,23 @@ public class MitigationExample {
 {
   "assessments": [
     {
-      "customer_id": "customer_a",
-      "attack_mac": "04:42:1a:8e:e3:65",
-      "attack_ip": "192.168.75.188",
-      "attack_count": 150,
-      "unique_ips": 5,
-      "unique_ports": 3,
-      "unique_devices": 2,
+      "customerId": "customer_a",
+      "attackMac": "04:42:1a:8e:e3:65",
+      "attackIp": "192.168.75.188",
+      "attackCount": 150,
+      "uniqueIps": 5,
+      "uniquePorts": 3,
+      "uniqueDevices": 2,
       "timestamp": "2025-01-15T02:30:00Z"
     },
     {
-      "customer_id": "customer_a",
-      "attack_mac": "aa:bb:cc:dd:ee:ff",
-      "attack_ip": "10.0.1.50",
-      "attack_count": 30,
-      "unique_ips": 2,
-      "unique_ports": 1,
-      "unique_devices": 1,
+      "customerId": "customer_a",
+      "attackMac": "aa:bb:cc:dd:ee:ff",
+      "attackIp": "10.0.1.50",
+      "attackCount": 30,
+      "uniqueIps": 2,
+      "uniquePorts": 1,
+      "uniqueDevices": 1,
       "timestamp": "2025-01-15T14:30:00Z"
     }
   ]
@@ -1115,23 +1115,23 @@ curl -X POST http://localhost:8081/api/v1/assessment/batch-evaluate \
   -d '{
     "assessments": [
       {
-        "customer_id": "customer_a",
-        "attack_mac": "04:42:1a:8e:e3:65",
-        "attack_ip": "192.168.75.188",
-        "attack_count": 150,
-        "unique_ips": 5,
-        "unique_ports": 3,
-        "unique_devices": 2,
+        "customerId": "customer_a",
+        "attackMac": "04:42:1a:8e:e3:65",
+        "attackIp": "192.168.75.188",
+        "attackCount": 150,
+        "uniqueIps": 5,
+        "uniquePorts": 3,
+        "uniqueDevices": 2,
         "timestamp": "2025-01-15T02:30:00Z"
       },
       {
-        "customer_id": "customer_a",
-        "attack_mac": "aa:bb:cc:dd:ee:ff",
-        "attack_ip": "10.0.1.50",
-        "attack_count": 30,
-        "unique_ips": 2,
-        "unique_ports": 1,
-        "unique_devices": 1,
+        "customerId": "customer_a",
+        "attackMac": "aa:bb:cc:dd:ee:ff",
+        "attackIp": "10.0.1.50",
+        "attackCount": 30,
+        "uniqueIps": 2,
+        "uniquePorts": 1,
+        "uniqueDevices": 1,
         "timestamp": "2025-01-15T14:30:00Z"
       }
     ]
@@ -1183,13 +1183,13 @@ public static class BatchAssessmentResponse {
   "results": [
     {
       "assessmentId": "12345",
-      "threat_score": 7290.0,
-      "threat_level": "CRITICAL"
+      "threatScore": 7290.0,
+      "threatLevel": "CRITICAL"
     },
     {
       "assessmentId": "12346",
-      "threat_score": 72.0,
-      "threat_level": "MEDIUM"
+      "threatScore": 72.0,
+      "threatLevel": "MEDIUM"
     }
   ],
   "errors": []
@@ -1242,16 +1242,16 @@ public AssessmentResponse reEvaluate(String assessmentId) {
 ```json
 {
   "assessmentId": "12345",
-  "customer_id": "customer_a",
-  "attack_mac": "04:42:1a:8e:e3:65",
-  "attack_ip": "192.168.75.188",
-  "threat_score": 7500.0,
-  "threat_level": "CRITICAL",
+  "customerId": "customer_a",
+  "attackMac": "04:42:1a:8e:e3:65",
+  "attackIp": "192.168.75.188",
+  "threatScore": 7500.0,
+  "threatLevel": "CRITICAL",
   "riskFactors": {
-    "attack_count": 150,
-    "unique_ips": 5,
-    "unique_ports": 3,
-    "unique_devices": 2,
+    "attackCount": 150,
+    "uniqueIps": 5,
+    "uniquePorts": 3,
+    "uniqueDevices": 2,
     "timeWeight": 1.2,
     "ipWeight": 1.5,
     "portWeight": 1.2,
@@ -1262,7 +1262,7 @@ public AssessmentResponse reEvaluate(String assessmentId) {
     "检查同网段其他主机是否被攻陷"
   ],
   "assessmentTime": "2025-01-15T02:30:00Z",
-  "created_at": "2025-01-15T02:35:00Z"
+  "createdAt": "2025-01-15T02:35:00Z"
 }
 ```
 
@@ -1971,13 +1971,13 @@ org.springframework.web.client.HttpClientErrorException$BadRequest: 400 Bad Requ
 curl -X POST http://localhost:8081/api/v1/assessment/evaluate \
   -H "Content-Type: application/json" \
   -d '{
-    "customer_id": "customer_a",
-    "attack_mac": "04:42:1a:8e:e3:65",
-    "attack_ip": "192.168.75.188",
-    "attack_count": 0,
-    "unique_ips": 5,
-    "unique_ports": 3,
-    "unique_devices": 2,
+    "customerId": "customer_a",
+    "attackMac": "04:42:1a:8e:e3:65",
+    "attackIp": "192.168.75.188",
+    "attackCount": 0,
+    "uniqueIps": 5,
+    "uniquePorts": 3,
+    "uniqueDevices": 2,
     "timestamp": "2025-01-15T02:30:00Z"
   }' -v
 ```

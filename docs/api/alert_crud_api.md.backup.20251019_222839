@@ -269,10 +269,10 @@ public enum AlertStatus {
 | `title` | String | ✅ | @NotBlank, max=255 | 告警标题 |
 | `description` | String | ❌ | max=2000 | 详细描述 |
 | `severity` | String | ✅ | CRITICAL/HIGH/MEDIUM/LOW/INFO | 严重等级 |
-| `attack_mac` | String | ✅ | @NotBlank | 被诱捕者MAC |
-| `attack_ip` | String | ✅ | @NotBlank | 被诱捕者IP |
-| `threat_score` | Double | ❌ | ≥0 | 威胁评分 |
-| `customer_id` | String | ✅ | @NotBlank | 客户ID |
+| `attackMac` | String | ✅ | @NotBlank | 被诱捕者MAC |
+| `attackIp` | String | ✅ | @NotBlank | 被诱捕者IP |
+| `threatScore` | Double | ❌ | ≥0 | 威胁评分 |
+| `customerId` | String | ✅ | @NotBlank | 客户ID |
 | `assessmentId` | String | ❌ | - | 关联的评估ID |
 | `source` | String | ❌ | - | 告警来源 |
 
@@ -287,10 +287,10 @@ curl -X POST http://localhost:8082/api/v1/alerts \
     "title": "CRITICAL: 检测到深夜横向移动攻击",
     "description": "检测到IP 192.168.75.188 在凌晨2:30访问5个诱饵IP的3个端口,疑似APT横向移动",
     "severity": "CRITICAL",
-    "attack_mac": "04:42:1a:8e:e3:65",
-    "attack_ip": "192.168.75.188",
-    "threat_score": 7290.0,
-    "customer_id": "customer_a",
+    "attackMac": "04:42:1a:8e:e3:65",
+    "attackIp": "192.168.75.188",
+    "threatScore": 7290.0,
+    "customerId": "customer_a",
     "assessmentId": "ASSESS-12345",
     "source": "threat-assessment-service"
   }'
@@ -305,10 +305,10 @@ curl -X POST http://localhost:8082/api/v1/alerts \
     "title": "HIGH: 检测到大规模端口扫描",
     "description": "IP 10.0.1.50 在短时间内扫描了20+个端口",
     "severity": "HIGH",
-    "attack_mac": "aa:bb:cc:dd:ee:ff",
-    "attack_ip": "10.0.1.50",
-    "threat_score": 150.0,
-    "customer_id": "customer_a",
+    "attackMac": "aa:bb:cc:dd:ee:ff",
+    "attackIp": "10.0.1.50",
+    "threatScore": 150.0,
+    "customerId": "customer_a",
     "source": "manual"
   }'
 ```
@@ -411,18 +411,18 @@ public class AlertCrudExample {
   "description": "检测到IP 192.168.75.188 在凌晨2:30访问5个诱饵IP的3个端口,疑似APT横向移动",
   "severity": "CRITICAL",
   "status": "OPEN",
-  "attack_mac": "04:42:1a:8e:e3:65",
-  "attack_ip": "192.168.75.188",
-  "threat_score": 7290.0,
-  "customer_id": "customer_a",
+  "attackMac": "04:42:1a:8e:e3:65",
+  "attackIp": "192.168.75.188",
+  "threatScore": 7290.0,
+  "customerId": "customer_a",
   "assessmentId": "ASSESS-12345",
   "source": "threat-assessment-service",
-  "assigned_to": null,
-  "resolved_by": null,
+  "assignedTo": null,
+  "resolvedBy": null,
   "resolution": null,
-  "resolved_at": null,
-  "created_at": "2025-10-16T02:30:00Z",
-  "updated_at": "2025-10-16T02:30:00Z"
+  "resolvedAt": null,
+  "createdAt": "2025-10-16T02:30:00Z",
+  "updatedAt": "2025-10-16T02:30:00Z"
 }
 ```
 
@@ -515,18 +515,18 @@ public Alert getAlertById(Long alertId) {
   "description": "检测到IP 192.168.75.188 在凌晨2:30访问5个诱饵IP的3个端口,疑似APT横向移动",
   "severity": "CRITICAL",
   "status": "IN_PROGRESS",
-  "attack_mac": "04:42:1a:8e:e3:65",
-  "attack_ip": "192.168.75.188",
-  "threat_score": 7290.0,
-  "customer_id": "customer_a",
+  "attackMac": "04:42:1a:8e:e3:65",
+  "attackIp": "192.168.75.188",
+  "threatScore": 7290.0,
+  "customerId": "customer_a",
   "assessmentId": "ASSESS-12345",
   "source": "threat-assessment-service",
-  "assigned_to": "security-analyst@company.com",
-  "resolved_by": null,
+  "assignedTo": "security-analyst@company.com",
+  "resolvedBy": null,
   "resolution": null,
-  "resolved_at": null,
-  "created_at": "2025-10-16T02:30:00Z",
-  "updated_at": "2025-10-16T03:00:00Z"
+  "resolvedAt": null,
+  "createdAt": "2025-10-16T02:30:00Z",
+  "updatedAt": "2025-10-16T03:00:00Z"
 }
 ```
 
@@ -562,10 +562,10 @@ curl -X POST http://localhost:8082/api/v1/alerts \
   -d '{
     "title": "CRITICAL: 检测到横向移动攻击",
     "severity": "CRITICAL",
-    "attack_mac": "04:42:1a:8e:e3:65",
-    "attack_ip": "192.168.75.188",
-    "threat_score": 7290.0,
-    "customer_id": "customer_a"
+    "attackMac": "04:42:1a:8e:e3:65",
+    "attackIp": "192.168.75.188",
+    "threatScore": 7290.0,
+    "customerId": "customer_a"
   }'
 ```
 
@@ -603,11 +603,11 @@ public Alert createAlert(String customerId, String attackMac,
   "title": "CRITICAL: 检测到横向移动攻击",
   "severity": "CRITICAL",
   "status": "OPEN",
-  "attack_mac": "04:42:1a:8e:e3:65",
-  "attack_ip": "192.168.75.188",
-  "threat_score": 7290.0,
-  "customer_id": "customer_a",
-  "created_at": "2025-01-15T02:30:00Z"
+  "attackMac": "04:42:1a:8e:e3:65",
+  "attackIp": "192.168.75.188",
+  "threatScore": 7290.0,
+  "customerId": "customer_a",
+  "createdAt": "2025-01-15T02:30:00Z"
 }
 ```
 
@@ -644,14 +644,14 @@ public Alert getAlert(Long id) {
 
 | 参数 | 类型 | 必需 | 默认值 | 说明 |
 |-----|------|------|--------|------|
-| `customer_id` | String | ❌ | - | 客户ID (自动从上下文获取) |
+| `customerId` | String | ❌ | - | 客户ID (自动从上下文获取) |
 | `status` | String | ❌ | - | 告警状态 (OPEN/IN_PROGRESS/RESOLVED/CLOSED) |
 | `severity` | String | ❌ | - | 严重等级 (CRITICAL/HIGH/MEDIUM/LOW/INFO) |
-| `attack_ip` | String | ❌ | - | 攻击源IP地址 |
-| `attack_mac` | String | ❌ | - | 攻击源MAC地址 |
+| `attackIp` | String | ❌ | - | 攻击源IP地址 |
+| `attackMac` | String | ❌ | - | 攻击源MAC地址 |
 | `startTime` | String | ❌ | - | 开始时间 (ISO8601格式) |
 | `endTime` | String | ❌ | - | 结束时间 (ISO8601格式) |
-| `assigned_to` | String | ❌ | - | 责任人邮箱 |
+| `assignedTo` | String | ❌ | - | 责任人邮箱 |
 | `page` | Integer | ❌ | 0 | 页码 (从0开始) |
 | `size` | Integer | ❌ | 20 | 每页大小 (1-100) |
 | `sortBy` | String | ❌ | createdAt | 排序字段 |
@@ -740,7 +740,7 @@ public List<Alert> queryCriticalOpenAlerts() {
         .status(AlertStatus.OPEN)
         .page(0)
         .size(100)
-        .sortBy("created_at")
+        .sortBy("createdAt")
         .sortDir("DESC")
         .build();
     
@@ -767,7 +767,7 @@ public static class AlertQueryParams {
     private String assignedTo;
     private int page = 0;
     private int size = 20;
-    private String sortBy = "created_at";
+    private String sortBy = "createdAt";
     private String sortDir = "DESC";
 }
 ```
@@ -784,22 +784,22 @@ public static class AlertQueryParams {
       "title": "CRITICAL: 检测到深夜横向移动攻击",
       "severity": "CRITICAL",
       "status": "OPEN",
-      "attack_mac": "04:42:1a:8e:e3:65",
-      "attack_ip": "192.168.75.188",
-      "threat_score": 7290.0,
-      "customer_id": "customer_a",
-      "created_at": "2025-10-16T02:30:00Z"
+      "attackMac": "04:42:1a:8e:e3:65",
+      "attackIp": "192.168.75.188",
+      "threatScore": 7290.0,
+      "customerId": "customer_a",
+      "createdAt": "2025-10-16T02:30:00Z"
     },
     {
       "id": 12346,
       "title": "CRITICAL: 勒索软件行为检测",
       "severity": "CRITICAL",
       "status": "OPEN",
-      "attack_mac": "11:22:33:44:55:66",
-      "attack_ip": "192.168.75.200",
-      "threat_score": 8500.0,
-      "customer_id": "customer_a",
-      "created_at": "2025-10-16T01:15:00Z"
+      "attackMac": "11:22:33:44:55:66",
+      "attackIp": "192.168.75.200",
+      "threatScore": 8500.0,
+      "customerId": "customer_a",
+      "createdAt": "2025-10-16T01:15:00Z"
     }
   ],
   "pageable": {
@@ -911,12 +911,12 @@ public Alert updateAlert(Long alertId, String newTitle, String newDescription) {
   "description": "经过分析确认为APT攻击,攻击者使用了多种横向移动技术,建议立即隔离",
   "severity": "CRITICAL",
   "status": "IN_PROGRESS",
-  "attack_mac": "04:42:1a:8e:e3:65",
-  "attack_ip": "192.168.75.188",
-  "threat_score": 7290.0,
-  "customer_id": "customer_a",
-  "created_at": "2025-10-16T02:30:00Z",
-  "updated_at": "2025-10-16T04:15:00Z"
+  "attackMac": "04:42:1a:8e:e3:65",
+  "attackIp": "192.168.75.188",
+  "threatScore": 7290.0,
+  "customerId": "customer_a",
+  "createdAt": "2025-10-16T02:30:00Z",
+  "updatedAt": "2025-10-16T04:15:00Z"
 }
 ```
 
@@ -1031,16 +1031,16 @@ public boolean hardDeleteAlert(Long alertId) {
     {
       "title": "CRITICAL: 告警1",
       "severity": "CRITICAL",
-      "attack_mac": "00:11:22:33:44:55",
-      "attack_ip": "192.168.1.100",
-      "customer_id": "customer_a"
+      "attackMac": "00:11:22:33:44:55",
+      "attackIp": "192.168.1.100",
+      "customerId": "customer_a"
     },
     {
       "title": "HIGH: 告警2",
       "severity": "HIGH",
-      "attack_mac": "aa:bb:cc:dd:ee:ff",
-      "attack_ip": "192.168.1.101",
-      "customer_id": "customer_a"
+      "attackMac": "aa:bb:cc:dd:ee:ff",
+      "attackIp": "192.168.1.101",
+      "customerId": "customer_a"
     }
   ]
 }
@@ -1056,16 +1056,16 @@ curl -X POST http://localhost:8082/api/v1/alerts/batch \
       {
         "title": "CRITICAL: 批量告警1",
         "severity": "CRITICAL",
-        "attack_mac": "00:11:22:33:44:55",
-        "attack_ip": "192.168.1.100",
-        "customer_id": "customer_a"
+        "attackMac": "00:11:22:33:44:55",
+        "attackIp": "192.168.1.100",
+        "customerId": "customer_a"
       },
       {
         "title": "HIGH: 批量告警2",
         "severity": "HIGH",
-        "attack_mac": "aa:bb:cc:dd:ee:ff",
-        "attack_ip": "192.168.1.101",
-        "customer_id": "customer_a"
+        "attackMac": "aa:bb:cc:dd:ee:ff",
+        "attackIp": "192.168.1.101",
+        "customerId": "customer_a"
       }
     ]
   }'
@@ -1117,12 +1117,12 @@ public static class BatchAlertResponse {
     {
       "id": 12345,
       "title": "CRITICAL: 批量告警1",
-      "created_at": "2025-10-16T02:30:00Z"
+      "createdAt": "2025-10-16T02:30:00Z"
     },
     {
       "id": 12346,
       "title": "HIGH: 批量告警2",
-      "created_at": "2025-10-16T02:30:01Z"
+      "createdAt": "2025-10-16T02:30:01Z"
     }
   ],
   "errors": []
@@ -1474,9 +1474,9 @@ curl -X POST http://localhost:8082/api/v1/alerts \
   -d '{
     "title": "TEST",
     "severity": "CRITICAL",
-    "attack_mac": "invalid-mac",
-    "attack_ip": "192.168.1.100",
-    "customer_id": "customer_a"
+    "attackMac": "invalid-mac",
+    "attackIp": "192.168.1.100",
+    "customerId": "customer_a"
   }' -v
 ```
 

@@ -12,6 +12,15 @@
 
 完整的API文档，包含curl和Java代码示例。
 
+⚠️ **重要**: 所有服务使用 **snake_case** 字段命名（如 `customer_id`, `subscription_tier`）。详见 [字段命名问题分析](./api/FIELD_NAMING_INCONSISTENCY.md)。
+
+#### API Gateway (统一入口)
+- **[API Gateway实现文档](./api/api_gateway_current.md)** - 路由管理、安全控制、熔断降级、监控告警
+- **[API Gateway测试报告](./api/API_GATEWAY_TEST_REPORT.md)** - 部署测试结果、问题解决、性能指标 ⭐ 最新
+
+#### 客户管理服务 (Customer Management)
+- **[客户管理API](./api/customer_management_api.md)** - 客户CRUD、设备绑定、通知配置（26个端点）
+
 #### 数据摄取服务 (Data Ingestion)
 - **[数据摄取API](./api/data_ingestion_api.md)** - 日志摄取、批量处理、统计监控
 
@@ -67,6 +76,13 @@
 ### 🔧 [问题修复](./fixes/) - 问题分析与修复记录
 
 系统问题分析、修复方案和经验总结。
+
+#### 最新发现 (2025-01-16)
+- **[字段命名不一致问题](./api/FIELD_NAMING_INCONSISTENCY.md)** ⚠️ P0 - API文档与实际实现字段命名不一致
+  - **问题**: 文档使用camelCase，实际服务使用snake_case
+  - **影响**: API集成、前端开发、测试脚本
+  - **解决方案**: 统一使用snake_case（推荐）
+  - **状态**: 🟡 进行中
 
 #### 重大修复记录
 - **[数据库修复报告](./fixes/DATABASE_FIX_REPORT.md)** - 数据库初始化问题修复

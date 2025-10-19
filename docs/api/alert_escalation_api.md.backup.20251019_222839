@@ -677,7 +677,7 @@ public List<EscalationHistoryResponse> getEscalationHistory(Long alertId) {
 [
   {
     "id": 789,
-    "alert_id": 12345,
+    "alertId": 12345,
     "escalationType": "AUTO",
     "previousLevel": "L1",
     "newLevel": "L2",
@@ -689,7 +689,7 @@ public List<EscalationHistoryResponse> getEscalationHistory(Long alertId) {
   },
   {
     "id": 790,
-    "alert_id": 12345,
+    "alertId": 12345,
     "escalationType": "MANUAL",
     "previousLevel": "L2",
     "newLevel": "L3",
@@ -762,22 +762,22 @@ public BatchEscalationResult batchEscalate(List<Long> alertIds, String reason, S
   "failureCount": 1,
   "results": [
     {
-      "alert_id": 12345,
+      "alertId": 12345,
       "success": true,
       "message": "升级成功"
     },
     {
-      "alert_id": 12346,
+      "alertId": 12346,
       "success": true,
       "message": "升级成功"
     },
     {
-      "alert_id": 12347,
+      "alertId": 12347,
       "success": true,
       "message": "升级成功"
     },
     {
-      "alert_id": 12348,
+      "alertId": 12348,
       "success": false,
       "message": "告警已关闭,无法升级"
     }

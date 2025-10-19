@@ -53,11 +53,11 @@ Kafka (threat-alerts) → Alert Management Service → PostgreSQL (alerts, notif
   "title": "CRITICAL: 检测到大规模横向移动",
   "severity": "CRITICAL",
   "status": "OPEN",
-  "attackMac": "04:42:1a:8e:e3:65",
-  "attackIp": "192.168.75.188",
-  "threatScore": 7290.0,
+  "attack_mac": "04:42:1a:8e:e3:65",
+  "attack_ip": "192.168.75.188",
+  "threat_score": 7290.0,
   "customerId": "customer_a",
-  "assignedTo": "security-team@company.com",
+  "assigned_to": "security-team@company.com",
   "createdAt": "2025-01-15T02:30:00Z"
 }
 ```

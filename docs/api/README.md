@@ -17,7 +17,76 @@
 
 ## 📂 服务分类
 
-### 🔵 数据摄取服务 (Port 8080)
+### � API Gateway (Port 8888)
+
+统一的API入口，提供路由转发、安全控制、限流保护等功能。
+
+| 文档 | 端点数量 | 状态 | 说明 |
+|------|---------|------|------|
+| **[api_gateway_current.md](./api_gateway_current.md)** | 5 | ✅ 完整 | 统一API入口、路由管理、熔断降级 |
+
+**核心功能**:
+- ✅ **路由管理**: 7个路由规则，自动转发到后端微服务
+- ✅ **安全控制**: CORS跨域、请求日志、限流保护
+- ✅ **熔断降级**: 服务不可用时友好错误响应
+- ✅ **监控告警**: Actuator健康检查、Prometheus指标
+
+**快速开始**:
+```bash
+# 通过Gateway访问Customer Management
+curl http://localhost:8888/api/v1/customers
+
+# 通过Gateway查询威胁评估
+curl http://localhost:8888/api/v1/assessment/trends?customerId=customer-001
+
+# 通过Gateway管理告警
+curl http://localhost:8888/api/v1/alerts?severity=CRITICAL
+```
+
+---
+
+### 🔶 客户管理服务 (Customer Management - Port 8084)
+
+客户配置管理中心，负责客户信息、设备绑定和通知配置管理。
+
+| 文档 | 端点数量 | 状态 | 说明 |
+|------|---------|------|------|
+| **[customer_management_api.md](./customer_management_api.md)** | 26 | ✅ 完整 | 客户CRUD、设备绑定、通知配置 |
+
+**核心功能**:
+- ✅ **客户管理**: 9个端点 - CRUD、搜索、统计
+- ✅ **设备绑定**: 9个端点 - 绑定/解绑、配额管理
+- ✅ **通知配置**: 8个端点 - Email/SMS/Slack/Webhook配置
+
+**订阅套餐**:
+- FREE: 5个设备
+- BASIC: 20个设备
+- PROFESSIONAL: 100个设备
+- ENTERPRISE: 10000个设备
+
+**快速开始**:
+```bash
+# 创建客户
+curl -X POST http://localhost:8084/api/v1/customers \
+  -H "Content-Type: application/json" \
+  -d '{"customer_id": "cust-001", "company_name": "示例公司", "subscription_tier": "PROFESSIONAL"}'
+
+# 绑定设备
+curl -X POST http://localhost:8084/api/v1/customers/cust-001/devices \
+  -H "Content-Type: application/json" \
+  -d '{"dev_serial": "DEV-001", "device_name": "网关01"}'
+
+# 配置通知
+curl -X PUT http://localhost:8084/api/v1/customers/cust-001/notification-config \
+  -H "Content-Type: application/json" \
+  -d '{"email_enabled": true, "email_recipients": ["admin@example.com"]}'
+```
+
+⚠️ **字段命名注意**: Customer Management服务使用 **snake_case** 命名 (如 `customer_id`, `subscription_tier`)，而非 camelCase。
+
+---
+
+### �🔵 数据摄取服务 (Port 8080)
 
 | 文档 | 端点数量 | 说明 |
 |------|---------|------|
@@ -122,17 +191,22 @@ curl -X POST http://localhost:8082/api/v1/alerts/12345/resolve \
 
 ---
 
-## 📊 API端点总览
+## � API端点总览
 
-| 服务 | 端口 | 总端点数 | 主要功能 |
-|------|------|---------|---------|
-| **Data Ingestion** | 8080 | 6 | 日志摄取和解析 |
-| **Threat Assessment** | 8081 | 5 | 威胁评估和分析 |
-| **Alert Management** | 8082 | 16 | 告警管理和通知 |
-| **Integration Test** | 8082 | 2 | 集成测试工具 |
-| **总计** | - | **29** | - |
+### 当前状态
 
----
+**总端点数**: 58
+**服务数量**: 5
+**已完成文档**: 14 (87%)
+
+| 服务 | 端口 | 总端点数 | 已完成文档 | 主要功能 |
+|------|------|---------|-----------|----------|
+| **API Gateway** | 8888 | 5 | ✅ | 统一API入口、路由转发、CORS、限流、熔断 |
+| **Customer Management** | 8084 | 26 | ✅ | 客户管理、设备绑定、通知配置 |
+| **Data Ingestion** | 8080 | 6 | ✅ | 日志摄取、批量处理、统计监控 |
+| **Threat Assessment** | 8083 | 5 | ✅ | 威胁评估、查询分析、趋势预测 |
+| **Alert Management** | 8082 | 16 | ✅ | 告警管理、通知发送、升级管理 |
+| **Integration Test** | - | 2 | ✅ | 系统集成测试支持 |
 
 ## � 文档补充计划
 
