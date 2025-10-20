@@ -1,125 +1,200 @@
 package com.threatdetection.assessment.controller;
 
-import com.threatdetection.assessment.model.*;
-import com.threatdetection.assessment.service.RiskAssessmentService;
+import com.threatdetection.assessment.dto.*;
+import com.threatdetection.assessment.service.ThreatQueryService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 
 /**
  * REST API controller for threat assessment operations
+ * 
+ * <p>对齐API文档:
+ * <ul>
+ *   <li>threat_assessment_query_api.md - 查询和趋势分析</li>
+ *   <li>threat_assessment_overview.md - 系统概述</li>
+ * </ul>
+ * 
+ * @author ThreatDetection Team
+ * @version 2.0
  */
 @RestController
 @RequestMapping("/api/v1/assessment")
-@Tag(name = "Threat Assessment", description = "Threat assessment and risk evaluation API")
+@Tag(name = "Threat Assessment", description = "Threat assessment query and analysis API")
 public class AssessmentController {
 
     private static final Logger logger = LoggerFactory.getLogger(AssessmentController.class);
 
-    private final RiskAssessmentService riskAssessmentService;
+    private final ThreatQueryService threatQueryService;
 
-    @Autowired
-    public AssessmentController(RiskAssessmentService riskAssessmentService) {
-        this.riskAssessmentService = riskAssessmentService;
+    public AssessmentController(ThreatQueryService threatQueryService) {
+        this.threatQueryService = threatQueryService;
     }
 
     /**
-     * Evaluate a threat alert and provide risk assessment
-     */
-    @PostMapping("/evaluate")
-    @Operation(summary = "Evaluate threat alert",
-               description = "Perform comprehensive risk assessment for a threat alert")
-    public ResponseEntity<AssessmentResponse> evaluateThreat(@Valid @RequestBody AssessmentRequest request) {
-        logger.info("Received assessment request for alert: {}", request.getAlertId());
-
-        try {
-            AssessmentResponse response = riskAssessmentService.assessThreat(request);
-            logger.info("Assessment completed for alert: {} with risk level: {}",
-                       request.getAlertId(), response.getRiskLevel());
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("Error processing assessment request for alert: {}", request.getAlertId(), e);
-            return ResponseEntity.internalServerError().build();
-        }
-    }
-
-    /**
-     * Retrieve detailed assessment information
+     * 获取评估详情
+     * 
+     * <p>API文档: threat_assessment_query_api.md § 5.1
+     * 
+     * @param assessmentId 评估记录ID
+     * @return 评估详情
      */
     @GetMapping("/{assessmentId}")
     @Operation(summary = "Get assessment details",
                description = "Retrieve detailed information about a specific threat assessment")
-    public ResponseEntity<ThreatAssessment> getAssessment(@PathVariable String assessmentId) {
-        logger.debug("Retrieving assessment: {}", assessmentId);
-
-        Optional<ThreatAssessment> assessment = riskAssessmentService.getAssessment(assessmentId);
-        if (assessment.isPresent()) {
-            return ResponseEntity.ok(assessment.get());
-        } else {
-            logger.warn("Assessment not found: {}", assessmentId);
-            return ResponseEntity.notFound().build();
-        }
-    }
-
-    /**
-     * Get threat trends and statistics
-     */
-    @GetMapping("/trends")
-    @Operation(summary = "Get threat trends",
-               description = "Retrieve threat trends and statistical analysis")
-    public ResponseEntity<List<TrendAnalysis>> getThreatTrends(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startTime,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endTime,
-            @RequestParam(required = false) RiskLevel threatLevel,
-            @RequestParam(defaultValue = "100") Integer limit) {
-
-        logger.info("Retrieving threat trends from {} to {} with limit {}", startTime, endTime, limit);
+    public ResponseEntity<ThreatAssessmentDetailResponse> getAssessment(
+            @Parameter(description = "Assessment ID", required = true)
+            @PathVariable Long assessmentId) {
+        
+        logger.debug("Retrieving assessment: id={}", assessmentId);
 
         try {
-            List<TrendAnalysis> trends = riskAssessmentService.getThreatTrends(startTime, endTime, threatLevel, limit);
-            return ResponseEntity.ok(trends);
+            ThreatAssessmentDetailResponse response = threatQueryService.getAssessmentDetail(assessmentId);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            logger.warn("Assessment not found: id={}", assessmentId);
+            return ResponseEntity.notFound().build();
         } catch (Exception e) {
-            logger.error("Error retrieving threat trends", e);
+            logger.error("Error retrieving assessment: id={}", assessmentId, e);
             return ResponseEntity.internalServerError().build();
         }
     }
 
     /**
-     * Execute mitigation actions for an assessment
+     * 查询评估列表 (分页)
+     * 
+     * <p>API文档: threat_assessment_query_api.md § 5.2
+     * 
+     * @param customerId 客户ID (必需)
+     * @param page 页码 (从0开始,默认0)
+     * @param size 每页大小 (默认20)
+     * @return 分页结果
      */
-    @PostMapping("/mitigation/{assessmentId}")
-    @Operation(summary = "Execute mitigation",
-               description = "Execute mitigation actions for a threat assessment")
-    public ResponseEntity<String> executeMitigation(@PathVariable String assessmentId) {
-        logger.info("Executing mitigation for assessment: {}", assessmentId);
+    @GetMapping("/assessments")
+    @Operation(summary = "Query assessment list",
+               description = "Query threat assessments with pagination")
+    public ResponseEntity<Page<ThreatAssessmentDetailResponse>> getAssessmentList(
+            @Parameter(description = "Customer ID", required = true)
+            @RequestParam(name = "customer_id") String customerId,
+            
+            @Parameter(description = "Page number (0-based)", required = false)
+            @RequestParam(defaultValue = "0") int page,
+            
+            @Parameter(description = "Page size", required = false)
+            @RequestParam(defaultValue = "20") int size) {
+
+        logger.info("Querying assessment list: customerId={}, page={}, size={}", customerId, page, size);
 
         try {
-            // In a real implementation, this would trigger actual mitigation actions
-            // For now, just return success
-            return ResponseEntity.ok("Mitigation actions initiated for assessment: " + assessmentId);
+            Page<ThreatAssessmentDetailResponse> result = threatQueryService.getAssessmentList(customerId, page, size);
+            return ResponseEntity.ok(result);
         } catch (Exception e) {
-            logger.error("Error executing mitigation for assessment: {}", assessmentId, e);
-            return ResponseEntity.internalServerError().body("Failed to execute mitigation");
+            logger.error("Error querying assessment list: customerId={}", customerId, e);
+            return ResponseEntity.internalServerError().build();
         }
     }
 
     /**
-     * Health check endpoint
+     * 获取威胁统计
+     * 
+     * <p>API文档: threat_assessment_query_api.md § 5.4
+     * <p>前端对接: Dashboard统计卡片
+     * 
+     * @param customerId 客户ID (必需)
+     * @return 统计结果
+     */
+    @GetMapping("/statistics")
+    @Operation(summary = "Get threat statistics",
+               description = "Get threat statistics including level distribution and average scores")
+    public ResponseEntity<ThreatStatisticsResponse> getStatistics(
+            @Parameter(description = "Customer ID", required = true)
+            @RequestParam(name = "customer_id") String customerId) {
+
+        logger.info("Getting threat statistics: customerId={}", customerId);
+
+        try {
+            ThreatStatisticsResponse response = threatQueryService.getStatistics(customerId);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Error getting statistics: customerId={}", customerId, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * 获取威胁趋势 (最近24小时)
+     * 
+     * <p>API文档: threat_assessment_query_api.md § 5.3
+     * <p>前端对接: Dashboard趋势图
+     * 
+     * @param customerId 客户ID (必需)
+     * @return 趋势数据点列表 (按小时聚合)
+     */
+    @GetMapping("/trend")
+    @Operation(summary = "Get threat trend",
+               description = "Get threat trend for the last 24 hours (hourly aggregation)")
+    public ResponseEntity<List<TrendDataPoint>> getThreatTrend(
+            @Parameter(description = "Customer ID", required = true)
+            @RequestParam(name = "customer_id") String customerId) {
+
+        logger.info("Getting threat trend: customerId={}", customerId);
+
+        try {
+            List<TrendDataPoint> trend = threatQueryService.getThreatTrend(customerId);
+            return ResponseEntity.ok(trend);
+        } catch (Exception e) {
+            logger.error("Error getting threat trend: customerId={}", customerId, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * 获取端口分布 (TOP 10)
+     * 
+     * <p>前端对接: Dashboard端口分布饼图
+     * 
+     * @param customerId 客户ID (必需)
+     * @return 端口分布列表
+     */
+    @GetMapping("/port-distribution")
+    @Operation(summary = "Get port distribution",
+               description = "Get top 10 attacked ports distribution")
+    public ResponseEntity<List<PortDistribution>> getPortDistribution(
+            @Parameter(description = "Customer ID", required = true)
+            @RequestParam(name = "customer_id") String customerId) {
+
+        logger.info("Getting port distribution: customerId={}", customerId);
+
+        try {
+            List<PortDistribution> distribution = threatQueryService.getPortDistribution(customerId);
+            return ResponseEntity.ok(distribution);
+        } catch (Exception e) {
+            logger.error("Error getting port distribution: customerId={}", customerId, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    /**
+     * 健康检查
+     * 
+     * <p>API文档: threat_assessment_query_api.md § 5.6
      */
     @GetMapping("/health")
     @Operation(summary = "Health check",
                description = "Check if the threat assessment service is healthy")
-    public ResponseEntity<String> health() {
-        return ResponseEntity.ok("Threat Assessment Service is healthy");
+    public ResponseEntity<Map<String, String>> health() {
+        Map<String, String> status = new HashMap<>();
+        status.put("status", "UP");
+        status.put("service", "threat-assessment");
+        return ResponseEntity.ok(status);
     }
 }

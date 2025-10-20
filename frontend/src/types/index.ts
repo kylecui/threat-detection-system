@@ -20,16 +20,21 @@ export enum ThreatLevel {
  */
 export interface ThreatAssessment {
   id: number;
-  customer_id: string;
-  attack_mac: string;           // 被诱捕者MAC (内网失陷主机)
-  threat_score: number;
-  threat_level: ThreatLevel;
-  attack_count: number;         // 对诱饵的探测次数
-  unique_ips: number;           // 访问的诱饵IP数量 (横向移动范围)
-  unique_ports: number;         // 尝试的端口种类 (攻击意图多样性)
-  unique_devices: number;       // 检测到该攻击者的设备数
-  assessment_time: string;      // ISO 8601格式
-  created_at: string;
+  customerId: string;
+  attackMac: string;            // 被诱捕者MAC (内网失陷主机)
+  attackIp?: string;            // 被诱捕者IP (可选)
+  threatScore: number;
+  threatLevel: ThreatLevel;
+  attackCount: number;          // 对诱饵的探测次数
+  uniqueIps: number;            // 访问的诱饵IP数量 (横向移动范围)
+  uniquePorts: number;          // 尝试的端口种类 (攻击意图多样性)
+  uniqueDevices: number;        // 检测到该攻击者的设备数
+  assessmentTime: string;       // ISO 8601格式
+  createdAt: string;
+  portList?: string;            // 端口列表 (可选)
+  portRiskScore?: number;       // 端口风险分数 (可选)
+  detectionTier?: number;       // 检测层级 (可选)
+  mitigationRecommendations?: string[];  // 缓解建议 (可选)
 }
 
 /**
@@ -50,16 +55,17 @@ export interface AttackEvent {
  * 统计数据
  */
 export interface Statistics {
-  total_threats: number;
-  critical_threats: number;
-  high_threats: number;
-  medium_threats: number;
-  low_threats: number;
-  info_threats: number;
-  avg_threat_score: number;
-  total_attack_count: number;
-  unique_attackers: number;
-  unique_targets: number;
+  customerId: string;
+  totalCount: number;
+  criticalCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  infoCount: number;
+  averageThreatScore: number;
+  maxThreatScore: number;
+  minThreatScore: number;
+  levelDistribution: Record<string, number>;
 }
 
 /**
@@ -83,14 +89,25 @@ export interface PaginationParams {
 }
 
 /**
- * 分页响应
+ * 分页响应 (Spring Data Page格式)
  */
 export interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
+  content: T[];
+  pageable: {
+    pageNumber: number;
+    pageSize: number;
+    offset: number;
+    paged: boolean;
+    unpaged: boolean;
+  };
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+  first: boolean;
+  size: number;
+  number: number;
+  numberOfElements: number;
+  empty: boolean;
 }
 
 /**

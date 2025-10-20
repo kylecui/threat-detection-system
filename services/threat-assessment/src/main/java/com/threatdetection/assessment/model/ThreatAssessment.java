@@ -36,8 +36,7 @@ public class ThreatAssessment {
     private String attackMac;
 
     @NotNull
-    @DecimalMin(value = "0.0")
-    @Column(name = "threat_score", nullable = false, precision = 12, scale = 2)
+    @Column(name = "threat_score", nullable = false)
     private Double threatScore;
 
     @NotBlank
@@ -73,12 +72,43 @@ public class ThreatAssessment {
     @Column(name = "port_list", columnDefinition = "TEXT")
     private String portList;
 
-    @DecimalMin(value = "0.0")
-    @Column(name = "port_risk_score", precision = 10, scale = 2)
+    @Column(name = "port_risk_score")
     private Double portRiskScore = 0.0;
 
     @Column(name = "detection_tier")
     private Integer detectionTier = 2;
+
+    // 新增字段 - 权重因子 (用于审计和调试)
+    @Column(name = "time_weight")
+    private Double timeWeight;
+
+    @Column(name = "ip_weight")
+    private Double ipWeight;
+
+    @Column(name = "port_weight")
+    private Double portWeight;
+
+    @Column(name = "device_weight")
+    private Double deviceWeight;
+
+    // 新增字段 - 攻击源IP
+    @Size(max = 45)
+    @Column(name = "attack_ip", length = 45)
+    private String attackIp;
+
+    // 新增字段 - 缓解建议 (JSON数组存储为TEXT)
+    @Column(name = "mitigation_recommendations", columnDefinition = "TEXT")
+    private String mitigationRecommendations;
+
+    // 新增字段 - 缓解状态
+    @Size(max = 50)
+    @Column(name = "mitigation_status", length = 50)
+    private String mitigationStatus;
+
+    // 新增字段 - 更新时间
+    @Column(name = "updated_at")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
+    private Instant updatedAt;
 
     // Constructors
     public ThreatAssessment() {}
@@ -139,6 +169,32 @@ public class ThreatAssessment {
 
     public Integer getDetectionTier() { return detectionTier; }
     public void setDetectionTier(Integer detectionTier) { this.detectionTier = detectionTier; }
+
+    public Double getTimeWeight() { return timeWeight; }
+    public void setTimeWeight(Double timeWeight) { this.timeWeight = timeWeight; }
+
+    public Double getIpWeight() { return ipWeight; }
+    public void setIpWeight(Double ipWeight) { this.ipWeight = ipWeight; }
+
+    public Double getPortWeight() { return portWeight; }
+    public void setPortWeight(Double portWeight) { this.portWeight = portWeight; }
+
+    public Double getDeviceWeight() { return deviceWeight; }
+    public void setDeviceWeight(Double deviceWeight) { this.deviceWeight = deviceWeight; }
+
+    public String getAttackIp() { return attackIp; }
+    public void setAttackIp(String attackIp) { this.attackIp = attackIp; }
+
+    public String getMitigationRecommendations() { return mitigationRecommendations; }
+    public void setMitigationRecommendations(String mitigationRecommendations) { 
+        this.mitigationRecommendations = mitigationRecommendations; 
+    }
+
+    public String getMitigationStatus() { return mitigationStatus; }
+    public void setMitigationStatus(String mitigationStatus) { this.mitigationStatus = mitigationStatus; }
+
+    public Instant getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 
     @Override
     public String toString() {

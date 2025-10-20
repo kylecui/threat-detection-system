@@ -23,13 +23,13 @@ const ThreatList = () => {
     try {
       setLoading(true);
       const response = await threatService.getThreatList({
-        page,
+        page: page - 1,  // Spring Data页码从0开始
         page_size: pageSize,
-        sort_by: 'assessment_time',
+        sort_by: 'assessmentTime',
         sort_order: 'desc',
       });
-      setThreats(response.items);
-      setTotal(response.total);
+      setThreats(response.content || []);
+      setTotal(response.totalElements || 0);
     } catch (error) {
       message.error('加载威胁列表失败');
     } finally {
@@ -87,53 +87,53 @@ const ThreatList = () => {
     },
     {
       title: '评估时间',
-      dataIndex: 'assessment_time',
-      key: 'assessment_time',
+      dataIndex: 'assessmentTime',
+      key: 'assessmentTime',
       render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm:ss'),
       width: 180,
     },
     {
       title: '攻击者MAC',
-      dataIndex: 'attack_mac',
-      key: 'attack_mac',
+      dataIndex: 'attackMac',
+      key: 'attackMac',
       render: (mac: string) => <code>{mac}</code>,
     },
     {
       title: '威胁等级',
-      dataIndex: 'threat_level',
-      key: 'threat_level',
+      dataIndex: 'threatLevel',
+      key: 'threatLevel',
       render: (level: ThreatLevel) => getThreatLevelTag(level),
       width: 100,
     },
     {
       title: '威胁分数',
-      dataIndex: 'threat_score',
-      key: 'threat_score',
-      render: (score: number) => score.toFixed(2),
+      dataIndex: 'threatScore',
+      key: 'threatScore',
+      render: (score: number) => score?.toFixed(2) || 'N/A',
       width: 100,
     },
     {
       title: '攻击次数',
-      dataIndex: 'attack_count',
-      key: 'attack_count',
+      dataIndex: 'attackCount',
+      key: 'attackCount',
       width: 100,
     },
     {
       title: '诱饵IP数',
-      dataIndex: 'unique_ips',
-      key: 'unique_ips',
+      dataIndex: 'uniqueIps',
+      key: 'uniqueIps',
       width: 100,
     },
     {
       title: '端口种类',
-      dataIndex: 'unique_ports',
-      key: 'unique_ports',
+      dataIndex: 'uniquePorts',
+      key: 'uniquePorts',
       width: 100,
     },
     {
       title: '设备数',
-      dataIndex: 'unique_devices',
-      key: 'unique_devices',
+      dataIndex: 'uniqueDevices',
+      key: 'uniqueDevices',
       width: 80,
     },
     {

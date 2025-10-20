@@ -20,39 +20,39 @@ class ThreatService {
   async getThreatList(
     filter: ThreatQueryFilter
   ): Promise<PaginatedResponse<ThreatAssessment>> {
-    const response = await apiClient.get<ApiResponse<PaginatedResponse<ThreatAssessment>>>(
+    const response = await apiClient.get<PaginatedResponse<ThreatAssessment>>(
       '/api/v1/assessment/assessments',
       { params: filter }
     );
-    return response.data.data;
+    return response.data;
   }
 
   /**
    * 获取威胁详情
    */
   async getThreatDetail(id: number): Promise<ThreatAssessment> {
-    const response = await apiClient.get<ApiResponse<ThreatAssessment>>(
+    const response = await apiClient.get<ThreatAssessment>(
       `/api/v1/assessment/assessments/${id}`
     );
-    return response.data.data;
+    return response.data;
   }
 
   /**
    * 获取统计数据
    */
   async getStatistics(customerId: string): Promise<Statistics> {
-    const response = await apiClient.get<ApiResponse<Statistics>>(
+    const response = await apiClient.get<Statistics>(
       '/api/v1/assessment/statistics',
       { params: { customer_id: customerId } }
     );
-    return response.data.data;
+    return response.data;
   }
 
   /**
    * 获取威胁趋势数据 (24小时)
    */
   async getThreatTrend(customerId: string): Promise<ChartDataPoint[]> {
-    const response = await apiClient.get<ApiResponse<ChartDataPoint[]>>(
+    const response = await apiClient.get<ChartDataPoint[]>(
       '/api/v1/assessment/trend',
       {
         params: {
@@ -61,7 +61,7 @@ class ThreatService {
         },
       }
     );
-    return response.data.data;
+    return response.data;
   }
 
   /**
@@ -84,7 +84,7 @@ class ThreatService {
    * 获取端口分布
    */
   async getPortDistribution(customerId: string): Promise<ChartDataPoint[]> {
-    const response = await apiClient.get<ApiResponse<ChartDataPoint[]>>(
+    const response = await apiClient.get<ChartDataPoint[]>(
       '/api/v1/assessment/port-distribution',
       {
         params: {
@@ -92,7 +92,7 @@ class ThreatService {
         },
       }
     );
-    return response.data.data;
+    return response.data;
   }
 
   /**

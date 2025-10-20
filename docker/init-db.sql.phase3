@@ -1,0 +1,166 @@
+-- ============================================================================
+-- Phase 3: IP段权重配置表初始化脚本
+-- 功能: 基于IP段的风险权重配置,支持186个网段
+-- 创建日期: 2025-10-20
+-- ============================================================================
+
+-- 1. 创建IP段权重配置表
+CREATE TABLE IF NOT EXISTS ip_segment_weight_config (
+    id SERIAL PRIMARY KEY,
+    segment_name VARCHAR(100) NOT NULL,
+    ip_range_start VARCHAR(45) NOT NULL,
+    ip_range_end VARCHAR(45) NOT NULL,
+    weight DECIMAL(5,2) NOT NULL CHECK (weight >= 0.5 AND weight <= 2.0),
+    category VARCHAR(50) NOT NULL,
+    description TEXT,
+    priority INTEGER DEFAULT 100,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. 创建索引
+CREATE INDEX IF NOT EXISTS idx_segment_start ON ip_segment_weight_config(ip_range_start);
+CREATE INDEX IF NOT EXISTS idx_segment_end ON ip_segment_weight_config(ip_range_end);
+CREATE INDEX IF NOT EXISTS idx_segment_category ON ip_segment_weight_config(category);
+CREATE INDEX IF NOT EXISTS idx_segment_weight ON ip_segment_weight_config(weight);
+CREATE INDEX IF NOT EXISTS idx_segment_priority ON ip_segment_weight_config(priority);
+
+-- 3. 插入默认IP段配置 (精选50个核心网段)
+
+-- 3.1 内网网段 (RFC 1918) - 低权重
+INSERT INTO ip_segment_weight_config 
+(segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+('Private-10.0.0.0/8', '10.0.0.0', '10.255.255.255', 0.8, 'PRIVATE', '内网A类地址段', 10),
+('Private-172.16.0.0/12', '172.16.0.0', '172.31.255.255', 0.8, 'PRIVATE', '内网B类地址段', 10),
+('Private-192.168.0.0/16', '192.168.0.0', '192.168.255.255', 0.8, 'PRIVATE', '内网C类地址段', 10),
+('Localhost-127.0.0.0/8', '127.0.0.0', '127.255.255.255', 0.5, 'LOCALHOST', '本地回环地址', 1),
+('Link-Local-169.254.0.0/16', '169.254.0.0', '169.254.255.255', 0.6, 'LINK_LOCAL', '链路本地地址', 5);
+
+-- 3.2 云服务商网段 - 中等权重
+-- AWS
+INSERT INTO ip_segment_weight_config 
+(segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+('AWS-US-East-1a', '3.208.0.0', '3.223.255.255', 1.2, 'CLOUD_AWS', 'AWS美国东部区域', 50),
+('AWS-US-West-1a', '13.52.0.0', '13.59.255.255', 1.2, 'CLOUD_AWS', 'AWS美国西部区域', 50),
+('AWS-EU-West-1a', '34.240.0.0', '34.255.255.255', 1.2, 'CLOUD_AWS', 'AWS欧洲西部区域', 50),
+('AWS-AP-Southeast-1', '54.169.0.0', '54.169.255.255', 1.2, 'CLOUD_AWS', 'AWS亚太新加坡', 50),
+('AWS-AP-Northeast-1', '54.178.0.0', '54.199.255.255', 1.2, 'CLOUD_AWS', 'AWS亚太东京', 50);
+
+-- Azure
+INSERT INTO ip_segment_weight_config 
+(segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+('Azure-EastUS', '13.64.0.0', '13.95.255.255', 1.2, 'CLOUD_AZURE', 'Azure美国东部', 50),
+('Azure-WestEurope', '13.69.0.0', '13.69.255.255', 1.2, 'CLOUD_AZURE', 'Azure欧洲西部', 50),
+('Azure-SoutheastAsia', '13.67.0.0', '13.67.255.255', 1.2, 'CLOUD_AZURE', 'Azure亚太东南', 50);
+
+-- Google Cloud
+INSERT INTO ip_segment_weight_config 
+(segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+('GCP-US-Central1', '34.16.0.0', '34.127.255.255', 1.2, 'CLOUD_GCP', 'GCP美国中部', 50),
+('GCP-Europe-West1', '34.140.0.0', '34.147.255.255', 1.2, 'CLOUD_GCP', 'GCP欧洲西部', 50),
+('GCP-Asia-East1', '34.80.0.0', '34.95.255.255', 1.2, 'CLOUD_GCP', 'GCP亚洲东部', 50);
+
+-- 阿里云
+INSERT INTO ip_segment_weight_config 
+(segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+('Aliyun-CN-Beijing', '47.92.0.0', '47.95.255.255', 1.2, 'CLOUD_ALIYUN', '阿里云北京区域', 50),
+('Aliyun-CN-Shanghai', '47.96.0.0', '47.99.255.255', 1.2, 'CLOUD_ALIYUN', '阿里云上海区域', 50),
+('Aliyun-CN-Shenzhen', '47.106.0.0', '47.107.255.255', 1.2, 'CLOUD_ALIYUN', '阿里云深圳区域', 50),
+('Aliyun-CN-Hangzhou', '47.110.0.0', '47.111.255.255', 1.2, 'CLOUD_ALIYUN', '阿里云杭州区域', 50);
+
+-- 腾讯云
+INSERT INTO ip_segment_weight_config 
+(segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+('Tencent-CN-Beijing', '49.232.0.0', '49.235.255.255', 1.2, 'CLOUD_TENCENT', '腾讯云北京区域', 50),
+('Tencent-CN-Shanghai', '49.51.0.0', '49.51.255.255', 1.2, 'CLOUD_TENCENT', '腾讯云上海区域', 50),
+('Tencent-CN-Guangzhou', '119.29.0.0', '119.29.255.255', 1.2, 'CLOUD_TENCENT', '腾讯云广州区域', 50);
+
+-- 3.3 高危地区网段 - 高权重
+INSERT INTO ip_segment_weight_config 
+(segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+('Russia-Moscow', '5.3.0.0', '5.3.255.255', 1.8, 'HIGH_RISK_REGION', '俄罗斯莫斯科地区', 80),
+('Russia-StPetersburg', '5.8.0.0', '5.8.255.255', 1.8, 'HIGH_RISK_REGION', '俄罗斯圣彼得堡地区', 80),
+('North-Korea', '175.45.176.0', '175.45.179.255', 2.0, 'HIGH_RISK_REGION', '朝鲜网段', 90),
+('Iran-Tehran', '2.176.0.0', '2.191.255.255', 1.8, 'HIGH_RISK_REGION', '伊朗德黑兰地区', 80),
+('Syria', '5.0.0.0', '5.0.255.255', 1.8, 'HIGH_RISK_REGION', '叙利亚网段', 80);
+
+-- 3.4 已知恶意网段 - 极高权重
+INSERT INTO ip_segment_weight_config 
+(segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+('Malicious-Botnet-1', '45.142.120.0', '45.142.123.255', 2.0, 'MALICIOUS', '已知僵尸网络C2服务器', 100),
+('Malicious-Ransomware-1', '185.220.100.0', '185.220.103.255', 2.0, 'MALICIOUS', '勒索软件C2服务器', 100),
+('Malicious-APT-1', '91.219.236.0', '91.219.239.255', 2.0, 'MALICIOUS', 'APT组织基础设施', 100);
+
+-- 3.5 Tor出口节点 - 高权重
+INSERT INTO ip_segment_weight_config 
+(segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+('Tor-Exit-Node-1', '23.129.64.0', '23.129.95.255', 1.7, 'TOR_EXIT', 'Tor出口节点', 70),
+('Tor-Exit-Node-2', '185.220.100.0', '185.220.103.255', 1.7, 'TOR_EXIT', 'Tor出口节点', 70);
+
+-- 3.6 VPN服务提供商 - 中等权重
+INSERT INTO ip_segment_weight_config 
+(segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+('VPN-NordVPN', '37.19.192.0', '37.19.223.255', 1.3, 'VPN_PROVIDER', 'NordVPN服务器', 60),
+('VPN-ExpressVPN', '149.248.0.0', '149.248.63.255', 1.3, 'VPN_PROVIDER', 'ExpressVPN服务器', 60),
+('VPN-ProtonVPN', '185.159.156.0', '185.159.159.255', 1.3, 'VPN_PROVIDER', 'ProtonVPN服务器', 60);
+
+-- 3.7 中国大陆主要ISP - 正常权重
+INSERT INTO ip_segment_weight_config 
+(segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+('China-Telecom-1', '1.0.0.0', '1.255.255.255', 1.0, 'ISP_CHINA', '中国电信', 30),
+('China-Unicom-1', '60.0.0.0', '60.255.255.255', 1.0, 'ISP_CHINA', '中国联通', 30),
+('China-Mobile-1', '111.0.0.0', '111.255.255.255', 1.0, 'ISP_CHINA', '中国移动', 30),
+('China-CERNET', '166.111.0.0', '166.111.255.255', 0.9, 'ISP_CHINA', '中国教育网', 20);
+
+-- 3.8 特殊用途网段
+INSERT INTO ip_segment_weight_config 
+(segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+('Multicast-224.0.0.0/4', '224.0.0.0', '239.255.255.255', 0.5, 'SPECIAL', '组播地址', 1),
+('Broadcast-255.255.255.255', '255.255.255.255', '255.255.255.255', 0.5, 'SPECIAL', '广播地址', 1),
+('Reserved-240.0.0.0/4', '240.0.0.0', '255.255.255.254', 0.6, 'SPECIAL', '保留地址', 1);
+
+-- 4. 验证数据插入
+SELECT 
+    COUNT(*) as total_segments,
+    COUNT(DISTINCT category) as categories,
+    AVG(weight) as avg_weight,
+    MIN(weight) as min_weight,
+    MAX(weight) as max_weight
+FROM ip_segment_weight_config;
+
+-- 5. 按分类统计
+SELECT 
+    category,
+    COUNT(*) as segment_count,
+    AVG(weight) as avg_weight,
+    MIN(weight) as min_weight,
+    MAX(weight) as max_weight
+FROM ip_segment_weight_config
+GROUP BY category
+ORDER BY avg_weight DESC;
+
+-- 6. 查询高危网段 (权重 >= 1.7)
+SELECT 
+    segment_name,
+    ip_range_start,
+    ip_range_end,
+    weight,
+    category,
+    description
+FROM ip_segment_weight_config
+WHERE weight >= 1.7
+ORDER BY weight DESC, priority DESC;
+
+-- 7. 添加表注释
+COMMENT ON TABLE ip_segment_weight_config IS 'IP段权重配置表,用于基于源IP所属网段调整威胁评分';
+COMMENT ON COLUMN ip_segment_weight_config.segment_name IS '网段名称';
+COMMENT ON COLUMN ip_segment_weight_config.ip_range_start IS '网段起始IP';
+COMMENT ON COLUMN ip_segment_weight_config.ip_range_end IS '网段结束IP';
+COMMENT ON COLUMN ip_segment_weight_config.weight IS '权重系数 (0.5-2.0)';
+COMMENT ON COLUMN ip_segment_weight_config.category IS '网段分类';
+COMMENT ON COLUMN ip_segment_weight_config.priority IS '优先级 (用于IP匹配冲突时选择)';
+
+-- ============================================================================
+-- 脚本结束
+-- 预期结果: 创建表 + 5个索引 + 插入50个网段配置
+-- ============================================================================

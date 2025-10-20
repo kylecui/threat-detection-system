@@ -1,0 +1,217 @@
+-- ============================================================================
+-- Phase 4: 威胁标签和白名单配置表初始化脚本
+-- 功能: 威胁标签管理 + 白名单过滤
+-- 创建日期: 2025-10-20
+-- ============================================================================
+
+-- ==================== 1. 威胁标签表 ====================
+
+CREATE TABLE IF NOT EXISTS threat_labels (
+    id SERIAL PRIMARY KEY,
+    label_code VARCHAR(50) NOT NULL UNIQUE,
+    label_name VARCHAR(100) NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    description TEXT,
+    auto_tag_rules TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 创建索引
+CREATE INDEX IF NOT EXISTS idx_label_code ON threat_labels(label_code);
+CREATE INDEX IF NOT EXISTS idx_label_category ON threat_labels(category);
+CREATE INDEX IF NOT EXISTS idx_label_severity ON threat_labels(severity);
+
+-- 插入默认威胁标签 (50个核心标签)
+
+-- APT攻击标签
+INSERT INTO threat_labels (label_code, label_name, category, severity, description) VALUES
+('APT_LATERAL_MOVE', 'APT横向移动', 'APT', 'CRITICAL', '使用RDP/SMB等协议进行内网横向移动'),
+('APT_RECON', 'APT侦察扫描', 'APT', 'HIGH', '大规模端口扫描和服务探测'),
+('APT_C2_COMM', 'APT C2通信', 'APT', 'CRITICAL', '与已知APT C2服务器通信'),
+('APT_DATA_EXFIL', 'APT数据窃取', 'APT', 'CRITICAL', '异常大量数据传输'),
+('APT_PERSISTENCE', 'APT持久化', 'APT', 'HIGH', '建立持久化后门');
+
+-- 勒索软件标签
+INSERT INTO threat_labels (label_code, label_name, category, severity, description) VALUES
+('RANSOMWARE_SMB', '勒索软件SMB传播', 'RANSOMWARE', 'CRITICAL', '通过SMB协议传播的勒索软件'),
+('RANSOMWARE_RDP', '勒索软件RDP入侵', 'RANSOMWARE', 'CRITICAL', '通过RDP暴力破解的勒索软件'),
+('RANSOMWARE_ENCRYPTION', '勒索软件加密行为', 'RANSOMWARE', 'CRITICAL', '检测到大量文件加密行为'),
+('RANSOMWARE_C2', '勒索软件C2通信', 'RANSOMWARE', 'CRITICAL', '与勒索软件C2服务器通信');
+
+-- 扫描行为标签
+INSERT INTO threat_labels (label_code, label_name, category, severity, description) VALUES
+('SCAN_PORT_FULL', '全端口扫描', 'SCANNING', 'MEDIUM', '扫描大量端口(20+)'),
+('SCAN_PORT_COMMON', '常用端口扫描', 'SCANNING', 'LOW', '扫描常用服务端口'),
+('SCAN_SERVICE', '服务识别扫描', 'SCANNING', 'MEDIUM', '服务版本探测'),
+('SCAN_VULN', '漏洞扫描', 'SCANNING', 'HIGH', '已知漏洞探测'),
+('SCAN_NETWORK', '网络拓扑扫描', 'SCANNING', 'MEDIUM', '网络结构探测');
+
+-- 横向移动标签
+INSERT INTO threat_labels (label_code, label_name, category, severity, description) VALUES
+('LATERAL_RDP', 'RDP横向移动', 'LATERAL_MOVEMENT', 'HIGH', '使用RDP进行横向移动'),
+('LATERAL_SMB', 'SMB横向移动', 'LATERAL_MOVEMENT', 'HIGH', '使用SMB进行横向移动'),
+('LATERAL_PSEXEC', 'PsExec横向移动', 'LATERAL_MOVEMENT', 'HIGH', '使用PsExec工具'),
+('LATERAL_WMI', 'WMI横向移动', 'LATERAL_MOVEMENT', 'HIGH', '使用WMI进行远程执行'),
+('LATERAL_SSH', 'SSH横向移动', 'LATERAL_MOVEMENT', 'MEDIUM', '使用SSH进行横向移动');
+
+-- 暴力破解标签
+INSERT INTO threat_labels (label_code, label_name, category, severity, description) VALUES
+('BRUTE_RDP', 'RDP暴力破解', 'BRUTE_FORCE', 'HIGH', 'RDP服务暴力破解'),
+('BRUTE_SSH', 'SSH暴力破解', 'BRUTE_FORCE', 'HIGH', 'SSH服务暴力破解'),
+('BRUTE_FTP', 'FTP暴力破解', 'BRUTE_FORCE', 'MEDIUM', 'FTP服务暴力破解'),
+('BRUTE_DB', '数据库暴力破解', 'BRUTE_FORCE', 'HIGH', '数据库服务暴力破解');
+
+-- 数据窃取标签
+INSERT INTO threat_labels (label_code, label_name, category, severity, description) VALUES
+('DATA_EXFIL_DB', '数据库数据窃取', 'DATA_EXFILTRATION', 'CRITICAL', '尝试访问数据库服务'),
+('DATA_EXFIL_FILE', '文件数据窃取', 'DATA_EXFILTRATION', 'HIGH', '尝试访问文件共享服务'),
+('DATA_EXFIL_LARGE', '大量数据传输', 'DATA_EXFILTRATION', 'CRITICAL', '异常大量数据传输');
+
+-- 恶意软件标签
+INSERT INTO threat_labels (label_code, label_name, category, severity, description) VALUES
+('MALWARE_BOTNET', '僵尸网络', 'MALWARE', 'CRITICAL', '僵尸网络C2通信'),
+('MALWARE_TROJAN', '木马后门', 'MALWARE', 'CRITICAL', '木马后门通信'),
+('MALWARE_WORM', '蠕虫传播', 'MALWARE', 'CRITICAL', '蠕虫式传播行为'),
+('MALWARE_MINER', '挖矿程序', 'MALWARE', 'HIGH', '加密货币挖矿行为');
+
+-- 网络异常标签
+INSERT INTO threat_labels (label_code, label_name, category, severity, description) VALUES
+('NETWORK_TOR', 'Tor网络访问', 'NETWORK_ANOMALY', 'MEDIUM', '通过Tor网络访问'),
+('NETWORK_VPN', 'VPN隧道访问', 'NETWORK_ANOMALY', 'LOW', '通过VPN访问'),
+('NETWORK_PROXY', '代理访问', 'NETWORK_ANOMALY', 'LOW', '通过代理服务器访问'),
+('NETWORK_HIGH_RISK_GEO', '高危地区访问', 'NETWORK_ANOMALY', 'HIGH', '来自高危地区的访问');
+
+-- 内网威胁标签
+INSERT INTO threat_labels (label_code, label_name, category, severity, description) VALUES
+('INSIDER_ABNORMAL_TIME', '异常时间访问', 'INSIDER_THREAT', 'MEDIUM', '非工作时间的异常访问'),
+('INSIDER_PRIVILEGE_ESC', '权限提升', 'INSIDER_THREAT', 'HIGH', '尝试提升权限'),
+('INSIDER_DATA_ACCESS', '敏感数据访问', 'INSIDER_THREAT', 'HIGH', '访问敏感数据');
+
+-- 其他威胁标签
+INSERT INTO threat_labels (label_code, label_name, category, severity, description) VALUES
+('EXPLOIT_KNOWN_VULN', '已知漏洞利用', 'EXPLOITATION', 'CRITICAL', '利用已知漏洞进行攻击'),
+('EXPLOIT_0DAY', '0day漏洞利用', 'EXPLOITATION', 'CRITICAL', '疑似0day漏洞利用'),
+('DOS_ATTACK', 'DoS攻击', 'DOS', 'HIGH', '拒绝服务攻击'),
+('DDOS_ATTACK', 'DDoS攻击', 'DOS', 'CRITICAL', '分布式拒绝服务攻击'),
+('WEB_ATTACK', 'Web攻击', 'WEB', 'HIGH', 'Web应用攻击'),
+('SQL_INJECTION', 'SQL注入', 'WEB', 'CRITICAL', 'SQL注入攻击'),
+('XSS_ATTACK', 'XSS攻击', 'WEB', 'MEDIUM', '跨站脚本攻击');
+
+-- ==================== 2. 白名单配置表 ====================
+
+CREATE TABLE IF NOT EXISTS whitelist_config (
+    id SERIAL PRIMARY KEY,
+    customer_id VARCHAR(50) NOT NULL,
+    whitelist_type VARCHAR(20) NOT NULL,
+    ip_address VARCHAR(45),
+    mac_address VARCHAR(17),
+    port_number INTEGER,
+    reason TEXT,
+    created_by VARCHAR(100),
+    expires_at TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 创建索引
+CREATE INDEX IF NOT EXISTS idx_whitelist_customer ON whitelist_config(customer_id);
+CREATE INDEX IF NOT EXISTS idx_whitelist_type ON whitelist_config(whitelist_type);
+CREATE INDEX IF NOT EXISTS idx_whitelist_ip ON whitelist_config(ip_address);
+CREATE INDEX IF NOT EXISTS idx_whitelist_mac ON whitelist_config(mac_address);
+CREATE INDEX IF NOT EXISTS idx_whitelist_active ON whitelist_config(is_active);
+CREATE INDEX IF NOT EXISTS idx_whitelist_expires ON whitelist_config(expires_at);
+
+-- 插入示例白名单配置
+
+-- IP白名单 (管理员IP)
+INSERT INTO whitelist_config 
+(customer_id, whitelist_type, ip_address, reason, created_by) VALUES
+('customer-001', 'IP', '192.168.1.10', '管理员工作站', 'admin'),
+('customer-001', 'IP', '192.168.1.11', 'IT运维工作站', 'admin'),
+('customer-001', 'IP', '10.0.1.100', '监控服务器', 'admin');
+
+-- MAC白名单 (信任设备)
+INSERT INTO whitelist_config 
+(customer_id, whitelist_type, mac_address, reason, created_by) VALUES
+('customer-001', 'MAC', '00:11:22:33:44:55', '管理员笔记本', 'admin'),
+('customer-001', 'MAC', '00:11:22:33:44:66', 'IT运维笔记本', 'admin');
+
+-- 端口白名单 (业务端口)
+INSERT INTO whitelist_config 
+(customer_id, whitelist_type, port_number, reason, created_by) VALUES
+('customer-001', 'PORT', 80, 'Web服务端口', 'admin'),
+('customer-001', 'PORT', 443, 'HTTPS服务端口', 'admin'),
+('customer-001', 'PORT', 22, 'SSH管理端口', 'admin');
+
+-- 组合白名单 (IP+MAC)
+INSERT INTO whitelist_config 
+(customer_id, whitelist_type, ip_address, mac_address, reason, created_by) VALUES
+('customer-001', 'COMBINED', '192.168.1.10', '00:11:22:33:44:55', '管理员设备绑定', 'admin');
+
+-- 临时白名单 (带过期时间)
+INSERT INTO whitelist_config 
+(customer_id, whitelist_type, ip_address, reason, created_by, expires_at) VALUES
+('customer-001', 'IP', '192.168.1.200', '临时测试设备', 'admin', NOW() + INTERVAL '7 days');
+
+-- ==================== 3. 威胁标签关联表 ====================
+
+CREATE TABLE IF NOT EXISTS threat_assessment_labels (
+    id SERIAL PRIMARY KEY,
+    threat_assessment_id BIGINT NOT NULL,
+    label_code VARCHAR(50) NOT NULL,
+    confidence DECIMAL(5,2) DEFAULT 1.0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (threat_assessment_id) REFERENCES threat_assessments(id) ON DELETE CASCADE
+);
+
+-- 创建索引
+CREATE INDEX IF NOT EXISTS idx_assessment_labels_threat_id ON threat_assessment_labels(threat_assessment_id);
+CREATE INDEX IF NOT EXISTS idx_assessment_labels_code ON threat_assessment_labels(label_code);
+
+-- ==================== 4. 验证数据 ====================
+
+-- 验证威胁标签
+SELECT 
+    COUNT(*) as total_labels,
+    COUNT(DISTINCT category) as categories,
+    COUNT(DISTINCT severity) as severities
+FROM threat_labels;
+
+-- 按分类统计标签
+SELECT 
+    category,
+    COUNT(*) as label_count,
+    string_agg(DISTINCT severity, ', ') as severities
+FROM threat_labels
+GROUP BY category
+ORDER BY label_count DESC;
+
+-- 验证白名单配置
+SELECT 
+    whitelist_type,
+    COUNT(*) as count,
+    COUNT(CASE WHEN is_active THEN 1 END) as active_count
+FROM whitelist_config
+GROUP BY whitelist_type;
+
+-- ==================== 5. 表注释 ====================
+
+COMMENT ON TABLE threat_labels IS '威胁标签配置表,定义各类威胁的标签和分类';
+COMMENT ON TABLE whitelist_config IS '白名单配置表,用于过滤信任的IP/MAC/端口';
+COMMENT ON TABLE threat_assessment_labels IS '威胁评估标签关联表,记录每次评估的标签';
+
+COMMENT ON COLUMN threat_labels.label_code IS '标签代码(唯一标识)';
+COMMENT ON COLUMN threat_labels.severity IS '严重程度: INFO/LOW/MEDIUM/HIGH/CRITICAL';
+COMMENT ON COLUMN whitelist_config.whitelist_type IS '白名单类型: IP/MAC/PORT/COMBINED';
+COMMENT ON COLUMN whitelist_config.expires_at IS '过期时间(NULL表示永久有效)';
+
+-- ============================================================================
+-- 脚本结束
+-- 预期结果: 
+-- - threat_labels表: 50个默认标签
+-- - whitelist_config表: 10个示例配置
+-- - threat_assessment_labels表: 关联表
+-- ============================================================================

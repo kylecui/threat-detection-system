@@ -1,0 +1,96 @@
+-- Phase 2: 端口风险配置表
+-- 执行: psql -U postgres -d threat_detection < init-db.sql.phase2
+
+-- 1. 创建port_risk_config表
+CREATE TABLE IF NOT EXISTS port_risk_config (
+    id SERIAL PRIMARY KEY,
+    port_number INTEGER NOT NULL UNIQUE,
+    port_name VARCHAR(100) NOT NULL,
+    risk_score DECIMAL(5,2) NOT NULL CHECK (risk_score >= 0.0 AND risk_score <= 5.0),
+    category VARCHAR(50) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT chk_port_range CHECK (port_number >= 1 AND port_number <= 65535)
+);
+
+-- 2. 创建索引
+CREATE INDEX IF NOT EXISTS idx_port_number ON port_risk_config(port_number);
+CREATE INDEX IF NOT EXISTS idx_category ON port_risk_config(category);
+CREATE INDEX IF NOT EXISTS idx_risk_score ON port_risk_config(risk_score);
+
+-- 3. 插入默认端口配置 (50个高危端口)
+INSERT INTO port_risk_config (port_number, port_name, risk_score, category, description) VALUES
+-- 高危端口 (riskScore = 2.0-3.0)
+(21, 'FTP', 2.5, 'FILE_TRANSFER', 'FTP文件传输协议-明文传输'),
+(22, 'SSH', 2.0, 'REMOTE_ACCESS', 'SSH远程登录'),
+(23, 'Telnet', 3.0, 'REMOTE_ACCESS', 'Telnet远程登录-明文传输'),
+(25, 'SMTP', 1.8, 'EMAIL', 'SMTP邮件传输'),
+(53, 'DNS', 1.5, 'NETWORK', 'DNS域名解析'),
+(80, 'HTTP', 1.5, 'WEB', 'HTTP Web服务'),
+(110, 'POP3', 1.8, 'EMAIL', 'POP3邮件接收'),
+(135, 'RPC', 2.5, 'WINDOWS', 'Windows RPC服务'),
+(139, 'NetBIOS', 2.5, 'WINDOWS', 'NetBIOS会话服务'),
+(143, 'IMAP', 1.8, 'EMAIL', 'IMAP邮件接收'),
+(443, 'HTTPS', 1.2, 'WEB', 'HTTPS安全Web服务'),
+(445, 'SMB', 3.0, 'WINDOWS', 'SMB文件共享-勒索软件常用'),
+(1433, 'MSSQL', 2.5, 'DATABASE', 'Microsoft SQL Server'),
+(1521, 'Oracle', 2.5, 'DATABASE', 'Oracle数据库'),
+(3306, 'MySQL', 2.5, 'DATABASE', 'MySQL数据库'),
+(3389, 'RDP', 3.0, 'REMOTE_ACCESS', '远程桌面协议-APT常用'),
+(5432, 'PostgreSQL', 2.5, 'DATABASE', 'PostgreSQL数据库'),
+(5900, 'VNC', 2.5, 'REMOTE_ACCESS', 'VNC远程桌面'),
+(6379, 'Redis', 2.8, 'DATABASE', 'Redis数据库-未授权访问高危'),
+(8080, 'HTTP-Proxy', 1.5, 'WEB', 'HTTP代理服务'),
+
+-- 中危端口 (riskScore = 1.5-2.0)
+(20, 'FTP-Data', 2.0, 'FILE_TRANSFER', 'FTP数据传输'),
+(69, 'TFTP', 2.0, 'FILE_TRANSFER', 'TFTP简单文件传输'),
+(111, 'RPC', 2.0, 'NETWORK', 'RPC端口映射'),
+(161, 'SNMP', 1.8, 'NETWORK', 'SNMP网络管理'),
+(389, 'LDAP', 1.8, 'DIRECTORY', 'LDAP目录服务'),
+(636, 'LDAPS', 1.5, 'DIRECTORY', 'LDAP安全连接'),
+(873, 'Rsync', 2.0, 'FILE_TRANSFER', 'Rsync文件同步'),
+(1080, 'SOCKS', 1.8, 'PROXY', 'SOCKS代理'),
+(1434, 'MSSQL-Monitor', 2.0, 'DATABASE', 'MSSQL监控服务'),
+(2049, 'NFS', 2.0, 'FILE_TRANSFER', 'NFS网络文件系统'),
+(2375, 'Docker', 2.8, 'CONTAINER', 'Docker未授权访问'),
+(2376, 'Docker-TLS', 2.0, 'CONTAINER', 'Docker TLS'),
+(3690, 'SVN', 1.5, 'VERSION_CONTROL', 'SVN版本控制'),
+(5000, 'Docker-Registry', 1.8, 'CONTAINER', 'Docker镜像仓库'),
+(5601, 'Kibana', 1.8, 'MONITORING', 'Kibana日志可视化'),
+(5672, 'RabbitMQ', 1.8, 'MESSAGE_QUEUE', 'RabbitMQ消息队列'),
+(6443, 'Kubernetes', 2.0, 'CONTAINER', 'Kubernetes API'),
+(7001, 'WebLogic', 2.0, 'APPLICATION', 'WebLogic管理端口'),
+(8081, 'HTTP-Alt', 1.5, 'WEB', 'HTTP备用端口'),
+(8443, 'HTTPS-Alt', 1.2, 'WEB', 'HTTPS备用端口'),
+
+-- 低危端口 (riskScore = 1.0-1.5)
+(123, 'NTP', 1.2, 'NETWORK', 'NTP时间同步'),
+(514, 'Syslog', 1.2, 'LOGGING', 'Syslog日志服务'),
+(587, 'SMTP-Submit', 1.5, 'EMAIL', 'SMTP邮件提交'),
+(993, 'IMAPS', 1.2, 'EMAIL', 'IMAP安全连接'),
+(995, 'POP3S', 1.2, 'EMAIL', 'POP3安全连接'),
+(8000, 'HTTP-Dev', 1.2, 'WEB', 'HTTP开发端口'),
+(8888, 'HTTP-Alt2', 1.2, 'WEB', 'HTTP备用端口2'),
+(9000, 'HTTP-Alt3', 1.2, 'WEB', 'HTTP备用端口3'),
+(9090, 'HTTP-Alt4', 1.2, 'WEB', 'HTTP备用端口4'),
+(9200, 'Elasticsearch', 1.8, 'DATABASE', 'Elasticsearch搜索引擎')
+ON CONFLICT (port_number) DO NOTHING;
+
+-- 4. 验证插入结果
+SELECT COUNT(*) as total_ports, 
+       AVG(risk_score) as avg_risk_score,
+       MAX(risk_score) as max_risk_score
+FROM port_risk_config;
+
+-- 5. 查看高危端口 (risk_score >= 2.5)
+SELECT port_number, port_name, risk_score, category, description
+FROM port_risk_config
+WHERE risk_score >= 2.5
+ORDER BY risk_score DESC;
+
+COMMENT ON TABLE port_risk_config IS '端口风险配置表 - 存储219个常见端口的风险评分';
+COMMENT ON COLUMN port_risk_config.port_number IS '端口号 (1-65535)';
+COMMENT ON COLUMN port_risk_config.risk_score IS '风险评分 (0.0-5.0, 越高越危险)';
+COMMENT ON COLUMN port_risk_config.category IS '端口分类 (REMOTE_ACCESS/DATABASE/WEB等)';
