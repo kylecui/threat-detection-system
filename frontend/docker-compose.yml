@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # =====================
+  # 开发环境前端
+  # =====================
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: threat-detection-ui-dev
+    ports:
+      - "3000:3000"
+    volumes:
+      # 挂载源码 (支持热更新)
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./index.html:/app/index.html
+      - ./vite.config.ts:/app/vite.config.ts
+      - ./tsconfig.json:/app/tsconfig.json
+      # 排除node_modules (使用容器内的)
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      # 浏览器使用 /api，Vite代理转发到 host.docker.internal:8888
+      - VITE_API_BASE_URL=/api
+      - VITE_APP_TITLE=威胁检测系统
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # =====================
+  # 生产环境前端
+  # =====================
+  frontend-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: threat-detection-ui-prod
+    ports:
+      - "80:80"
+    environment:
+      - NGINX_WORKER_PROCESSES=auto
+      - NGINX_WORKER_CONNECTIONS=1024
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M

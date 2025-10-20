@@ -1,0 +1,97 @@
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { message } from 'antd';
+
+/**
+ * Axios实例配置
+ * 
+ * API网关地址:
+ * - 开发环境: http://localhost:8888
+ * - 生产环境: /api (Nginx代理)
+ */
+const apiClient: AxiosInstance = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+/**
+ * 请求拦截器
+ */
+apiClient.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    // 添加认证token (如果需要)
+    const token = localStorage.getItem('token');
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    // 添加customer_id (多租户)
+    const customerId = localStorage.getItem('customer_id') || 'demo-customer';
+    if (config.params) {
+      config.params.customer_id = customerId;
+    } else {
+      config.params = { customer_id: customerId };
+    }
+
+    console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.params);
+    return config;
+  },
+  (error: AxiosError) => {
+    console.error('[API Request Error]', error);
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * 响应拦截器
+ */
+apiClient.interceptors.response.use(
+  (response) => {
+    console.log(`[API Response] ${response.config.url}`, response.data);
+    return response;
+  },
+  (error: AxiosError) => {
+    console.error('[API Response Error]', error);
+
+    // 处理不同的错误状态码
+    if (error.response) {
+      const { status, data } = error.response;
+      
+      switch (status) {
+        case 400:
+          message.error(`请求错误: ${(data as any)?.message || '参数错误'}`);
+          break;
+        case 401:
+          message.error('未授权，请重新登录');
+          // 清除token并跳转登录页
+          localStorage.removeItem('token');
+          window.location.href = '/login';
+          break;
+        case 403:
+          message.error('没有权限访问该资源');
+          break;
+        case 404:
+          message.error('请求的资源不存在');
+          break;
+        case 500:
+          message.error(`服务器错误: ${(data as any)?.message || '内部错误'}`);
+          break;
+        case 503:
+          message.error('服务暂时不可用，请稍后重试');
+          break;
+        default:
+          message.error(`请求失败 (${status})`);
+      }
+    } else if (error.request) {
+      message.error('网络错误，请检查网络连接');
+    } else {
+      message.error(`请求配置错误: ${error.message}`);
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+export default apiClient;
