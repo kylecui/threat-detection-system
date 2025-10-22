@@ -39,9 +39,9 @@ response=$(curl -s -w "\n%{http_code}" -X POST "$GATEWAY_URL/api/v1/customers" \
   -H "Content-Type: application/json" \
   -d '{
     "customer_id": "test-customer-001",
-    "company_name": "测试公司",
+    "name": "测试公司",
     "contact_name": "张三",
-    "contact_email": "test@example.com",
+    "email": "test@example.com",
     "subscription_tier": "PROFESSIONAL"
   }')
 http_code=$(echo "$response" | tail -n1)
@@ -120,7 +120,7 @@ response=$(curl -s -w "\n%{http_code}" -X OPTIONS "$GATEWAY_URL/api/v1/customers
   -I)
 http_code=$(echo "$response" | tail -n1)
 
-if echo "$response" | grep -q "access-control-allow-origin"; then
+if echo "$response" | grep -i "access-control-allow-origin"; then
     echo -e "${GREEN}✅ CORS配置正常${NC}"
 else
     echo -e "${YELLOW}⚠️  CORS可能未正确配置${NC}"
@@ -128,18 +128,28 @@ fi
 echo ""
 
 # 8. 测试限流（快速发送20个请求）
+# set +e
 echo -e "${YELLOW}[8/8] 测试限流功能${NC}"
 echo "快速发送20个请求..."
 success_count=0
 rate_limited_count=0
 
 for i in {1..20}; do
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" "$GATEWAY_URL/api/v1/customers")
-    if [ "$http_code" = "200" ]; then
-        ((success_count++))
-    elif [ "$http_code" = "429" ]; then
-        ((rate_limited_count++))
-    fi
+#    echo "发送请求 #$i"
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" "$GATEWAY_URL/api/v1/customers" || echo "000" )
+    # if [ "$http_code" = "200" ]; then
+    #     ((success_count++))
+    # elif [ "$http_code" = "429" ]; then
+    #     ((rate_limited_count++))
+    # fi
+    case "$http_code" in
+        200) ((success_count++)) || true;;
+        429) ((rate_limited_count++)) || true;;
+        000) echo "第 $i 次：网络错误（DNS/连接/超时等），已跳过" ;;
+        *)   echo "第 $i 次：HTTP $http_code" ;;
+    esac
+    # return http_code
+    # echo "请求 #$i 返回状态码: $http_code"
 done
 
 echo "成功: $success_count, 限流: $rate_limited_count"
@@ -149,6 +159,7 @@ else
     echo -e "${YELLOW}⚠️  未触发限流（可能需要发送更多请求）${NC}"
 fi
 echo ""
+# set -e
 
 # 总结
 echo "=========================================="

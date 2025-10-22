@@ -103,6 +103,7 @@ public class ApiGatewayApplication {
                 .uri("http://threat-assessment:8081"))
             
             // Alert Management Service (8082)
+            // Alert Management Service is 8082:8084. so we should use 8084. 
             .route("alert-management", r -> r
                 .path("/api/v1/alerts/**")
                 .filters(f -> f
@@ -111,7 +112,7 @@ public class ApiGatewayApplication {
                     .circuitBreaker(c -> c
                         .setName("alertManagementCB")
                         .setFallbackUri("forward:/fallback/alert-management")))
-                .uri("http://alert-management:8082"))
+                .uri("http://alert-management:8084"))
             
             // Health Check (直接返回Gateway健康状态)
             .route("health", r -> r

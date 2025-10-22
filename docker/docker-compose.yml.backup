@@ -427,3 +427,405 @@ volumes:
 networks:
   threat-detection-network:
     name: threat-detection-network
+
+# Environment optimization to prevent layer caching issues
+x-common-env: &common-env
+  # Production logging (no DEBUG output)
+  LOGGING_LEVEL_ROOT: "WARN"
+  LOGGING_LEVEL_COM_THREATDETECTION: "INFO"
+  LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA: "INFO"
+  LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB: "INFO"
+  
+  # Hibernate optimization
+  SPRING_JPA_OPEN_IN_VIEW: "true"
+  SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "false"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    hostname: postgres
+    container_name: postgres
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_DB: threat_detection
+      POSTGRES_USER: threat_user
+      POSTGRES_PASSWORD: threat_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./01-init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
+      - ./02-attack-events-storage.sql:/docker-entrypoint-initdb.d/02-attack-events-storage.sql
+      - ./03-port-weights.sql:/docker-entrypoint-initdb.d/03-port-weights.sql
+      - ./04-alert-management-tables.sql:/docker-entrypoint-initdb.d/04-alert-management-tables.sql
+      - ./05-notification-config-tables.sql:/docker-entrypoint-initdb.d/05-notification-config-tables.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U threat_user -d threat_detection"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports: ["2181:2181"]
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  redis:
+    image: redis:7-alpine
+    hostname: redis
+    container_name: redis
+    ports: ["6379:6379"]
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  logstash:
+    build: ../infrastructure/logging/logstash
+    container_name: logstash
+    depends_on:
+      - kafka
+    ports:
+      - "9080:9080/tcp"  # rsyslog 无 TLS
+      - "9081:9081/tcp"  # rsyslog TLS 预留
+      - "9600:9600"      # 监控 API
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+    volumes:
+      - logstash_data:/usr/share/logstash/data
+      - logstash_logs:/usr/share/logstash/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9600/_node/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports: ["9092:9092", "9101:9101"]
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  data-ingestion:
+    build:
+      context: ../services/data-ingestion/data-ingestion-service
+      dockerfile: Dockerfile
+      # ✅ Prevent layer caching issues
+      cache_from: []
+      # Build args to invalidate cache on timestamp changes
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+    image: data-ingestion:latest
+    hostname: data-ingestion
+    container_name: data-ingestion-service
+    depends_on:
+      - kafka
+    ports: ["8080:8080"]
+    environment:
+      <<: *common-env
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    # ✅ Production resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
+        reservations:
+          cpus: '1.0'
+          memory: 768M
+    restart: unless-stopped
+
+  stream-processing:
+    build:
+      context: ../services/stream-processing
+      dockerfile: Dockerfile
+      # ✅ Prevent layer caching issues
+      cache_from: []
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+    image: stream-processing:latest
+    hostname: stream-processing
+    container_name: stream-processing
+    depends_on:
+      kafka:
+        condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
+    ports: ["8081:8081"]
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: stream-processing
+        parallelism.default: 1
+        taskmanager.numberOfTaskSlots: 1
+        rest.port: 8081
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      INPUT_TOPIC: attack-events
+      STATUS_TOPIC: status-events
+      OUTPUT_TOPIC: threat-alerts
+      AGGREGATION_TOPIC: minute-aggregations
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/overview"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    # ✅ Resource limits for Flink
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.5'
+          memory: 1.5G
+    restart: unless-stopped
+
+  taskmanager:
+    build:
+      context: ../services/stream-processing
+      dockerfile: Dockerfile
+    hostname: taskmanager
+    container_name: taskmanager
+    depends_on:
+      stream-processing:
+        condition: service_started
+    environment:
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: stream-processing
+        taskmanager.numberOfTaskSlots: 2
+        taskmanager.memory.process.size: 1728m
+    command: "taskmanager"
+    restart: unless-stopped
+
+  threat-assessment:
+    build:
+      context: ../services/threat-assessment
+      dockerfile: Dockerfile
+      # ✅ Prevent layer caching issues
+      cache_from: []
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+    image: threat-assessment:latest
+    hostname: threat-assessment
+    container_name: threat-assessment-service
+    depends_on:
+      - kafka
+      - postgres
+    ports: ["8083:8081"]
+    environment:
+      <<: *common-env
+      SPRING_PROFILES_ACTIVE: docker
+      SERVER_PORT: 8081
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
+      SPRING_DATASOURCE_USERNAME: threat_user
+      SPRING_DATASOURCE_PASSWORD: threat_password
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/api/v1/assessment/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    # ✅ Production resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    restart: unless-stopped
+
+  alert-management:
+    build:
+      context: ../services/alert-management
+      dockerfile: Dockerfile
+      # ✅ Prevent layer caching issues - this was the root cause of past bugs!
+      cache_from: []
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+    image: alert-management:latest
+    hostname: alert-management
+    container_name: alert-management-service
+    depends_on:
+      - kafka
+      - postgres
+    ports: ["8082:8084"]
+    environment:
+      <<: *common-env
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
+      SPRING_DATASOURCE_USERNAME: threat_user
+      SPRING_DATASOURCE_PASSWORD: threat_password
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_JPA_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_MAIL_HOST: smtp.163.com
+      SPRING_MAIL_PORT: 25
+      SPRING_MAIL_USERNAME: threat_detection@163.com
+      SPRING_MAIL_PASSWORD: TTXWjJiuxmE2HCRE
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "true"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "false"
+      INTEGRATION_TEST_EMAIL_RECIPIENT: kylecui@outlook.com
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    # ✅ Production resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    restart: unless-stopped
+
+  customer-management:
+    build:
+      context: ../services/customer-management
+      dockerfile: Dockerfile
+      # ✅ Prevent layer caching issues
+      cache_from: []
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+    image: customer-management:latest
+    hostname: customer-management
+    container_name: customer-management-service
+    depends_on:
+      - postgres
+    ports: ["8084:8084"]
+    environment:
+      <<: *common-env
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
+      SPRING_DATASOURCE_USERNAME: threat_user
+      SPRING_DATASOURCE_PASSWORD: threat_password
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics,prometheus,mappings
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    # ✅ Production resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1.5G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    restart: unless-stopped
+
+  api-gateway:
+    build:
+      context: ../services/api-gateway
+      dockerfile: Dockerfile
+      # ✅ Prevent layer caching issues
+      cache_from: []
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+    image: api-gateway:latest
+    hostname: api-gateway
+    container_name: api-gateway
+    depends_on:
+      - redis
+      - customer-management
+      - data-ingestion
+      - threat-assessment
+      - alert-management
+    ports: ["8888:8080"]
+    environment:
+      <<: *common-env
+      SPRING_PROFILES_ACTIVE: docker
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVER_PORT: 8080
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_CAPACITY: 100
+      RATE_LIMIT_REFILL_RATE: 10
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    # ✅ Production resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1.5G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    restart: unless-stopped
+
+  topic-init:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: topic-init
+    container_name: topic-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: >-
+      "
+      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic attack-events &&
+      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic status-events &&
+      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic threat-alerts &&
+      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic minute-aggregations &&
+      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic device-health-alerts
+      "
+    restart: "no"
+
+volumes:
+  postgres_data:
+  logstash_data:
+  logstash_logs:
+
+networks:
+  default:
+    name: threat-detection-network
