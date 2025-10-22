@@ -6,6 +6,32 @@
 
 ---
 
+## 🎯 文档导航指南 (重要提醒)
+
+**请始终按照以下标准三步流程使用文档系统：**
+
+### 📋 第一步：从项目根目录的 README.md 开始
+- **位置**: `/README.md` (项目根目录)
+- **目的**: 了解项目整体概况、架构、技术栈、快速启动
+- **内容**: 系统架构介绍、部署指南、核心特性说明
+
+### 🔍 第二步：查看本文档 (DOCUMENTATION_INDEX.md) 进行导航
+- **位置**: `docs/DOCUMENTATION_INDEX.md` (您正在阅读的文档)
+- **目的**: 获取完整的文档目录，快速定位所需信息
+- **内容**: 文档分类导航、搜索指南、使用统计
+
+### 📂 第三步：根据具体需求进入相应子目录
+- **API文档**: `docs/api/` - REST API接口详细说明
+- **设计规范**: `docs/design/` - 架构设计和技术规范
+- **测试指南**: `docs/testing/` - 测试方法和自动化脚本
+- **构建部署**: `docs/build/` - Docker构建和部署指南
+- **审计报告**: `docs/audit/` - 代码质量和安全审计
+- **修复记录**: `docs/fixes/` - Bug修复和技术债务清理
+
+**💡 提示**: 这三步流程确保您能够高效地找到所需信息，避免在文档海洋中迷失方向。
+
+---
+
 ## 📖 快速导航
 
 ### 🚀 核心文档 (docs/ 根目录)
@@ -203,23 +229,44 @@ docs/
 
 ---
 
-## 🚀 快速开始
+## 🚀 快速开始 (标准导航流程)
 
-### 新开发者
-1. 阅读 [README.md](README.md) 了解项目概况
-2. 查看 [DEVELOPMENT_PLAN_AND_PROGRESS.md](DEVELOPMENT_PLAN_AND_PROGRESS.md) 了解当前状态
-3. 参考 [USAGE_GUIDE.md](guides/USAGE_GUIDE.md) 开始使用
-4. 查看 [TESTING_PRINCIPLES.md](TESTING_PRINCIPLES.md) 了解测试方法
+### 📋 所有用户的统一入口 (必循三步)
 
-### API开发者
-1. 查看 [API_COLLECTION_AND_REFERENCE.md](API_COLLECTION_AND_REFERENCE.md) 了解API概览
-2. 深入 [api/](api/) 目录查看详细API文档
-3. 参考 [CONTAINER_ARCHITECTURE_AND_APIS.md](CONTAINER_ARCHITECTURE_AND_APIS.md) 了解服务架构
+**第一步**: 从项目根目录的 [README.md](../README.md) 开始
+- 了解项目整体架构和技术栈
+- 查看快速启动指南和系统特性
 
-### 运维人员
-1. 查看 [CONTAINER_ARCHITECTURE_AND_APIS.md](CONTAINER_ARCHITECTURE_AND_APIS.md) 了解部署架构
-2. 参考 [DATA_STRUCTURES_AND_CONNECTIONS.md](DATA_STRUCTURES_AND_CONNECTIONS.md) 了解数据库配置
-3. 查看 [build/](build/) 目录了解构建和部署
+**第二步**: 返回本文档进行导航定位
+- 浏览文档分类和目录结构
+- 根据需求类型选择相应文档
+
+**第三步**: 深入具体子目录获取详细信息
+- 技术文档 → 相应子目录
+- API文档 → `docs/api/`
+- 部署指南 → `docs/build/`
+
+### 🎯 不同角色推荐路径
+
+#### 新开发者 (推荐完全遵循三步流程)
+1. 📖 [README.md](../README.md) → 项目概况
+2. 📚 [本文档](DOCUMENTATION_INDEX.md) → 导航定位  
+3. 📂 [USAGE_GUIDE.md](guides/USAGE_GUIDE.md) → 详细使用指南
+
+#### API开发者
+1. 📖 [README.md](../README.md) → 基础了解
+2. 📚 [本文档](DOCUMENTATION_INDEX.md) → 定位API文档
+3. 📂 [api/](api/) → 具体API接口文档
+
+#### 运维人员  
+1. 📖 [README.md](../README.md) → 部署概览
+2. 📚 [本文档](DOCUMENTATION_INDEX.md) → 查找部署文档
+3. 📂 [build/](build/) → 构建和部署指南
+
+#### 测试人员
+1. 📖 [README.md](../README.md) → 系统架构
+2. 📚 [本文档](DOCUMENTATION_INDEX.md) → 测试文档导航
+3. 📂 [testing/](testing/) → 测试方法和脚本
 
 ---
 
