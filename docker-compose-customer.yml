@@ -1,5 +1,12 @@
 version: '3.8'
 
+# ✅ Common environment variables for consistent config
+x-common-env: &common-env
+  LOGGING_LEVEL_ROOT: "WARN"
+  LOGGING_LEVEL_COM_THREATDETECTION: "INFO"
+  SPRING_JPA_OPEN_IN_VIEW: "true"
+  SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "false"
+
 services:
   # PostgreSQL Database
   postgres:
@@ -22,14 +29,30 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    # ✅ Production resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    restart: unless-stopped
 
   # Customer Management Service
   customer-management:
     build:
       context: ./services/customer-management
       dockerfile: Dockerfile
+      # ✅ Prevent layer caching issues
+      cache_from: []
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+    image: customer-management:latest
     container_name: customer-management-service
     environment:
+      <<: *common-env
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
       SPRING_DATASOURCE_USERNAME: threat_user
@@ -48,6 +71,15 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    # ✅ Production resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1.5G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
     restart: unless-stopped
 
 volumes:

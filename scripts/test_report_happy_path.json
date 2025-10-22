@@ -1,0 +1,19 @@
+{
+  "timestamp": "$(date -Iseconds)",
+  "environment": "development",
+  "services": {
+    "customer_management": "http://localhost:8084",
+    "alert_management": "http://localhost:8082",
+    "data_ingestion": "http://localhost:8080",
+    "threat_assessment": "http://localhost:8083",
+    "api_gateway": "http://localhost:8888"
+  },
+  "test_results": [],
+  "summary": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0,
+    "success_rate": "0%"
+  }
+}

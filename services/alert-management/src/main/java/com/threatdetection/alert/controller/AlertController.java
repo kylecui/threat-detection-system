@@ -68,13 +68,22 @@ public class AlertController {
      * 获取告警详情
      */
     @GetMapping("/{id}")
-    @Operation(summary = "获取告警详情", description = "根据ID获取告警详细信息")
-    public ResponseEntity<Alert> getAlert(
-            @Parameter(description = "告警ID") @PathVariable Long id) {
-
-        Optional<Alert> alert = alertService.findById(id);
-        return alert.map(ResponseEntity::ok)
-                   .orElse(ResponseEntity.notFound().build());
+    @Operation(summary = "Get alert by ID", description = "Retrieve a specific alert by its ID")
+    public ResponseEntity<?> getAlert(
+            @Parameter(description = "Alert ID")
+            @PathVariable Long id) {
+        logger.info("Fetching alert with ID: {}", id);
+        try {
+            Optional<Alert> alert = alertService.findById(id);
+            if (alert.isEmpty()) {
+                logger.warn("Alert not found: {}", id);
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.ok(alert.get());
+        } catch (Exception e) {
+            logger.error("Error fetching alert: {}", id, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     /**

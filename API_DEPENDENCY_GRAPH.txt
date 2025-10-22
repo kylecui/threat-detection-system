@@ -1,0 +1,517 @@
+````text
+API 调用链与依赖关系图
+=====================
+
+生成日期: 2025-10-21
+总共分析: 58个API端点 + 3个关键业务流程
+
+═══════════════════════════════════════════════════════════════
+
+【流程1】 创建客户 → 绑定设备 → 配置通知
+───────────────────────────────────────
+
+Step 1: 创建客户
+  ┌─ POST /api/v1/customers
+  │  Request: {customerId, companyName, contactEmail, ...}
+  │  Port: 8084 (Customer-Management)
+  │  前置条件: customerId唯一性检查
+  │  后置条件: 创建customer记录
+  │  Response: CustomerResponse {customerId, createdAt, ...}
+  │
+  └─ 【检查点1】customerId是否有效且不重复
+     └─ DB: INSERT INTO customers (customer_id, ...) 
+        VALUES (?, ...)
+
+Step 2: 绑定设备
+  ┌─ POST /api/v1/customers/{customerId}/devices
+  │  Request: {devSerial, deviceType, location, ...}
+  │  Path Param: customerId
+  │  Port: 8084 (Customer-Management)
+  │  前置条件: 
+  │    ✓ 客户存在 (Step 1创建)
+  │    ✓ 设备配额未满 (DeviceQuota表)
+  │  后置条件: 
+  │    ✓ device_customer_mapping记录创建
+  │    ✓ 更新customer_device_quota表
+  │  Response: DeviceMappingResponse {customerId, devSerial, ...}
+  │
+  ├─ 【检查点2.1】client验证: customerId存在
+  ├─ 【检查点2.2】检查配额: 
+  │  └─ SELECT device_count FROM customer_device_quota 
+  │     WHERE customer_id = ? 
+  │     COMPARE device_count < QUOTA_LIMIT (默认100)
+  └─ 【检查点2.3】插入映射记录
+     └─ INSERT INTO device_customer_mapping 
+        (customer_id, dev_serial, ...) VALUES (?, ?, ...)
+
+Step 3: 配置通知
+  ┌─ PUT /api/v1/customers/{customerId}/notification-config
+  │  Request: {
+  │    emailEnabled: true,
+  │    slackEnabled: false,
+  │    webhookEnabled: true,
+  │    emailList: ["admin@company.com"],
+  │    minSeverityLevel: "HIGH"
+  │  }
+  │  Path Param: customerId
+  │  Port: 8084 (Customer-Management)
+  │  前置条件: 
+  │    ✓ 客户存在 (Step 1创建)
+  │    ✓ 通知渠道有效
+  │  后置条件: 
+  │    ✓ customer_notification_configs记录更新/创建
+  │  Response: NotificationConfigResponse
+  │
+  ├─ 【检查点3.1】验证emailList格式有效
+  ├─ 【检查点3.2】检查SMTP配置已就位
+  │  └─ SELECT * FROM smtp_configs 
+  │     WHERE is_default = true OR id = ?
+  └─ 【检查点3.3】更新/插入配置
+     └─ UPSERT INTO customer_notification_configs 
+        (customer_id, email_enabled, ...) 
+        VALUES (?, ?, ...)
+
+业务流程验证检查点总结:
+  ✓ 多租户隔离: 所有3步都验证customerId权限
+  ✓ 约束检查: 配额、格式、唯一性
+  ✓ 依赖关系: Step1→Step2→Step3线性依赖
+  ✓ 数据一致性: 3个不同表的同步更新
+
+
+═══════════════════════════════════════════════════════════════
+
+【流程2】 日志摄取 → 威胁评分 → 告警生成 (异步流)
+──────────────────────────────────────────
+
+Step 1: 日志摄取 (同步)
+  ┌─ POST /api/v1/logs/ingest 或 /batch
+  │  Request (单条): rawLog (JSON string)
+  │  Request (批量): {logs: [log1, log2, ...]}
+  │  Port: 8080 (Data-Ingestion)
+  │  前置条件: 
+  │    ✓ 日志格式有效 (syslog_version, dev_serial, attack_mac, ...)
+  │    ✓ devSerial→customerId映射存在
+  │  处理流程:
+  │    1. LogParserService.parseLog(rawLog)
+  │       └─ 提取: dev_serial, attack_mac, attack_ip, response_ip, response_port, timestamp
+  │    2. DevSerialToCustomerMappingService.resolveCustomerId(devSerial)
+  │       └─ 查询: DB: SELECT customer_id FROM device_customer_mapping 
+  │          WHERE dev_serial = ? AND active = true
+  │    3. 构造AttackEvent对象 (包含customerId)
+  │    4. KafkaProducerService.sendAttackEvent(event)
+  │       └─ 发送到: Kafka topic "attack-events" (分区key: customerId)
+  │  Response: {success or error}
+  │  性能: 目标10000+ events/sec
+  │
+  ├─ 【检查点1.1】日志解析成功
+  ├─ 【检查点1.2】devSerial→customerId映射正确
+  └─ 【检查点1.3】Kafka发送成功
+
+
+Step 2: 流处理 - 聚合 (Kafka+Flink, 异步)
+  │
+  ├─ 消费: Kafka topic "attack-events"
+  │  消息格式: {
+  │    customerId, attackMac, attackIp, responseIp, responsePort, 
+  │    devSerial, timestamp, logTime
+  │  }
+  │
+  ├─ 三层窗口处理 (Watermark容差: 1分钟)
+  │  
+  │  ├─ 窗口1 (30秒): 快速响应层 (勒索软件检测)
+  │  │  └─ 分组: (customerId, attackMac)
+  │  │     聚合: COUNT, DISTINCT ips, DISTINCT ports, DISTINCT devices
+  │  │     输出: minute-aggregations (30s+5min+15min都产生)
+  │  │
+  │  ├─ 窗口2 (5分钟): 主要分析层 (横向移动检测)
+  │  │  └─ 分组: (customerId, attackMac)
+  │  │     聚合: SUM(attackCount), COUNT(DISTINCT ips), ...
+  │  │
+  │  └─ 窗口3 (15分钟): APT检测层 (长期威胁)
+  │     └─ 分组: (customerId, attackMac)
+  │        聚合: 长期趋势数据
+  │
+  └─ 输出: Kafka topic "minute-aggregations"
+     消息格式: {
+       customerId, attackMac, 
+       uniqueIps, uniquePorts, uniqueDevices,
+       attackCount, timestamp
+     }
+
+
+Step 3: 威胁评分计算 (Flink, 异步)
+  ┌─ 消费: Kafka topic "minute-aggregations"
+  │  
+  ├─ 评分算法:
+  │  threatScore = (attackCount × uniqueIps × uniquePorts) 
+  │              × timeWeight 
+  │              × ipWeight 
+  │              × portWeight 
+  │              × deviceWeight
+  │
+  ├─ 权重计算:
+  │  ├─ timeWeight (时间段): 
+  │  │  ├─ 0:00-6:00 (深夜): 1.2
+  │  │  ├─ 6:00-9:00 (早晨): 1.1
+  │  │  ├─ 9:00-17:00 (工作): 1.0
+  │  │  ├─ 17:00-21:00 (傍晚): 0.9
+  │  │  └─ 21:00-24:00 (夜间): 0.8
+  │  │
+  │  ├─ ipWeight (IP多样性):
+  │  │  ├─ uniqueIps=1: 1.0
+  │  │  ├─ uniqueIps=2-3: 1.3
+  │  │  ├─ uniqueIps=4-5: 1.5
+  │  │  ├─ uniqueIps=6-10: 1.7
+  │  │  └─ uniqueIps>10: 2.0
+  │  │
+  │  ├─ portWeight (端口多样性):
+  │  │  ├─ uniquePorts=1: 1.0
+  │  │  ├─ uniquePorts=2-3: 1.2
+  │  │  ├─ uniquePorts=4-5: 1.4
+  │  │  ├─ uniquePorts=6-10: 1.6
+  │  │  ├─ uniquePorts=11-20: 1.8
+  │  │  └─ uniquePorts>20: 2.0
+  │  │
+  │  └─ deviceWeight (设备覆盖):
+  │     ├─ uniqueDevices=1: 1.0
+  │     └─ uniqueDevices≥2: 1.5
+  │
+  ├─ 威胁等级分类:
+  │  ├─ INFO: score < 10
+  │  ├─ LOW: 10 ≤ score < 50
+  │  ├─ MEDIUM: 50 ≤ score < 100
+  │  ├─ HIGH: 100 ≤ score < 200
+  │  └─ CRITICAL: score ≥ 200
+  │
+  └─ 输出: Kafka topic "threat-alerts"
+     消息格式: {
+       customerId, attackMac, 
+       threatScore, threatLevel,
+       attackCount, uniqueIps, uniquePorts, uniqueDevices,
+       timestamp
+     }
+
+
+Step 4: 威胁评估持久化 (同步, Threat-Assessment Service)
+  ┌─ 消费: Kafka topic "threat-alerts"
+  │  
+  ├─ 将每条告警插入: PostgreSQL threat_assessments表
+  │  ├─ INSERT INTO threat_assessments (
+  │  │   customer_id, attack_mac, threat_score, threat_level,
+  │  │   attack_count, unique_ips, unique_ports, unique_devices,
+  │  │   assessment_time, created_at
+  │  │ ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+  │  └─ 创建索引: (customer_id, attack_mac), (assessment_time), (threat_level)
+  │
+  ├─ 【检查点4.1】数据完整性: 所有字段非null
+  ├─ 【检查点4.2】多租户隔离: customer_id正确
+  └─ 【检查点4.3】性能: 批量插入优化
+
+
+Step 5: 告警创建与通知 (内部触发)
+  ┌─ 当 threatLevel >= 客户config.minSeverityLevel 时
+  │  
+  ├─ 触发: POST /api/v1/alerts (内部调用)
+  │  ├─ Request: {
+  │  │   customerId, title, description, severity, threatId, ...
+  │  │ }
+  │  └─ Response: Alert {id, status: OPEN, ...}
+  │
+  ├─ 根据Customer通知配置发送通知
+  │  ├─ 查询: GET /api/notification-config/customer/{customerId}
+  │  │  (Alert-Management内部只读API)
+  │  ├─ 提取: emailEnabled, emailList, slackEnabled, ...
+  │  └─ 发送通知:
+  │     ├─ 如果emailEnabled: 
+  │     │  ├─ 查询SMTP配置
+  │     │  └─ 发送邮件到emailList
+  │     ├─ 如果slackEnabled:
+  │     │  └─ POST到Slack Webhook
+  │     └─ 如果webhookEnabled:
+  │        └─ POST到客户webhook URL
+  │
+  └─ 【检查点5】通知发送成功/失败记录
+
+
+整体流程时间轴:
+  T+0s:    API /logs/ingest 接收日志
+  T+1s:    日志解析+Kafka发送完成
+  T+5-30s: Flink 30s窗口聚合完成
+  T+60s:   Flink 威胁评分计算完成
+  T+70s:   Kafka发送threat-alerts
+  T+80s:   Threat-Assessment持久化
+  T+90s:   告警创建+通知发送
+  T+120s~240s: 用户收到通知 (邮件延迟)
+  
+  总延迟: < 4分钟 ✓
+
+
+═══════════════════════════════════════════════════════════════
+
+【流程3】 告警管理全生命周期
+──────────────────────────
+
+告警状态转移图:
+  
+  ┌─────────────────────────────────────────────────┐
+  │          告警创建 (POST /api/v1/alerts)          │
+  │         Response: Alert {id, status: OPEN}      │
+  └────────────────────┬────────────────────────────┘
+                       │
+                       ↓
+  ┌─────────────────────────────────────────────────┐
+  │              状态: OPEN (初始)                   │
+  │           [等待处理 - 触发通知]                 │
+  └────────────────────┬────────────────────────────┘
+                       │
+         ┌─────────────┼─────────────┐
+         │             │             │
+         ↓             ↓             ↓
+    [2小时?]     [2小时?]     [2小时?]
+         
+    情况1:         情况2:        情况3:
+  已处理        未处理        已处理
+    ↓             ↓             ↓
+
+  POST            自动          POST
+  /acknowledge    升级          /resolve
+     ↓         (可选规则)        ↓
+     
+  ACKNOWLEDGED    ESCALATED    RESOLVED
+     │             │             │
+     │             ↓             │
+     │         [通知升级]        │
+     │             │             │
+     │             ↓             │
+     │         POST /resolve     │
+     │             │             │
+     └─────────────┴─────────────┘
+             │
+             ↓
+  状态: RESOLVED (最终)
+  [等待存档]
+           │
+           ├─ ≥7天?
+           │   ├─ 是 → POST /archive
+           │   │       └─ 移至档案库
+           │   └─ 否 → 保留在活跃列表
+           │
+           └─ 可随时:
+              └─ GET /analytics (统计分析)
+
+
+相关API调用:
+
+  1. POST /api/v1/alerts/{id}/acknowledge
+     ├─ 前置: status = OPEN
+     ├─ 后置: status = ACKNOWLEDGED
+     └─ 响应: Alert {id, status: ACKNOWLEDGED, ...}
+
+  2. POST /api/v1/alerts/{id}/escalate (手动)
+     ├─ 前置: status in [OPEN, ACKNOWLEDGED]
+     ├─ 后置: status = ESCALATED
+     ├─ 触发: 升级通知 (到管理员)
+     └─ 响应: {success}
+
+  3. POST /api/v1/alerts/{id}/cancel-escalation
+     ├─ 前置: status = ESCALATED
+     ├─ 后置: status = OPEN (或ACKNOWLEDGED)
+     └─ 响应: {success}
+
+  4. POST /api/v1/alerts/{id}/resolve
+     ├─ 前置: status in [OPEN, ACKNOWLEDGED, ESCALATED]
+     ├─ 后置: status = RESOLVED
+     ├─ 请求: {resolution: "已修复XXX", resolvedBy: "admin"}
+     └─ 响应: Alert {id, status: RESOLVED, ...}
+
+  5. POST /api/v1/alerts/{id}/assign
+     ├─ 前置: -
+     ├─ 后置: assignedTo字段更新
+     ├─ 请求: {assignedTo: "user@company.com"}
+     └─ 响应: Alert {id, assignedTo, ...}
+
+  6. GET /api/v1/alerts?status=OPEN&severity=HIGH&page=0&size=20
+     ├─ 查询活跃告警
+     ├─ 支持过滤: status, severity, startTime, endTime
+     └─ 响应: Page<Alert>
+
+  7. GET /api/v1/alerts/analytics
+     ├─ 统计数据: totalCount, openCount, acknowledgedCount, resolvedCount
+     ├─ 平均处理时间: avgResponseTime
+     └─ 响应: AlertStatistics
+
+  8. POST /api/v1/alerts/archive
+     ├─ 前置: status = RESOLVED AND createdAt < NOW() - 7天
+     ├─ 后置: 移至档案库
+     └─ 响应: {archived: true, count: n}
+
+
+═══════════════════════════════════════════════════════════════
+
+【API之间的隐性依赖】
+──────────────────
+
+依赖1: Data-Ingestion ← Customer-Management
+  ├─ 触发条件: 日志包含devSerial
+  ├─ 解析流程: devSerial → customerId
+  ├─ 查询: DB SELECT customer_id FROM device_customer_mapping 
+  │       WHERE dev_serial = ? AND active = true
+  ├─ 后果如果出错:
+  │   └─ 日志无法关联customer_id → Kafka消息缺少customerId → 后续无法处理
+  └─ 验证方法:
+     └─ GET /api/v1/logs/customer-mapping/{devSerial}
+
+
+依赖2: Stream-Processing ← Data-Ingestion
+  ├─ 触发条件: Kafka topic attack-events有新消息
+  ├─ 消费: AttackEvent {customerId, attackMac, ...}
+  ├─ 聚合: 按 (customerId, attackMac) 分组
+  ├─ 后果如果出错:
+  │   └─ Kafka消息格式错误 → Flink窗口处理失败 → 无威胁评分
+  └─ 验证方法:
+     └─ Kafka console consumer查看消息格式
+
+
+依赖3: Threat-Assessment ← Stream-Processing
+  ├─ 触发条件: Kafka topic threat-alerts有新消息
+  ├─ 消费: ThreatAlert {customerId, attackMac, threatScore, ...}
+  ├─ 持久化: INSERT INTO threat_assessments
+  ├─ 后果如果出错:
+  │   └─ 消息丢失 → API无法查询 → 前端无数据
+  └─ 验证方法:
+     ├─ GET /api/v1/assessment/assessments?customer_id=xxx
+     └─ SELECT COUNT(*) FROM threat_assessments WHERE customer_id = ?
+
+
+依赖4: Alert-Management ← Threat-Assessment
+  ├─ 触发条件: threatScore & threatLevel >= config
+  ├─ 创建: POST /api/v1/alerts (内部)
+  ├─ 后果如果出错:
+  │   └─ 虽然有威胁评分但无告警 → 用户不知道
+  └─ 验证方法:
+     └─ POST /api/v1/logs/ingest 后查询 GET /api/v1/alerts
+
+
+依赖5: Alert-Management Notifications ← Customer-Management
+  ├─ 触发条件: 告警创建时
+  ├─ 查询: 获取customer通知配置
+  ├─ 调用: 
+  │   └─ 内部API GET /api/notification-config/customer/{customerId}
+  │       (Alert-Management只读副本)
+  ├─ 后果如果出错:
+  │   └─ 无法发送通知 → 客户不知道威胁
+  └─ 验证方法:
+     ├─ 创建客户后配置通知
+     ├─ 创建告警
+     └─ 检查是否收到邮件/Slack消息
+
+
+═══════════════════════════════════════════════════════════════
+
+【多租户隔离检查清单】
+──────────────────
+
+每个API都需要验证:
+
+□ 路径参数中有customerId
+  例: /api/v1/customers/{customerId}/devices
+
+□ 查询参数中有customer_id
+  例: GET /api/v1/assessment/assessments?customer_id=xxx
+
+□ 请求体中有customerId (如适用)
+  例: {customerId, ..., other fields}
+
+□ 数据库查询带WHERE customer_id = ?过滤
+  例: SELECT * FROM devices WHERE customer_id = ? AND dev_serial = ?
+
+□ 响应中包含customerId (便于审计)
+  例: {customerId, devSerial, ...}
+
+□ 错误消息包含customerId (便于排查)
+  例: "Customer customer-001 not found"
+
+□ 多租户测试: 创建两个不同customer，验证数据隔离
+  └─ Customer A 的设备不能被 Customer B 访问
+
+
+═══════════════════════════════════════════════════════════════
+
+【关键前置条件总结】
+──────────────────
+
+启动系统前必须确保:
+
+1. 数据库就绪
+   ├─ PostgreSQL 15+ 运行
+   ├─ 所有表已创建 (20+表)
+   ├─ 索引已建立
+   └─ 示例数据已加载
+
+2. Kafka就绪
+   ├─ Kafka 3.4+ 运行
+   ├─ Zookeeper 运行
+   ├─ Topics已创建: attack-events, minute-aggregations, threat-alerts, status-events
+   └─ Topic分区按customerId分配
+
+3. Flink就绪
+   ├─ Flink 1.17+ TaskManager运行
+   ├─ 所有Stream Processing jobs部署
+   └─ 窗口配置生效 (30s, 5min, 15min)
+
+4. 所有微服务启动
+   ├─ Customer-Management (8084)
+   ├─ Alert-Management (8082)
+   ├─ Data-Ingestion (8080)
+   ├─ Threat-Assessment (8083)
+   └─ API-Gateway (8888) [最后启动]
+
+5. 连接性检查
+   ├─ API-Gateway → 所有后端服务 (检查路由)
+   ├─ Data-Ingestion → Kafka (检查producer)
+   ├─ Flink → Kafka (检查consumer)
+   ├─ Threat-Assessment → PostgreSQL (检查连接)
+   └─ Alert-Management → SMTP (检查邮件)
+
+6. 初始化数据
+   ├─ 创建至少1个客户: POST /api/v1/customers
+   ├─ 创建至少1个设备映射: POST /api/v1/customers/{id}/devices
+   ├─ 配置通知: PUT /api/v1/customers/{id}/notification-config
+   └─ 验证: GET /api/v1/customers/{id}/devices
+
+
+═══════════════════════════════════════════════════════════════
+
+【性能指标检查】
+──────────────
+
+需要在测试中验证:
+
+单个API响应时间:
+  ├─ GET /api/v1/customers: < 100ms
+  ├─ POST /api/v1/logs/ingest: < 50ms
+  ├─ GET /api/v1/assessment/assessments: < 200ms (涉及DB查询)
+  └─ 其他API: < 100ms
+
+吞吐量:
+  ├─ Data-Ingestion: 目标10000+ events/sec
+  ├─ Flink处理: 目标10000+ events/sec (30s窗口)
+  └─ Threat-Assessment: 目标1000+ assessments/sec
+
+延迟:
+  ├─ 端到端: < 4分钟 (日志→告警)
+  ├─ 威胁评分: < 2分钟 (聚合→评分)
+  └─ 通知发送: < 30秒 (告警创建→邮件发送开始)
+
+资源使用:
+  ├─ 单个Pod内存: < 2GB
+  ├─ 单个Pod CPU: < 2核
+  └─ 数据库连接池: 20-50
+
+
+════════════════════════════════════════════════════════════
+
+文档完成日期: 2025-10-21
+下一步: 使用此文档指导API测试脚本编写和验证
+
+````

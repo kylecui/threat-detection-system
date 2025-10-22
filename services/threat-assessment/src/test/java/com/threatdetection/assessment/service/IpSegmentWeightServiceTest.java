@@ -10,6 +10,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -48,7 +49,7 @@ class IpSegmentWeightServiceTest {
             .segmentName("Private-192.168.0.0/16")
             .ipRangeStart("192.168.0.0")
             .ipRangeEnd("192.168.255.255")
-            .weight(0.8)
+            .weight(new BigDecimal("0.8"))
             .category("PRIVATE")
             .description("内网C类地址段")
             .priority(10)
@@ -61,7 +62,7 @@ class IpSegmentWeightServiceTest {
             .segmentName("Russia-Moscow")
             .ipRangeStart("5.3.0.0")
             .ipRangeEnd("5.3.255.255")
-            .weight(1.8)
+            .weight(new BigDecimal("1.8"))
             .category("HIGH_RISK_REGION")
             .description("俄罗斯莫斯科地区")
             .priority(80)
@@ -74,7 +75,7 @@ class IpSegmentWeightServiceTest {
             .segmentName("Malicious-Botnet-1")
             .ipRangeStart("45.142.120.0")
             .ipRangeEnd("45.142.123.255")
-            .weight(2.0)
+            .weight(new BigDecimal("2.0"))
             .category("MALICIOUS")
             .description("已知僵尸网络C2服务器")
             .priority(100)
@@ -184,7 +185,7 @@ class IpSegmentWeightServiceTest {
         // Then
         assertTrue(config.isPresent());
         assertEquals("Private-192.168.0.0/16", config.get().getSegmentName());
-        assertEquals(0.8, config.get().getWeight(), 0.01);
+        assertEquals(new BigDecimal("0.8"), config.get().getWeight());
     }
     
     @Test
@@ -219,8 +220,8 @@ class IpSegmentWeightServiceTest {
         
         // Then
         assertEquals(2, result.size());
-        assertEquals(2.0, result.get(0).getWeight(), 0.01);
-        assertEquals(1.8, result.get(1).getWeight(), 0.01);
+        assertEquals(new BigDecimal("2.0"), result.get(0).getWeight());
+        assertEquals(new BigDecimal("1.8"), result.get(1).getWeight());
         verify(repository, times(1)).findHighRiskSegments(1.7);
     }
     
@@ -238,7 +239,7 @@ class IpSegmentWeightServiceTest {
         // Then
         assertEquals(1, result.size());
         assertEquals("MALICIOUS", result.get(0).getCategory());
-        assertEquals(2.0, result.get(0).getWeight(), 0.01);
+        assertEquals(new BigDecimal("2.0"), result.get(0).getWeight());
     }
     
     // ==================== 分类查询测试 ====================
@@ -257,7 +258,7 @@ class IpSegmentWeightServiceTest {
         // Then
         assertEquals(1, result.size());
         assertEquals("PRIVATE", result.get(0).getCategory());
-        assertEquals(0.8, result.get(0).getWeight(), 0.01);
+        assertEquals(new BigDecimal("0.8"), result.get(0).getWeight());
     }
     
     // ==================== 内网检测测试 ====================

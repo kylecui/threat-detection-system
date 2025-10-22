@@ -79,7 +79,7 @@ public class IpSegmentWeightService {
             Optional<IpSegmentWeightConfig> config = repository.findByIpAddress(ipAddress);
             
             if (config.isPresent()) {
-                double weight = config.get().getWeight();
+                double weight = config.get().getWeight().doubleValue();
                 log.debug("Found segment weight for IP {}: {} (segment: {})", 
                          ipAddress, weight, config.get().getSegmentName());
                 return weight;

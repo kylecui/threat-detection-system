@@ -1,5 +1,6 @@
 package com.threatdetection.alert.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -7,11 +8,12 @@ import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-import org.hibernate.type.descriptor.jdbc.VarcharJdbcType;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,7 +33,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Alert {
+public class Alert implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -72,16 +75,18 @@ public class Alert {
     @Column(columnDefinition = "DOUBLE PRECISION")
     private Double threatScore;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "alert_affected_assets",
                      joinColumns = @JoinColumn(name = "alert_id"))
     @Column(name = "asset")
+    @JsonIgnore
     private List<String> affectedAssets = new ArrayList<>();
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "alert_recommendations",
                      joinColumns = @JoinColumn(name = "alert_id"))
     @Column(name = "recommendation")
+    @JsonIgnore
     private List<String> recommendations = new ArrayList<>();
 
     @Size(max = 100)

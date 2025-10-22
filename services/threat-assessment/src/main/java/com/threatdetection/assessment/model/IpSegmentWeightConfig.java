@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
@@ -99,8 +100,8 @@ public class IpSegmentWeightConfig {
     @NotNull(message = "权重不能为空")
     @DecimalMin(value = "0.5", message = "权重不能小于0.5")
     @DecimalMax(value = "2.0", message = "权重不能大于2.0")
-    @Column(name = "weight", nullable = false, precision = 5, scale = 2)
-    private Double weight;
+    @Column(name = "weight", nullable = false, columnDefinition = "DECIMAL(3,2)")
+    private BigDecimal weight;
     
     /**
      * 网段分类

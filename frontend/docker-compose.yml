@@ -9,6 +9,11 @@ services:
       context: .
       dockerfile: Dockerfile
       target: development
+      # ✅ Prevent layer caching
+      cache_from: []
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+    image: threat-detection-ui:dev-latest
     container_name: threat-detection-ui-dev
     ports:
       - "3000:3000"
@@ -35,6 +40,15 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    # ✅ Development resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
   # =====================
   # 生产环境前端
@@ -44,6 +58,11 @@ services:
       context: .
       dockerfile: Dockerfile
       target: production
+      # ✅ Prevent layer caching
+      cache_from: []
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+    image: threat-detection-ui:prod-latest
     container_name: threat-detection-ui-prod
     ports:
       - "80:80"
@@ -53,6 +72,13 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # ✅ Production resource limits
     deploy:
       resources:
         limits:

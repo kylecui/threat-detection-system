@@ -5,8 +5,6 @@ import com.threatdetection.alert.repository.AlertRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -20,7 +18,6 @@ import java.util.Optional;
  * 告警管理核心服务
  */
 @Service
-@Transactional
 public class AlertService {
 
     private static final Logger logger = LoggerFactory.getLogger(AlertService.class);
@@ -34,6 +31,7 @@ public class AlertService {
     /**
      * 创建新告警
      */
+    @Transactional
     public Alert createAlert(Alert alert) {
         logger.info("Creating new alert: {}", alert.getTitle());
 
@@ -59,7 +57,6 @@ public class AlertService {
     /**
      * 根据ID查找告警
      */
-    @Cacheable(value = "alerts", key = "#id")
     public Optional<Alert> findById(Long id) {
         return alertRepository.findById(id);
     }
@@ -67,7 +64,7 @@ public class AlertService {
     /**
      * 更新告警状态
      */
-    @CacheEvict(value = "alerts", key = "#id")
+    @Transactional
     public Alert updateStatus(Long id, AlertStatus newStatus) {
         Alert alert = alertRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Alert not found: " + id));
@@ -81,7 +78,7 @@ public class AlertService {
     /**
      * 解决告警
      */
-    @CacheEvict(value = "alerts", key = "#id")
+    @Transactional
     public Alert resolveAlert(Long id, String resolution, String resolvedBy) {
         Alert alert = alertRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Alert not found: " + id));
@@ -95,7 +92,7 @@ public class AlertService {
     /**
      * 分配告警
      */
-    @CacheEvict(value = "alerts", key = "#id")
+    @Transactional
     public Alert assignAlert(Long id, String assignedTo) {
         Alert alert = alertRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Alert not found: " + id));
@@ -188,7 +185,6 @@ public class AlertService {
     /**
      * 清理缓存
      */
-    @CacheEvict(value = "alerts", allEntries = true)
     public void clearCache() {
         logger.info("Cleared alert cache");
     }
