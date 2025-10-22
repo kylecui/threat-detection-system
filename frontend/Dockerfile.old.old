@@ -1,0 +1,36 @@
+# ========= 依赖缓存层 =========
+FROM node:20-alpine AS deps
+WORKDIR /app
+
+# 只复制包清单，充分利用缓存
+COPY package.json package-lock.json* ./
+RUN npm ci --legacy-peer-deps
+
+# ========= 构建层（编译最新源码） =========
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# 复制 node_modules（来自 deps）
+COPY --from=deps /app/node_modules /app/node_modules
+
+# 再复制源码 —— 源码变化会触发重新构建
+COPY . .
+
+# 可选：把 Git 提交号写进镜像，方便核对
+ARG COMMIT_SHA=unknown
+RUN echo "$COMMIT_SHA" > .build-commit
+
+# 生产构建（根据你的项目命令修改）
+RUN npm run build
+
+# ========= 运行层（静态站点） =========
+FROM nginx:alpine AS runtime
+# 用 nginx 提供静态资源
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# 可选：把提交号暴露出来便于排错（例如 /__version）
+RUN echo 'location = /__version { default_type text/plain; return 200 "ok\n"; }' \
+    > /etc/nginx/conf.d/version.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

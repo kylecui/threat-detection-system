@@ -12,6 +12,10 @@ import { ThreatLevel } from '@/types';
 import threatService from '@/services/threat';
 import dayjs from 'dayjs';
 
+// 在文件顶部 import 之后添加（或放在组件内也可）
+type PortDatum = { category: string; value: number };
+
+
 /**
  * 仪表盘页面
  * 
@@ -26,7 +30,9 @@ const Dashboard = () => {
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [recentThreats, setRecentThreats] = useState<ThreatAssessment[]>([]);
   const [trendData, setTrendData] = useState<ChartDataPoint[]>([]);
-  const [portData, setPortData] = useState<ChartDataPoint[]>([]);
+  //const [portData, setPortData] = useState<ChartDataPoint[]>([]);
+  // 原来：const [portData, setPortData] = useState<ChartDataPoint[]>([]);
+  const [portData, setPortData] = useState<PortDatum[]>([]);
   const customerId = localStorage.getItem('customer_id') || 'demo-customer';
 
   /**

@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  # ============== 开发：热更新，挂载源码（不做生产构建） ==============
+  frontend-dev:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -lc "npm ci --legacy-peer-deps && npm run dev -- --host"
+    ports:
+      - "5173:5173"         # Vite 默认端口
+    volumes:
+      - ./:/app             # 仅用于开发热更
+      - /app/node_modules   # 匿名卷，防止 node_modules 被宿主机覆盖
+    environment:
+      - NODE_ENV=development
+
+  # ============== 生产：构建静态资源 + Nginx 提供 ==============
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # 强制用我们在 Dockerfile 里定义的默认 target（runtime 是最终层）
+      # 不指定 target，默认就是 Dockerfile 最后一层
+      args:
+        COMMIT_SHA: ${COMMIT_SHA:-unknown}
+      # 强制不使用缓存（也可在命令行传 --no-cache）
+      cache_from: []
+    image: threat-detection-ui:prod
+    ports:
+      - "8080:80"
+    # ⚠️ 生产一定不要挂源代码卷，否则会覆盖 /usr/share/nginx/html
+    # volumes:   # 不要添加任何把代码挂进去的卷！
+    #   - ./:/app
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
