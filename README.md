@@ -695,6 +695,7 @@ SELECT channel, COUNT(*) as count FROM notifications GROUP BY channel;
 
 ### 🎯 核心文档 (按使用频率排序)
 - **[📚 文档索引](docs/DOCUMENTATION_INDEX.md)** ⭐ **导航起点** - 完整的文档目录和导航指南
+- **[下一步研发工作计划](docs/NEXT_DEVELOPMENT_PLAN.md)** ⭐ **最新** - 详细的研发计划和优先级
 - **[调试与测试指南](docs/debugging_and_testing_guide.md)** ⭐ **必读** - 常见问题、调试流程、最佳实践
 - **[快速参考卡片](docs/QUICK_REFERENCE.md)** - 最常用命令速查
 - **[使用指南](USAGE_GUIDE.md)** - 详细的系统使用文档
