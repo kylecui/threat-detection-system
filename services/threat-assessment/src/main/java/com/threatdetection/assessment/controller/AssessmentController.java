@@ -1,13 +1,17 @@
 package com.threatdetection.assessment.controller;
 
 import com.threatdetection.assessment.dto.*;
+import com.threatdetection.assessment.model.ThreatAssessment;
+import com.threatdetection.assessment.service.ThreatAssessmentService;
 import com.threatdetection.assessment.service.ThreatQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +26,7 @@ import java.util.Map;
  * <ul>
  *   <li>threat_assessment_query_api.md - 查询和趋势分析</li>
  *   <li>threat_assessment_overview.md - 系统概述</li>
+ *   <li>POST /evaluate - 执行威胁评估</li>
  * </ul>
  * 
  * @author ThreatDetection Team
@@ -35,9 +40,65 @@ public class AssessmentController {
     private static final Logger logger = LoggerFactory.getLogger(AssessmentController.class);
 
     private final ThreatQueryService threatQueryService;
+    private final ThreatAssessmentService threatAssessmentService;
 
-    public AssessmentController(ThreatQueryService threatQueryService) {
+    public AssessmentController(ThreatQueryService threatQueryService,
+                               ThreatAssessmentService threatAssessmentService) {
         this.threatQueryService = threatQueryService;
+        this.threatAssessmentService = threatAssessmentService;
+    }
+
+    /**
+     * 执行威胁评估
+     * 
+     * <p>API文档: POST /api/v1/assessment/evaluate
+     * <p>基于蜜罐机制的聚合攻击数据执行实时威胁评估
+     * 
+     * @param request 评估请求数据
+     * @return 评估结果
+     */
+    @PostMapping("/evaluate")
+    @Operation(summary = "Execute threat assessment",
+               description = "Evaluate threat based on aggregated attack data from honeypot detection")
+    public ResponseEntity<AssessmentResponse> evaluateThreat(
+            @Parameter(description = "Assessment request with aggregated attack data", required = true)
+            @Valid @RequestBody AssessmentRequest request) {
+        
+        logger.info("Executing threat assessment: customerId={}, attackMac={}, attackCount={}",
+                   request.getCustomerId(), request.getAttackMac(), request.getAttackCount());
+
+        try {
+            // 1. 转换请求为聚合数据
+            AggregatedAttackData data = request.toAggregatedData();
+            
+            // 2. 验证数据完整性
+            if (!data.isValid()) {
+                logger.warn("Invalid assessment request: customerId={}, attackMac={}",
+                           request.getCustomerId(), request.getAttackMac());
+                return ResponseEntity.badRequest().build();
+            }
+            
+            // 3. 执行威胁评估
+            ThreatAssessment assessment = threatAssessmentService.assessThreat(data);
+            
+            // 4. 转换为响应DTO
+            AssessmentResponse response = AssessmentResponse.fromEntity(assessment);
+            
+            logger.info("✅ Threat assessment completed: assessmentId={}, customerId={}, level={}, score={}",
+                       response.getAssessmentId(), request.getCustomerId(),
+                       response.getThreatLevel(), response.getThreatScore());
+            
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            
+        } catch (IllegalArgumentException e) {
+            logger.warn("Invalid assessment data: customerId={}, error={}",
+                       request.getCustomerId(), e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            logger.error("Error executing threat assessment: customerId={}, attackMac={}",
+                        request.getCustomerId(), request.getAttackMac(), e);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     /**

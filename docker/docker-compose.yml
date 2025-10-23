@@ -32,6 +32,7 @@ services:
       - ./06-ip-segment-weights.sql:/docker-entrypoint-initdb.d/06-ip-segment-weights.sql
       - ./07-whitelist-config.sql:/docker-entrypoint-initdb.d/07-whitelist-config.sql
       - ./08-threat-labels.sql:/docker-entrypoint-initdb.d/08-threat-labels.sql
+      - ./09-add-missing-fields.sql:/docker-entrypoint-initdb.d/09-add-missing-fields.sql
     networks:
       - threat-detection-network
     healthcheck:
