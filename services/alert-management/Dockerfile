@@ -20,10 +20,10 @@ USER appuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:8084/actuator/health || exit 1
+  CMD curl -f http://localhost:8082/actuator/health || exit 1
 
 # Expose port
-EXPOSE 8084
+EXPOSE 8082
 
 # Run the application
 ENTRYPOINT ["java", "-jar", "/app/app.jar", "--spring.profiles.active=docker"]

@@ -91,7 +91,7 @@ public class ApiGatewayApplication {
                         .setFallbackUri("forward:/fallback/data-ingestion")))
                 .uri("http://data-ingestion:8080"))
             
-            // Threat Assessment Service (8081)
+            // Threat Assessment Service (8083)
             .route("threat-assessment", r -> r
                 .path("/api/v1/assessment/**")
                 .filters(f -> f
@@ -100,10 +100,9 @@ public class ApiGatewayApplication {
                     .circuitBreaker(c -> c
                         .setName("threatAssessmentCB")
                         .setFallbackUri("forward:/fallback/threat-assessment")))
-                .uri("http://threat-assessment:8081"))
-            
+                .uri("http://threat-assessment:8083"))
+
             // Alert Management Service (8082)
-            // Alert Management Service is 8082:8084. so we should use 8084. 
             .route("alert-management", r -> r
                 .path("/api/v1/alerts/**")
                 .filters(f -> f
@@ -112,12 +111,12 @@ public class ApiGatewayApplication {
                     .circuitBreaker(c -> c
                         .setName("alertManagementCB")
                         .setFallbackUri("forward:/fallback/alert-management")))
-                .uri("http://alert-management:8084"))
+                .uri("http://alert-management:8082"))
             
             // Health Check (直接返回Gateway健康状态)
             .route("health", r -> r
                 .path("/health", "/actuator/health")
-                .uri("http://localhost:8080"))
+                .uri("http://localhost:8888"))
             
             .build();
     }

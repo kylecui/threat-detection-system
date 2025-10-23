@@ -48,7 +48,8 @@ spring:
 
 # 服务器配置
 server:
-  port: ${SERVER_PORT:8080}
+# use 8888 instead of 8088 to align with docker-compose exposure
+  port: ${SERVER_PORT:8888}
   shutdown: graceful
   
   # 错误处理

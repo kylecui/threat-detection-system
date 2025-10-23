@@ -47,9 +47,11 @@ public class Alert implements Serializable {
 
     @Size(max = 2000)
     @Column(length = 2000)
-    private String description;    @NotNull
+    private String description;    
+    @NotNull
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private AlertStatus status = AlertStatus.NEW;
 
     @NotNull
@@ -59,6 +61,7 @@ public class Alert implements Serializable {
 
     @Size(max = 100)
     @Column(length = 100)
+    @Builder.Default
     private String source = "threat-detection-system";
 
     @Size(max = 100)
@@ -80,6 +83,7 @@ public class Alert implements Serializable {
                      joinColumns = @JoinColumn(name = "alert_id"))
     @Column(name = "asset")
     @JsonIgnore
+    @Builder.Default
     private List<String> affectedAssets = new ArrayList<>();
 
     @ElementCollection(fetch = FetchType.EAGER)
@@ -87,6 +91,7 @@ public class Alert implements Serializable {
                      joinColumns = @JoinColumn(name = "alert_id"))
     @Column(name = "recommendation")
     @JsonIgnore
+    @Builder.Default
     private List<String> recommendations = new ArrayList<>();
 
     @Size(max = 100)
@@ -108,6 +113,7 @@ public class Alert implements Serializable {
     private LocalDateTime lastNotifiedAt;
 
     @Column(name = "escalation_level")
+    @Builder.Default
     private Integer escalationLevel = 0;
 
     @Column(name = "escalation_reason")

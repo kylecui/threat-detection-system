@@ -23,7 +23,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:8083/api/v1/assessment/health || exit 1
 
 # Expose port
-EXPOSE 8081
+EXPOSE 8083
 
 # Run the application
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
