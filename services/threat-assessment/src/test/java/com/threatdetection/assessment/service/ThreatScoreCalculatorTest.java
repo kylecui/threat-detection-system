@@ -28,11 +28,14 @@ class ThreatScoreCalculatorTest {
     @Mock
     private IpSegmentWeightService ipSegmentWeightService;
     
+    @Mock
+    private IpSegmentWeightServiceV4 ipSegmentWeightServiceV4;
+
     private ThreatScoreCalculator calculator;
     
     @BeforeEach
     void setUp() {
-        calculator = new ThreatScoreCalculator(portRiskService, ipSegmentWeightService);
+        calculator = new ThreatScoreCalculator(portRiskService, ipSegmentWeightService, ipSegmentWeightServiceV4);
     }
     
     // ==================== 时间权重测试 ====================

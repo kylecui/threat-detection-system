@@ -14,18 +14,23 @@ import java.util.List;
 /**
  * 威胁评分计算器 - 基于蜜罐机制的多维度评分算法
  * 
- * <p>核心公式:
+ * <p>核心公式 (V4.0双维度):
  * threatScore = (attackCount × uniqueIps × uniquePorts) 
- *             × timeWeight × ipWeight × portWeight × deviceWeight × ipSegmentWeight
+ *             × timeWeight × ipWeight × portWeight × deviceWeight 
+ *             × attackSourceWeight × honeypotSensitivityWeight
  * 
  * <p>对齐原系统:
  * total_score = count_port × sum_ip × count_attack × score_weighting
  * 
  * <p>Phase 2增强: 集成端口风险配置 (219个端口)
- * <p>Phase 3增强: 集成IP段权重配置 (186个网段)
+ * <p>Phase 3增强: 集成IP段权重配置 (186个网段) - 已被V4.0替代
+ * <p>Phase 4增强 (V4.0): 双维度IP段权重系统
+ *   - attackSourceWeight (0.5-3.0): 评估"被诱捕设备的严重性" (IoT=0.9, DB服务器=3.0)
+ *   - honeypotSensitivityWeight (1.0-3.5): 评估"攻击者意图的严重性" (管理蜜罐=3.5, 办公蜜罐=1.3)
+ *   - 关键案例: IoT(0.9) × 管理蜜罐(3.5) = 3.15 → CRITICAL威胁
  * 
  * @author Security Team
- * @version 3.0
+ * @version 4.0
  */
 @Component
 public class ThreatScoreCalculator {
@@ -33,19 +38,30 @@ public class ThreatScoreCalculator {
     private static final Logger logger = LoggerFactory.getLogger(ThreatScoreCalculator.class);
     
     private final PortRiskService portRiskService;
-    private final IpSegmentWeightService ipSegmentWeightService;
+    private final IpSegmentWeightService ipSegmentWeightService;  // 保留用于兼容性
+    private final IpSegmentWeightServiceV4 ipSegmentWeightServiceV4;  // V4.0双维度服务
     
     @Autowired
     public ThreatScoreCalculator(PortRiskService portRiskService, 
-                                 IpSegmentWeightService ipSegmentWeightService) {
+                                 IpSegmentWeightService ipSegmentWeightService,
+                                 IpSegmentWeightServiceV4 ipSegmentWeightServiceV4) {
         this.portRiskService = portRiskService;
         this.ipSegmentWeightService = ipSegmentWeightService;
+        this.ipSegmentWeightServiceV4 = ipSegmentWeightServiceV4;
     }
     
     /**
      * 计算威胁评分
      * 
-     * <p>Phase 3更新: 增加IP段权重维度
+     * <p>Phase 4更新 (V4.0): 集成双维度IP段权重
+     * 
+     * <p>双维度权重说明:
+     * - attackSourceWeight: 被诱捕设备的严重性 (IoT=0.9, 数据库服务器=3.0)
+     * - honeypotSensitivityWeight: 攻击者意图的严重性 (管理蜜罐=3.5, 办公蜜罐=1.3)
+     * - 关键案例: IoT设备访问管理蜜罐 → 0.9 × 3.5 = 3.15 → CRITICAL级别
+     * 
+     * <p>当前实施: V4.0 Phase 1 - 仅使用attackSourceWeight
+     * <p>未来增强: V4.0 Phase 2 - 需要在聚合层增加mostAccessedHoneypotIp字段以启用honeypotSensitivityWeight
      * 
      * @param data 聚合攻击数据
      * @return 威胁评分 (0.0 - 无限大)
@@ -67,19 +83,39 @@ public class ThreatScoreCalculator {
         double portWeight = calculatePortWeight(data.getUniquePorts());
         double deviceWeight = calculateDeviceWeight(data.getUniqueDevices());
         
-        // Phase 3: 计算IP段权重 (基于攻击者IP)
-        double ipSegmentWeight = 1.0; // 默认值
+        // V4.0第一维度: 攻击源严重性权重
+        double attackSourceWeight = 1.0;  // 默认值 (向后兼容)
+        
         if (data.getAttackIp() != null && !data.getAttackIp().isEmpty()) {
-            ipSegmentWeight = ipSegmentWeightService.getIpSegmentWeight(data.getAttackIp());
+            String customerId = data.getCustomerId();
+            String attackIp = data.getAttackIp();
+            
+            // 获取攻击源权重 (被诱捕设备的严重性)
+            attackSourceWeight = ipSegmentWeightServiceV4.getAttackSourceWeight(customerId, attackIp);
+            
+            logger.info("V4.0 attack source weight applied: customerId={}, attackIp={}, weight={}",
+                       customerId, attackIp, attackSourceWeight);
+        } else {
+            logger.debug("Missing attackIp for V4.0 weight, using default (1.0)");
         }
         
-        // 最终评分 (Phase 3增加IP段权重)
-        double finalScore = baseScore * timeWeight * ipWeight * portWeight * deviceWeight * ipSegmentWeight;
+        // TODO V4.0 Phase 2: 添加蜜罐敏感性权重
+        // 需要在AggregatedAttackData中添加mostAccessedHoneypotIp字段
+        // 或者在Flink聚合层计算平均honeypotSensitivityWeight
+        // 
+        // double honeypotSensitivityWeight = ipSegmentWeightServiceV4
+        //     .getHoneypotSensitivityWeight(customerId, data.getMostAccessedHoneypotIp());
+        
+        // 最终评分 (当前版本: V4.0 Phase 1 - 仅包含attackSourceWeight)
+        double finalScore = baseScore * timeWeight * ipWeight * portWeight * deviceWeight 
+                          * attackSourceWeight;
         
         logger.debug("Threat score calculation: customerId={}, attackMac={}, attackIp={}, " +
-                    "baseScore={}, timeWeight={}, ipWeight={}, portWeight={}, deviceWeight={}, ipSegmentWeight={}, finalScore={}",
+                    "baseScore={}, timeWeight={}, ipWeight={}, portWeight={}, deviceWeight={}, " +
+                    "attackSourceWeight={}, finalScore={}",
                     data.getCustomerId(), data.getAttackMac(), data.getAttackIp(),
-                    baseScore, timeWeight, ipWeight, portWeight, deviceWeight, ipSegmentWeight, finalScore);
+                    baseScore, timeWeight, ipWeight, portWeight, deviceWeight, 
+                    attackSourceWeight, finalScore);
         
         return finalScore;
     }

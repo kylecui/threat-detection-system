@@ -605,6 +605,47 @@ logging:
 
 ## Copilot 工作指令
 
+### ⚠️ 容器重建流程（强制执行）
+
+**每次代码修改后，必须完整执行以下流程：**
+
+```bash
+# 方法一：使用快速脚本（推荐）
+cd ~/threat-detection-system/scripts
+./rebuild_service.sh <service-name>
+
+# 方法二：手动执行标准流程
+# 1. 重新编译
+cd ~/threat-detection-system/services/<service-name>
+mvn clean package -DskipTests
+
+# 2. 重构容器
+cd ~/threat-detection-system/docker
+docker compose down -v <service-name>
+docker compose build --no-cache <service-name>
+docker compose up -d --force-recreate <service-name>
+
+# 3. 检查容器状态
+docker compose ps
+docker logs <service-name>-service --tail 30
+
+# 4. 运行测试验证
+cd ~/threat-detection-system/scripts
+bash test_v4_phase1_integration.sh
+```
+
+**禁止操作**:
+- ❌ 使用 `docker compose restart` 代替完整重建
+- ❌ 跳过 `mvn clean package` 步骤
+- ❌ 省略 `--no-cache` 参数
+- ❌ 忘记验证容器状态和测试
+
+**详细文档**: 
+- `docs/guides/CONTAINER_REBUILD_WORKFLOW.md` - 完整流程和故障排查
+- `REBUILD_QUICK_REF.md` - 快速参考
+
+---
+
 ### 编写代码时
 
 1. **必须遵循**:
@@ -613,6 +654,7 @@ logging:
    - 使用 SLF4J 进行日志记录
    - 异常必须记录详细上下文 (customerId, 错误详情)
    - 遵循 Spring Boot 3.1+ 最佳实践
+   - **代码修改后必须执行容器重建流程**
 
 2. **威胁评分**:
    - 严格按照公式: `(attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeight × portWeight × deviceWeight`
