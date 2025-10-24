@@ -66,12 +66,32 @@ public class TierWindowProcessor
         Set<Integer> uniquePorts = new HashSet<>();
         Set<String> uniqueDevices = new HashSet<>();
         
+        // V4.0 Phase 2: 收集攻击IP和蜜罐访问统计
+        String attackIp = null;
+        java.util.Map<String, Integer> honeypotAccessCount = new java.util.HashMap<>();
+        
         for (AttackEvent event : elements) {
             attackCount++;
+            
+            // 收集攻击源IP (所有事件的attackIp应该相同，取第一个)
+            if (attackIp == null && event.getAttackIp() != null) {
+                attackIp = event.getAttackIp();
+            }
+            
+            // 统计每个蜜罐IP的访问次数
+            String honeypotIp = event.getResponseIp();
+            honeypotAccessCount.put(honeypotIp, honeypotAccessCount.getOrDefault(honeypotIp, 0) + 1);
+            
             uniqueIps.add(event.getResponseIp());
             uniquePorts.add(event.getResponsePort());
-            uniqueDevices.add(event.getDevSerial()); // 修正：使用getDevSerial()
+            uniqueDevices.add(event.getDevSerial());
         }
+        
+        // 找出访问最多的蜜罐IP
+        String mostAccessedHoneypotIp = honeypotAccessCount.entrySet().stream()
+            .max(java.util.Map.Entry.comparingByValue())
+            .map(java.util.Map.Entry::getKey)
+            .orElse(null);
         
         // 计算混合端口权重 (修正：只传入ports Set)
         double mixedPortWeight = portWeightService.calculateMixedPortWeight(uniquePorts);
@@ -93,6 +113,8 @@ public class TierWindowProcessor
         AggregatedAttackData aggregated = AggregatedAttackData.builder()
                 .customerId(customerId)
                 .attackMac(attackMac)
+                .attackIp(attackIp)  // V4.0 Phase 2
+                .mostAccessedHoneypotIp(mostAccessedHoneypotIp)  // V4.0 Phase 2
                 .attackCount(attackCount)
                 .uniqueIps(uniqueIps.size())
                 .uniquePorts(uniquePorts.size())
@@ -107,8 +129,10 @@ public class TierWindowProcessor
                 .timestamp(Instant.now())
                 .build();
         
-        log.info("Tier {} window: customerId={}, attackMac={}, threatScore={}, threatLevel={}, count={}, ips={}, ports={}, devices={}",
-                tier, customerId, attackMac, threatScore, threatLevel, attackCount, 
+        log.info("Tier {} window: customerId={}, attackMac={}, attackIp={}, mostAccessedHoneypot={}, " +
+                "threatScore={}, threatLevel={}, count={}, ips={}, ports={}, devices={}",
+                tier, customerId, attackMac, attackIp, mostAccessedHoneypotIp,
+                threatScore, threatLevel, attackCount, 
                 uniqueIps.size(), uniquePorts.size(), uniqueDevices.size());
         
         out.collect(aggregated);

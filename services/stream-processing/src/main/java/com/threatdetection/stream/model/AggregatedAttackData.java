@@ -14,6 +14,8 @@ public class AggregatedAttackData implements Serializable {
     
     private String customerId;
     private String attackMac;
+    private String attackIp;  // V4.0 Phase 2: 被诱捕者IP
+    private String mostAccessedHoneypotIp;  // V4.0 Phase 2: 访问最多的蜜罐IP
     private int attackCount;
     private int uniqueIps;
     private int uniquePorts;
@@ -32,13 +34,16 @@ public class AggregatedAttackData implements Serializable {
     // Constructors
     public AggregatedAttackData() {}
     
-    public AggregatedAttackData(String customerId, String attackMac, int attackCount,
+    public AggregatedAttackData(String customerId, String attackMac, String attackIp,
+                               String mostAccessedHoneypotIp, int attackCount,
                                int uniqueIps, int uniquePorts, int uniqueDevices,
                                double mixedPortWeight, int tier, String windowType,
                                Instant windowStart, Instant windowEnd, Instant timestamp,
                                double threatScore, String threatLevel) {
         this.customerId = customerId;
         this.attackMac = attackMac;
+        this.attackIp = attackIp;
+        this.mostAccessedHoneypotIp = mostAccessedHoneypotIp;
         this.attackCount = attackCount;
         this.uniqueIps = uniqueIps;
         this.uniquePorts = uniquePorts;
@@ -61,6 +66,8 @@ public class AggregatedAttackData implements Serializable {
     public static class Builder {
         private String customerId;
         private String attackMac;
+        private String attackIp;
+        private String mostAccessedHoneypotIp;
         private int attackCount;
         private int uniqueIps;
         private int uniquePorts;
@@ -81,6 +88,16 @@ public class AggregatedAttackData implements Serializable {
         
         public Builder attackMac(String attackMac) {
             this.attackMac = attackMac;
+            return this;
+        }
+        
+        public Builder attackIp(String attackIp) {
+            this.attackIp = attackIp;
+            return this;
+        }
+        
+        public Builder mostAccessedHoneypotIp(String mostAccessedHoneypotIp) {
+            this.mostAccessedHoneypotIp = mostAccessedHoneypotIp;
             return this;
         }
         
@@ -145,10 +162,10 @@ public class AggregatedAttackData implements Serializable {
         }
         
         public AggregatedAttackData build() {
-            return new AggregatedAttackData(customerId, attackMac, attackCount,
-                uniqueIps, uniquePorts, uniqueDevices, mixedPortWeight,
-                tier, windowType, windowStart, windowEnd, timestamp,
-                threatScore, threatLevel);
+            return new AggregatedAttackData(customerId, attackMac, attackIp,
+                mostAccessedHoneypotIp, attackCount, uniqueIps, uniquePorts, 
+                uniqueDevices, mixedPortWeight, tier, windowType, windowStart, 
+                windowEnd, timestamp, threatScore, threatLevel);
         }
     }
     
@@ -158,6 +175,14 @@ public class AggregatedAttackData implements Serializable {
     
     public String getAttackMac() { return attackMac; }
     public void setAttackMac(String attackMac) { this.attackMac = attackMac; }
+    
+    public String getAttackIp() { return attackIp; }
+    public void setAttackIp(String attackIp) { this.attackIp = attackIp; }
+    
+    public String getMostAccessedHoneypotIp() { return mostAccessedHoneypotIp; }
+    public void setMostAccessedHoneypotIp(String mostAccessedHoneypotIp) { 
+        this.mostAccessedHoneypotIp = mostAccessedHoneypotIp; 
+    }
     
     public int getAttackCount() { return attackCount; }
     public void setAttackCount(int attackCount) { this.attackCount = attackCount; }

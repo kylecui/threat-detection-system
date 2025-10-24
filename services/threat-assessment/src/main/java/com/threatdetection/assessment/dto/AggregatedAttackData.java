@@ -41,6 +41,12 @@ public class AggregatedAttackData {
     private String attackIp;
     
     /**
+     * 访问最多的蜜罐IP (用于计算蜜罐敏感度权重)
+     * V4.0 Phase 2新增字段
+     */
+    private String mostAccessedHoneypotIp;
+    
+    /**
      * 探测次数 (1分钟窗口内的攻击次数)
      */
     private Integer attackCount;
