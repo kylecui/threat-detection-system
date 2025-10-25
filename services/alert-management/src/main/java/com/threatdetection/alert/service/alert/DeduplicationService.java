@@ -30,18 +30,30 @@ public class DeduplicationService {
 
     /**
      * 检查告警是否为重复
+     * 
+     * 改进: 不同tier的告警不应该互相去重，因为它们有不同的检测目的：
+     * - Tier 1 (30秒): 勒索软件快速检测
+     * - Tier 2 (5分钟): 主要威胁检测
+     * - Tier 3 (15分钟): APT慢速扫描检测
      */
     public boolean isDuplicate(Alert newAlert) {
-        // 基于攻击MAC的时间窗口去重
-        if (newAlert.getAttackMac() != null) {
+        // 基于攻击MAC + Tier的时间窗口去重
+        if (newAlert.getAttackMac() != null && newAlert.getMetadata() != null) {
             LocalDateTime since = LocalDateTime.now().minusSeconds(timeWindowSeconds);
             List<Alert> recentAlerts = alertRepository.findRecentAlertsByAttackMac(
                     newAlert.getAttackMac(), since);
 
-            if (!recentAlerts.isEmpty()) {
-                logger.info("Found {} recent alerts for MAC {} within {} seconds",
-                           recentAlerts.size(), newAlert.getAttackMac(), timeWindowSeconds);
-                return true;
+            // 提取新告警的tier信息
+            String newTier = extractTierFromMetadata(newAlert.getMetadata());
+            
+            // 只与相同tier的告警比较
+            for (Alert recentAlert : recentAlerts) {
+                String recentTier = extractTierFromMetadata(recentAlert.getMetadata());
+                if (newTier != null && newTier.equals(recentTier)) {
+                    logger.info("Found recent alert for MAC {} with same tier {} within {} seconds",
+                               newAlert.getAttackMac(), newTier, timeWindowSeconds);
+                    return true;
+                }
             }
         }
 
@@ -148,6 +160,54 @@ public class DeduplicationService {
         }
 
         return newAlert;
+    }
+
+    /**
+     * 从metadata中提取tier信息
+     * 
+     * @param metadata JSON格式的元数据字符串
+     * @return tier值，如果无法提取则返回null
+     */
+    private String extractTierFromMetadata(String metadata) {
+        if (metadata == null || metadata.trim().isEmpty()) {
+            return null;
+        }
+        
+        try {
+            // 简单的JSON解析（不依赖外部库）
+            // 查找 "tier": 数字 的模式
+            int tierIndex = metadata.indexOf("\"tier\"");
+            if (tierIndex == -1) {
+                return null;
+            }
+            
+            // 找到冒号后的数字
+            int colonIndex = metadata.indexOf(":", tierIndex);
+            if (colonIndex == -1) {
+                return null;
+            }
+            
+            // 提取数字部分（跳过空格和引号）
+            String remaining = metadata.substring(colonIndex + 1).trim();
+            StringBuilder tierValue = new StringBuilder();
+            
+            for (char c : remaining.toCharArray()) {
+                if (Character.isDigit(c)) {
+                    tierValue.append(c);
+                } else if (c == ',' || c == '}' || c == ' ') {
+                    break;
+                } else if (c != '"' && c != ' ') {
+                    break;
+                }
+            }
+            
+            String tier = tierValue.toString();
+            return tier.isEmpty() ? null : tier;
+            
+        } catch (Exception e) {
+            logger.warn("Failed to extract tier from metadata: {}", metadata, e);
+            return null;
+        }
     }
 
     /**

@@ -141,12 +141,12 @@ test_scenario \
 # 测试场景4: 办公网络 (权重应为1.0 - 默认)
 test_scenario \
     "办公网络攻击 (默认权重)" \
-    "192.168.10.100" \
+    "192.168.11.100" \
     "1.0" \
     '{
       "customer_id": "customer-001",
       "attack_mac": "22:33:44:55:66:77",
-      "attack_ip": "192.168.10.100",
+      "attack_ip": "192.168.11.100",
       "attack_count": 100,
       "unique_ips": 5,
       "unique_ports": 3,

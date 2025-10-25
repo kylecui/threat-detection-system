@@ -109,7 +109,7 @@ public class KafkaConfig {
         // 设置并发消费者数量
         factory.setConcurrency(3);
 
-        // 设置批量监听
+        // 设置批量监听模式（提升性能）
         factory.setBatchListener(true);
 
         // 设置手动确认模式

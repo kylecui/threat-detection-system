@@ -4,11 +4,11 @@ package com.threatdetection.alert.model;
  * 告警严重程度枚举
  */
 public enum AlertSeverity {
-    CRITICAL("严重", 1000),
-    HIGH("高危", 500),
-    MEDIUM("中危", 100),
-    LOW("低危", 10),
-    INFO("信息", 0);
+    CRITICAL("严重", 200),   // 与ThreatLevel阈值对齐: score >= 200
+    HIGH("高危", 100),       // 与ThreatLevel阈值对齐: 100 <= score < 200
+    MEDIUM("中危", 50),      // 与ThreatLevel阈值对齐: 50 <= score < 100
+    LOW("低危", 10),         // 与ThreatLevel阈值对齐: 10 <= score < 50
+    INFO("信息", 0);         // 与ThreatLevel阈值对齐: score < 10
 
     private final String description;
     private final int threshold;

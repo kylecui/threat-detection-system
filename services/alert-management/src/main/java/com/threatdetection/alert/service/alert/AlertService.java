@@ -43,9 +43,11 @@ public class AlertService {
             alert.setStatus(AlertStatus.NEW);
         }
 
-        // 如果有威胁分数，自动确定严重程度
-        if (alert.getThreatScore() != null) {
+        // 注意: severity已在KafkaConsumerService中从threatLevel正确映射，不再重新计算
+        // 如果未设置severity但有威胁分数，则作为fallback自动确定严重程度
+        if (alert.getSeverity() == null && alert.getThreatScore() != null) {
             alert.setSeverity(AlertSeverity.fromScore(alert.getThreatScore()));
+            logger.warn("Severity not set, calculated from score: {}", alert.getSeverity());
         }
 
         Alert savedAlert = alertRepository.save(alert);
