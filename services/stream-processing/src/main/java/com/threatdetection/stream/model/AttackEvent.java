@@ -1,7 +1,9 @@
 package com.threatdetection.stream.model;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 public class AttackEvent {
     private String id;
@@ -23,8 +25,8 @@ public class AttackEvent {
     private String rawLog;
     private String customerId;
 
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'")
-    private LocalDateTime timestamp;
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'", timezone = "UTC")
+    private Instant timestamp;
 
     // Constructors
     public AttackEvent() {}
@@ -48,7 +50,7 @@ public class AttackEvent {
         this.ipType = ipType;
         this.rawLog = rawLog;
         this.customerId = customerId;
-        this.timestamp = LocalDateTime.now();
+        this.timestamp = Instant.now();
         this.severity = determineSeverity(subType);
         this.description = generateDescription();
         this.id = devSerial + "_" + logTime + "_" + lineId;
@@ -144,6 +146,23 @@ public class AttackEvent {
     public String getCustomerId() { return customerId; }
     public void setCustomerId(String customerId) { this.customerId = customerId; }
 
-    public LocalDateTime getTimestamp() { return timestamp; }
-    public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
+    public Instant getTimestamp() { return timestamp; }
+    public void setTimestamp(Instant timestamp) { this.timestamp = timestamp; }
+
+    /**
+     * 获取本地时间（便捷方法）
+     * @return LocalDateTime 使用系统默认时区
+     */
+    public LocalDateTime getLocalDateTime() {
+        return timestamp != null ? LocalDateTime.ofInstant(timestamp, ZoneId.systemDefault()) : null;
+    }
+
+    /**
+     * 获取本地时间（指定时区）
+     * @param zoneId 时区
+     * @return LocalDateTime
+     */
+    public LocalDateTime getLocalDateTime(ZoneId zoneId) {
+        return timestamp != null ? LocalDateTime.ofInstant(timestamp, zoneId) : null;
+    }
 }
