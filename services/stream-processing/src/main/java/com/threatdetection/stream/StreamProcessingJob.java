@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.threatdetection.stream.model.AttackEvent;
 import com.threatdetection.stream.model.StatusEvent;
+import com.threatdetection.stream.sink.AttackEventJdbcSink;
 import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.FlatMapFunction;
@@ -16,6 +17,7 @@ import org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema;
 import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
+import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
@@ -66,6 +68,14 @@ public class StreamProcessingJob {
     public static void main(String[] args) throws Exception {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
+        // ===== Checkpoint配置 - 保证Exactly-Once语义 =====
+        logger.info("Configuring Flink checkpointing for exactly-once semantics");
+        env.enableCheckpointing(60000);  // 每60秒checkpoint
+        env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
+        env.getCheckpointConfig().setMinPauseBetweenCheckpoints(30000);  // 最小间隔30秒
+        env.getCheckpointConfig().setCheckpointTimeout(600000);  // 超时10分钟
+        env.getCheckpointConfig().setMaxConcurrentCheckpoints(1);  // 同时只有1个checkpoint
+        
         // Read configuration from environment variables
     String bootstrapServers = System.getenv("KAFKA_BOOTSTRAP_SERVERS") != null ?
         System.getenv("KAFKA_BOOTSTRAP_SERVERS") : "kafka:29092";
@@ -125,7 +135,18 @@ public class StreamProcessingJob {
                 .assignTimestampsAndWatermarks(
                         WatermarkStrategy.<AttackEvent>forMonotonousTimestamps()
                                 .withTimestampAssigner(new AttackEventTimestampAssigner()) // 使用显式类替代lambda
-                );
+                )
+                .name("attack-event-preprocessor");
+
+        // ===== 分支1: 持久化到PostgreSQL (替代AttackEventPersistenceService) =====
+        logger.info("Configuring PostgreSQL persistence sink for attack events");
+        attackStream
+            .addSink(AttackEventJdbcSink.createSinkWithEnvConfig())
+            .name("attack-events-persistence")
+            .uid("attack-events-persistence-sink")  // 用于checkpoint恢复
+            .setParallelism(2);  // 并行度2,提高写入性能
+        
+        logger.info("PostgreSQL persistence sink configured successfully");
 
         // Status events stream - enabled for device health monitoring
         logger.info("Starting Status Event Processing for Device Health Monitoring");

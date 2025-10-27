@@ -17,6 +17,13 @@ import java.time.Instant;
  * 攻击事件持久化服务
  * 
  * <p>监听attack-events topic,将所有攻击事件持久化到数据库
+ * 
+ * <p>**已禁用**: 功能已迁移到Flink的JDBC Sink
+ * <p>原因: 
+ * - 避免与Flink消费者竞争同一topic
+ * - Flink提供更好的exactly-once语义和批量写入性能
+ * <p>迁移日期: 2025-10-27
+ * <p>可以在未来需要时重新启用作为备份方案
  */
 @Service
 public class AttackEventPersistenceService {
@@ -35,11 +42,13 @@ public class AttackEventPersistenceService {
     
     /**
      * 消费attack-events topic并持久化
+     * 
+     * **临时禁用**: 功能已迁移到Flink,避免offset竞争
      */
-    @KafkaListener(
-        topics = "attack-events",
-        groupId = "attack-events-persistence-group"
-    )
+    // @KafkaListener(
+    //     topics = "attack-events",
+    //     groupId = "attack-events-persistence-group"
+    // )
     @Transactional
     public void consumeAttackEvent(String message) {
         try {

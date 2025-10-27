@@ -83,6 +83,20 @@
       <artifactId>slf4j-log4j12</artifactId>
     </dependency>
 
+    <!-- Flink JDBC Connector for PostgreSQL persistence -->
+    <dependency>
+      <groupId>org.apache.flink</groupId>
+      <artifactId>flink-connector-jdbc</artifactId>
+      <version>3.1.1-1.17</version>
+    </dependency>
+    
+    <!-- PostgreSQL Driver -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>42.6.0</version>
+    </dependency>
+
     <!-- Test -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
@@ -114,7 +128,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <mainClass>com.threatdetection.stream.StreamProcessingJob</mainClass>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>
