@@ -183,6 +183,17 @@ services:
       STATUS_TOPIC: status-events
       OUTPUT_TOPIC: threat-alerts
       AGGREGATION_TOPIC: minute-aggregations
+      
+      # ✅ 时间窗口配置（可自定义）
+      # 时长配置（单位：秒，推荐范围见下方说明）
+      TIER1_WINDOW_SECONDS: "30"        # Tier 1 窗口时长（默认30秒，推荐范围：10-300秒）
+      TIER2_WINDOW_SECONDS: "300"       # Tier 2 窗口时长（默认5分钟=300秒，推荐范围：60-1800秒）
+      TIER3_WINDOW_SECONDS: "900"       # Tier 3 窗口时长（默认15分钟=900秒，推荐范围：300-7200秒）
+      
+      # 窗口名称配置（可自定义，用于告警描述）
+      TIER1_WINDOW_NAME: "勒索软件快速检测"    # Tier 1 窗口名称
+      TIER2_WINDOW_NAME: "主要威胁检测"        # Tier 2 窗口名称
+      TIER3_WINDOW_NAME: "APT慢速扫描检测"     # Tier 3 窗口名称
     networks:
       - threat-detection-network
     healthcheck:

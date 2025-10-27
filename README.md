@@ -319,6 +319,14 @@ SELECT channel, COUNT(*) as count FROM notifications GROUP BY channel;
 | `TEAMS_WEBHOOK_URL` | Microsoft Teams webhook URL | - |
 | `ENCRYPT_KEY` | 配置服务器加密密钥 | - |
 | `GIT_CONFIG_URI` | 配置Git仓库URI | - |
+| **⭐ `TIER1_WINDOW_SECONDS`** | **Tier 1 时间窗口(秒) - 勒索软件检测** | **`30`** (推荐: 10-300) |
+| **⭐ `TIER2_WINDOW_SECONDS`** | **Tier 2 时间窗口(秒) - 主要威胁检测** | **`300`** (推荐: 60-1800) |
+| **⭐ `TIER3_WINDOW_SECONDS`** | **Tier 3 时间窗口(秒) - APT检测** | **`900`** (推荐: 300-7200) |
+| `TIER1_WINDOW_NAME` | Tier 1 窗口名称 (告警描述) | `勒索软件快速检测` |
+| `TIER2_WINDOW_NAME` | Tier 2 窗口名称 (告警描述) | `主要威胁检测` |
+| `TIER3_WINDOW_NAME` | Tier 3 窗口名称 (告警描述) | `APT慢速扫描检测` |
+
+> **🆕 时间窗口配置**: 现在支持自定义3层时间窗口的时长和名称，详见 [时间窗口配置指南](docs/guides/TIME_WINDOW_CONFIGURATION.md)
 
 ### 配置文件
 

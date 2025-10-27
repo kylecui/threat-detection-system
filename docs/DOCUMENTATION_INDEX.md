@@ -92,7 +92,8 @@ docs/
 │
 ├── guides/                                # 使用指南
 │   ├── USAGE_GUIDE.md
-│   └── DEVELOPMENT_CHEATSHEET.md
+│   ├── TIME_WINDOW_CONFIGURATION.md       # ⭐ 时间窗口自定义配置指南 (最新)
+│   └── CONTAINER_REBUILD_WORKFLOW.md
 │
 ├── design/                                # 设计文档
 │   ├── honeypot_based_threat_scoring.md
