@@ -16,7 +16,9 @@
 
 | 文档 | 说明 |
 |------|------|
+| [flink_stream_processing_architecture.md](./flink_stream_processing_architecture.md) | ⭐ **Flink流处理架构详解** - Kafka消费、窗口对齐、数据流分支 (最新) |
 | [new_system_architecture_spec.md](./new_system_architecture_spec.md) | **云原生系统架构规范** - 微服务架构、数据流、技术栈 |
+| [UNIFIED_FLINK_ARCHITECTURE.md](./UNIFIED_FLINK_ARCHITECTURE.md) | **统一Flink架构** - PostgreSQL持久化移入Flink |
 | [original_system_analysis.md](./original_system_analysis.md) | **原系统分析** - C#/Windows系统分析和迁移对比 |
 | [data_structures.md](./data_structures.md) | **数据结构定义** - Kafka消息格式、PostgreSQL表结构 |
 | [log_format_analysis.md](./log_format_analysis.md) | **日志格式分析** - Syslog格式、字段说明、解析规则 |
@@ -54,6 +56,7 @@
 ```
 1. 阅读架构文档
    ├── new_system_architecture_spec.md (了解整体架构)
+   ├── flink_stream_processing_architecture.md (Flink流处理详解 ⭐ 必读)
    └── data_structures.md (理解数据模型)
 
 2. 理解核心机制
@@ -190,4 +193,4 @@ threatScore = (attackCount × uniqueIps × uniquePorts)
 
 ---
 
-**最后更新**: 2025-01-16
+**最后更新**: 2025-10-27

@@ -96,6 +96,7 @@ docs/
 │   └── CONTAINER_REBUILD_WORKFLOW.md
 │
 ├── design/                                # 设计文档
+│   ├── flink_stream_processing_architecture.md  # ⭐ Flink流处理架构详解 (最新)
 │   ├── honeypot_based_threat_scoring.md
 │   ├── new_system_architecture_spec.md
 │   └── understanding_corrections_summary.md
