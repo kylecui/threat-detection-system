@@ -165,7 +165,7 @@ class PortRiskServiceTest {
         List<PortRiskConfig> result = service.getHighRiskPorts(2.5);
         
         assertEquals(3, result.size());
-        assertTrue(result.stream().allMatch(p -> p.getRiskScore() >= 2.5));
+        assertTrue(result.stream().allMatch(p -> p.getRiskWeight() >= 2.5));
     }
     
     // ==================== 初始化测试 ====================

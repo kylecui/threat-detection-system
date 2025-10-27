@@ -47,7 +47,7 @@ public class PortRiskService {
     @Cacheable(value = "portRiskScores", key = "#portNumber")
     public double getPortRiskScore(int portNumber) {
         return repository.findByPortNumber(portNumber)
-            .map(PortRiskConfig::getRiskScore)
+            .map(PortRiskConfig::getRiskWeight)
             .orElse(DEFAULT_RISK_SCORE);
     }
     
@@ -67,7 +67,7 @@ public class PortRiskService {
         
         // 填充已配置的端口评分
         for (PortRiskConfig config : configs) {
-            scoreMap.put(config.getPortNumber(), config.getRiskScore());
+            scoreMap.put(config.getPortNumber(), config.getRiskWeight());
         }
         
         // 填充未配置端口的默认评分

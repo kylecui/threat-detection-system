@@ -274,12 +274,23 @@ public class StreamProcessingJob {
             logger.info("Aggregation for customer:source {}: {} unique IPs, {} unique ports, {} unique devices, {} attacks",
                 key, uniqueIps.size(), uniquePorts.size(), uniqueDevSerials.size(), attackCount);
 
-            // 增强的聚合输出：包含客户ID和端口多样性、设备信息
-            String result = String.format("{\"customerId\":\"%s\",\"attackMac\":\"%s\",\"uniqueIps\":%d,\"uniquePorts\":%d,\"uniqueDevices\":%d,\"attackCount\":%d,\"timestamp\":%d,\"windowStart\":%d,\"windowEnd\":%d}",
+            // Convert port set to JSON array string for portList field
+            StringBuilder portListJson = new StringBuilder("[");
+            int i = 0;
+            for (Integer port : uniquePorts) {
+                if (i > 0) portListJson.append(",");
+                portListJson.append(port);
+                i++;
+            }
+            portListJson.append("]");
+
+            // 增强的聚合输出：包含客户ID、端口多样性、设备信息、端口列表（用于端口权重计算）
+            String result = String.format("{\"customerId\":\"%s\",\"attackMac\":\"%s\",\"uniqueIps\":%d,\"uniquePorts\":%d,\"uniqueDevices\":%d,\"attackCount\":%d,\"timestamp\":%d,\"windowStart\":%d,\"windowEnd\":%d,\"portList\":%s}",
                     customerId, key.substring(key.indexOf(":") + 1), uniqueIps.size(), uniquePorts.size(), uniqueDevSerials.size(), attackCount,
                     context.window().getEnd(),
                     context.window().getStart(),
-                    context.window().getEnd());
+                    context.window().getEnd(),
+                    portListJson.toString());
             out.collect(result);
         }
     }

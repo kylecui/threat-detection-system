@@ -34,6 +34,7 @@ services:
       - ./08-threat-labels.sql:/docker-entrypoint-initdb.d/08-threat-labels.sql
       - ./09-add-missing-fields.sql:/docker-entrypoint-initdb.d/09-add-missing-fields.sql
       - ./12-ip-segment-weights-v4.sql:/docker-entrypoint-initdb.d/12-ip-segment-weights-v4.sql
+      - ./13-customer-port-weights.sql:/docker-entrypoint-initdb.d/13-customer-port-weights.sql
     networks:
       - threat-detection-network
     healthcheck:
@@ -169,6 +170,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+      threat-assessment:
+        condition: service_started
       topic-init:
         condition: service_completed_successfully
     ports: ["8081:8081"]
@@ -183,6 +186,9 @@ services:
       STATUS_TOPIC: status-events
       OUTPUT_TOPIC: threat-alerts
       AGGREGATION_TOPIC: minute-aggregations
+      
+      # ✅ 端口权重服务配置 (Port Weight Service Integration)
+      THREAT_ASSESSMENT_SERVICE_URL: http://threat-assessment:8082
       
       # ✅ 时间窗口配置（可自定义）
       # 时长配置（单位：秒，推荐范围见下方说明）

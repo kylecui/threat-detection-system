@@ -89,6 +89,13 @@ public class AssessmentRequest {
     private Instant timestamp;
 
     /**
+     * 端口列表 (可选, 用于端口权重计算)
+     * V4.0 Phase 3新增字段
+     */
+    @JsonProperty("port_list")
+    private java.util.List<Integer> portList;
+
+    /**
      * 转换为聚合攻击数据
      */
     public AggregatedAttackData toAggregatedData() {
@@ -101,6 +108,7 @@ public class AssessmentRequest {
             .uniquePorts(uniquePorts)
             .uniqueDevices(uniqueDevices)
             .timestamp(timestamp != null ? timestamp : Instant.now())
+            .portList(portList)
             .build();
     }
 }

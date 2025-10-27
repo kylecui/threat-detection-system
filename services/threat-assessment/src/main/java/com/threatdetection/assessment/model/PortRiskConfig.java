@@ -14,10 +14,10 @@ import java.time.Instant;
  * @version 2.0
  */
 @Entity
-@Table(name = "port_risk_config", indexes = {
-    @Index(name = "idx_port_number", columnList = "port_number", unique = true),
-    @Index(name = "idx_category", columnList = "category"),
-    @Index(name = "idx_risk_score", columnList = "risk_score")
+@Table(name = "port_risk_configs", indexes = {
+    @Index(name = "idx_port_risk_configs_port", columnList = "port_number"),
+    @Index(name = "idx_port_risk_configs_risk_level", columnList = "risk_level"),
+    @Index(name = "idx_port_risk_configs_enabled", columnList = "enabled")
 })
 public class PortRiskConfig {
 
@@ -37,15 +37,26 @@ public class PortRiskConfig {
     private String portName;
 
     @NotNull
-    @DecimalMin("0.0")
-    @DecimalMax("5.0")
-    @Column(name = "risk_score", nullable = false)
-    private Double riskScore;
+    @DecimalMin("1.0")
+    @DecimalMax("10.0")
+    @Column(name = "risk_weight", nullable = false)
+    private Double riskWeight;
 
     @NotBlank
-    @Size(max = 50)
-    @Column(name = "category", nullable = false, length = 50)
-    private String category;
+    @Size(max = 20)
+    @Column(name = "risk_level", nullable = false, length = 20)
+    private String riskLevel;
+
+    @Size(max = 200)
+    @Column(name = "attack_intent", length = 200)
+    private String attackIntent;
+
+    @Size(max = 20)
+    @Column(name = "config_source", length = 20)
+    private String configSource = "LEGACY";
+
+    @Column(name = "enabled")
+    private Boolean enabled = true;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
@@ -53,16 +64,20 @@ public class PortRiskConfig {
     @Column(name = "created_at", insertable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "updated_at", insertable = false, updatable = false)
+    private Instant updatedAt;
+
     // Constructors
     public PortRiskConfig() {}
 
-    public PortRiskConfig(Integer portNumber, String portName, Double riskScore, 
-                         String category, String description) {
+    public PortRiskConfig(Integer portNumber, String portName, Double riskWeight, 
+                         String riskLevel, String description) {
         this.portNumber = portNumber;
         this.portName = portName;
-        this.riskScore = riskScore;
-        this.category = category;
+        this.riskWeight = riskWeight;
+        this.riskLevel = riskLevel;
         this.description = description;
+        this.enabled = true;
     }
 
     // Getters and Setters
@@ -75,11 +90,23 @@ public class PortRiskConfig {
     public String getPortName() { return portName; }
     public void setPortName(String portName) { this.portName = portName; }
 
-    public Double getRiskScore() { return riskScore; }
-    public void setRiskScore(Double riskScore) { this.riskScore = riskScore; }
+    public Double getRiskWeight() { return riskWeight; }
+    public void setRiskWeight(Double riskWeight) { this.riskWeight = riskWeight; }
 
-    public String getCategory() { return category; }
-    public void setCategory(String category) { this.category = category; }
+    public String getRiskLevel() { return riskLevel; }
+    public void setRiskLevel(String riskLevel) { this.riskLevel = riskLevel; }
+
+    public String getAttackIntent() { return attackIntent; }
+    public void setAttackIntent(String attackIntent) { this.attackIntent = attackIntent; }
+
+    public String getConfigSource() { return configSource; }
+    public void setConfigSource(String configSource) { this.configSource = configSource; }
+
+    public Boolean getEnabled() { return enabled; }
+    public void setEnabled(Boolean enabled) { this.enabled = enabled; }
+
+    public Instant getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
@@ -93,8 +120,9 @@ public class PortRiskConfig {
                 "id=" + id +
                 ", portNumber=" + portNumber +
                 ", portName='" + portName + '\'' +
-                ", riskScore=" + riskScore +
-                ", category='" + category + '\'' +
+                ", riskWeight=" + riskWeight +
+                ", riskLevel='" + riskLevel + '\'' +
+                ", enabled=" + enabled +
                 '}';
     }
 }

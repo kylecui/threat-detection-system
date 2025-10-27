@@ -28,14 +28,24 @@ public interface PortRiskConfigRepository extends JpaRepository<PortRiskConfig, 
     List<PortRiskConfig> findByPortNumberIn(List<Integer> portNumbers);
 
     /**
-     * 根据风险分类查询
+     * 根据风险等级查询
      */
-    List<PortRiskConfig> findByCategory(String category);
+    List<PortRiskConfig> findByRiskLevel(String riskLevel);
+    
+    /**
+     * 根据配置来源查询
+     */
+    List<PortRiskConfig> findByConfigSource(String configSource);
+    
+    /**
+     * 查询已启用的端口配置
+     */
+    List<PortRiskConfig> findByEnabledTrue();
 
     /**
-     * 查询高危端口 (riskScore >= threshold)
+     * 查询高危端口 (riskWeight >= threshold)
      */
-    @Query("SELECT p FROM PortRiskConfig p WHERE p.riskScore >= ?1 ORDER BY p.riskScore DESC")
+    @Query("SELECT p FROM PortRiskConfig p WHERE p.riskWeight >= ?1 ORDER BY p.riskWeight DESC")
     List<PortRiskConfig> findHighRiskPorts(Double threshold);
 
     /**

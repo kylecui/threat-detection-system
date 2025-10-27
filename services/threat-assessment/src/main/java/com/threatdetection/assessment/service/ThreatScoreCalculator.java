@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 威胁评分计算器 - 基于蜜罐机制的多维度评分算法
@@ -38,14 +39,17 @@ public class ThreatScoreCalculator {
     private final PortRiskService portRiskService;
     private final IpSegmentWeightService ipSegmentWeightService;  // 保留用于兼容性
     private final IpSegmentWeightServiceV4 ipSegmentWeightServiceV4;  // V4.0双维度服务
+    private final CustomerPortWeightService customerPortWeightService;  // V4.0 Phase3端口权重服务
     
     @Autowired
     public ThreatScoreCalculator(PortRiskService portRiskService, 
                                  IpSegmentWeightService ipSegmentWeightService,
-                                 IpSegmentWeightServiceV4 ipSegmentWeightServiceV4) {
+                                 IpSegmentWeightServiceV4 ipSegmentWeightServiceV4,
+                                 CustomerPortWeightService customerPortWeightService) {
         this.portRiskService = portRiskService;
         this.ipSegmentWeightService = ipSegmentWeightService;
         this.ipSegmentWeightServiceV4 = ipSegmentWeightServiceV4;
+        this.customerPortWeightService = customerPortWeightService;
     }
     
     /**
@@ -80,7 +84,8 @@ public class ThreatScoreCalculator {
         // 计算各维度权重
         double timeWeight = calculateTimeWeight(data.getTimestamp());
         double ipWeight = calculateIpWeight(data.getUniqueIps());
-        double portWeight = calculatePortWeight(data.getUniquePorts());
+        // V4.0 Phase 3: 使用增强端口权重 (集成customer_port_weights)
+        double portWeight = calculateEnhancedPortWeight(data.getCustomerId(), data.getPortList(), data.getUniquePorts());
         double deviceWeight = calculateDeviceWeight(data.getUniqueDevices());
         
         // V4.0双维度权重计算
@@ -211,25 +216,43 @@ public class ThreatScoreCalculator {
     }
     
     /**
-     * 计算增强的端口权重 (集成端口风险配置)
+     * 计算增强的端口权重 (集成customer_port_weights)
      * 
-     * <p>Phase 2新方法: 混合策略
-     * 1. 如果提供端口列表,使用PortRiskService计算配置权重
-     * 2. 同时考虑端口多样性
-     * 3. 取两者最大值
+     * <p>V4.0 Phase 3新方法: 混合策略
+     * 1. 如果提供端口列表和customerId,使用CustomerPortWeightService查询配置权重
+     * 2. 同时考虑端口多样性权重
+     * 3. 取两者最大值: portWeight = max(avgConfigWeight, diversityWeight)
      * 
+     * @param customerId 客户ID (用于查询客户配置)
      * @param portNumbers 端口号列表 (可选)
      * @param uniquePorts 唯一端口数量
-     * @return 端口权重 (1.0-2.0)
+     * @return 端口权重 (1.0-2.0+)
      */
-    public double calculateEnhancedPortWeight(List<Integer> portNumbers, int uniquePorts) {
-        if (portNumbers == null || portNumbers.isEmpty()) {
-            // 如果没有端口列表,使用基础多样性权重
-            return calculatePortWeight(uniquePorts);
+    public double calculateEnhancedPortWeight(String customerId, List<Integer> portNumbers, int uniquePorts) {
+        // 计算基于多样性的权重
+        double diversityWeight = calculatePortWeight(uniquePorts);
+        
+        if (portNumbers == null || portNumbers.isEmpty() || customerId == null) {
+            logger.debug("No port list or customerId provided, using diversity weight: {}", diversityWeight);
+            return diversityWeight;
         }
         
-        // 使用PortRiskService计算增强权重
-        return portRiskService.calculatePortRiskWeight(portNumbers, uniquePorts);
+        // 批量查询端口权重配置
+        Map<Integer, Double> portWeights = customerPortWeightService.getPortWeightsBatch(customerId, portNumbers);
+        
+        // 计算平均配置权重
+        double avgConfigWeight = portWeights.values().stream()
+            .mapToDouble(Double::doubleValue)
+            .average()
+            .orElse(1.0);
+        
+        // 取两者最大值
+        double finalWeight = Math.max(avgConfigWeight, diversityWeight);
+        
+        logger.info("Enhanced port weight: customerId={}, ports={}, avgConfig={}, diversity={}, final={}",
+                   customerId, portNumbers, avgConfigWeight, diversityWeight, finalWeight);
+        
+        return finalWeight;
     }
     
     /**

@@ -72,6 +72,12 @@ public class AggregatedAttackData {
     private Instant timestamp;
     
     /**
+     * 端口列表 (用于端口权重计算)
+     * V4.0 Phase 3新增字段
+     */
+    private java.util.List<Integer> portList;
+    
+    /**
      * 验证数据完整性
      */
     public boolean isValid() {
