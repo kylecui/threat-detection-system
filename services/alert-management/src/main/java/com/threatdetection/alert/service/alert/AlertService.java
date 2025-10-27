@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -54,6 +55,40 @@ public class AlertService {
         logger.info("Alert created with ID: {}", savedAlert.getId());
 
         return savedAlert;
+    }
+
+    /**
+     * 批量保存告警（性能优化）
+     * 使用JPA的saveAll批量插入，减少数据库往返次数
+     */
+    @Transactional
+    public List<Alert> saveAllAlerts(List<Alert> alerts) {
+        if (alerts == null || alerts.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        logger.info("Batch saving {} alerts", alerts.size());
+
+        // 设置默认状态和严重程度
+        for (Alert alert : alerts) {
+            if (alert.getStatus() == null) {
+                alert.setStatus(AlertStatus.NEW);
+            }
+            
+            // 注意: severity已在KafkaConsumerService中从threatLevel正确映射
+            // 这里只作为fallback处理
+            if (alert.getSeverity() == null && alert.getThreatScore() != null) {
+                alert.setSeverity(AlertSeverity.fromScore(alert.getThreatScore()));
+                logger.warn("Severity not set for alert {}, calculated from score: {}", 
+                           alert.getTitle(), alert.getSeverity());
+            }
+        }
+
+        // 批量保存
+        List<Alert> savedAlerts = alertRepository.saveAll(alerts);
+        logger.info("Successfully saved {} alerts in batch", savedAlerts.size());
+
+        return savedAlerts;
     }
 
     /**

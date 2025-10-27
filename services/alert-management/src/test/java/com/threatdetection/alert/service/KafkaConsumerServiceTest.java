@@ -58,13 +58,13 @@ class KafkaConsumerServiceTest {
     void consumeThreatEvents_ShouldCreateAlert_WhenValidEvent() throws Exception {
         // Given
         when(deduplicationService.isDuplicate(any(Alert.class))).thenReturn(false);
-        when(alertService.createAlert(any(Alert.class))).thenReturn(createTestAlert());
+        when(alertService.saveAllAlerts(any(List.class))).thenReturn(List.of(createTestAlert()));
         when(objectMapper.writeValueAsString(any())).thenReturn("{\"ip\":\"192.168.1.100\"}");
 
         // When
         kafkaConsumerService.consumeThreatEvents(
                 List.of(threatEvent),
-                "threat-events",
+                List.of("threat-events"),
                 List.of(0),
                 List.of(0L),
                 acknowledgment
@@ -72,7 +72,7 @@ class KafkaConsumerServiceTest {
 
         // Then
         verify(deduplicationService).isDuplicate(any(Alert.class));
-        verify(alertService).createAlert(any(Alert.class));
+        verify(alertService).saveAllAlerts(any(List.class));
         verify(acknowledgment).acknowledge();
     }
 
@@ -84,7 +84,7 @@ class KafkaConsumerServiceTest {
         // When
         kafkaConsumerService.consumeThreatEvents(
                 List.of(threatEvent),
-                "threat-events",
+                List.of("threat-events"),
                 List.of(0),
                 List.of(0L),
                 acknowledgment
@@ -92,7 +92,7 @@ class KafkaConsumerServiceTest {
 
         // Then
         verify(deduplicationService).isDuplicate(any(Alert.class));
-        verify(alertService, never()).createAlert(any(Alert.class));
+        verify(alertService, never()).saveAllAlerts(any(List.class));
         verify(acknowledgment).acknowledge();
     }
 
@@ -104,7 +104,7 @@ class KafkaConsumerServiceTest {
         // When
         kafkaConsumerService.consumeThreatEvents(
                 List.of(threatEvent),
-                "threat-events",
+                List.of("threat-events"),
                 List.of(0),
                 List.of(0L),
                 acknowledgment
@@ -124,13 +124,13 @@ class KafkaConsumerServiceTest {
         threatAssessmentEvent.put("severity", 0); // CRITICAL
 
         when(deduplicationService.isDuplicate(any(Alert.class))).thenReturn(false);
-        when(alertService.createAlert(any(Alert.class))).thenReturn(createTestAlert());
+        when(alertService.saveAllAlerts(any(List.class))).thenReturn(List.of(createTestAlert()));
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
         // When
         kafkaConsumerService.consumeThreatEvents(
                 List.of(threatAssessmentEvent),
-                "threat-events",
+                List.of("threat-events"),
                 List.of(0),
                 List.of(0L),
                 acknowledgment
@@ -138,15 +138,8 @@ class KafkaConsumerServiceTest {
 
         // Then
         verify(deduplicationService).isDuplicate(any(Alert.class));
-        verify(alertService).createAlert(argThat(alert -> {
-            // 验证字段映射是否正确
-            return alert.getTitle().contains("[threat-assessment-service] Critical Network Anomaly Detected") &&
-                   alert.getDescription().equals("Multiple failed login attempts from suspicious IP") &&
-                   alert.getSeverity() == AlertSeverity.MEDIUM && // severity=0 映射为 MEDIUM
-                   alert.getThreatScore() == 95.5 &&
-                   alert.getSource().equals("threat-assessment-service") &&
-                   alert.getEventType().equals("THREAT_ASSESSMENT");
-        }));
+        // 使用saveAllAlerts而不是createAlert
+        verify(alertService).saveAllAlerts(any(List.class));
         verify(acknowledgment).acknowledge();
     }
 

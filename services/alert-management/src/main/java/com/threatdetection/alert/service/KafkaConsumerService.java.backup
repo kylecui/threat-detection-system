@@ -14,7 +14,6 @@ import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -26,17 +25,6 @@ import java.util.Optional;
 /**
  * Kafka消费者服务
  * 监听威胁检测事件并创建告警
- * 
- * V2.0 性能优化:
- * - 批量数据库插入（saveAll）
- * - 异步通知发送（不阻塞主流程）
- * - 三阶段处理：准备 → 批量保存 → 异步通知
- * 
- * 🛡️ V2.1 安全增强:
- * - 单条消息异常不影响整批处理（隔离失败）
- * - 数据验证失败自动跳过并记录
- * - 防止有毒消息导致无限重试和资源耗尽
- * - 配合 ErrorHandlingDeserializer 和 DefaultErrorHandler 实现多层防护
  */
 @Service
 @RequiredArgsConstructor
@@ -58,15 +46,7 @@ public class KafkaConsumerService {
      * <p>批量处理优势:
      * - 减少数据库往返次数（批量插入）
      * - 减少Kafka offset提交次数
-     * - 异步通知不阻塞主流程
-     * - 提升整体吞吐量 5-10倍
-     * 
-     * <p>🛡️ 安全防护机制:
-     * 1. 单条消息处理失败不影响整批（try-catch 隔离）
-     * 2. 失败消息被跳过并记录，不阻塞后续处理
-     * 3. 整批处理失败则不提交 offset，等待重试（由 DefaultErrorHandler 控制）
-     * 4. 配合 ErrorHandlingDeserializer 防止反序列化错误永久阻塞
-     * 5. 超过重试次数后自动跳过有毒消息（见 KafkaConfig）
+     * - 提升整体吞吐量 3-5倍
      */
     @KafkaListener(
             topics = "${app.kafka.topics.threat-events}",
@@ -84,157 +64,44 @@ public class KafkaConsumerService {
         log.info("接收到 {} 个威胁检测事件批量，分区: {}, 偏移量范围: {}-{}",
                 batchSize, partitions.get(0), offsets.get(0), offsets.get(batchSize - 1));
 
-        // 🛡️ 防护: 过滤掉反序列化失败的 null 消息
-        events.removeIf(event -> event == null);
-        if (events.isEmpty()) {
-            log.warn("⚠️ 批量中所有消息均为 null（反序列化失败），跳过处理并提交 offset");
-            acknowledgment.acknowledge();
-            return;
-        }
-
-        int processedCount = 0;
-        int deduplicatedCount = 0;
+        int successCount = 0;
         int failureCount = 0;
-        int skippedCount = 0;  // 新增: 跳过的无效消息计数
-        
-        // 收集待批量保存的告警（非重复的）
-        List<Alert> alertsToSave = new ArrayList<>();
-        // 收集需要发送通知的告警信息
-        List<AlertNotificationInfo> notificationsToSend = new ArrayList<>();
         
         try {
-            // 第一阶段: 处理所有事件，准备告警对象
+            // 批量处理所有事件
             for (int i = 0; i < events.size(); i++) {
                 Map<String, Object> event = events.get(i);
                 try {
-                    // 🛡️ 防护: 数据验证
-                    if (!isValidEvent(event)) {
-                        skippedCount++;
-                        log.warn("⚠️ 事件 {}/{} 数据验证失败，已跳过: {}", 
-                                i + 1, batchSize, event);
-                        continue;  // 跳过无效消息，继续处理下一条
+                    processThreatEvent(event);
+                    successCount++;
+                    
+                    if (log.isDebugEnabled()) {
+                        log.debug("成功处理事件 {}/{}: MAC={}, Tier={}", 
+                                i + 1, batchSize, event.get("attackMac"), event.get("tier"));
                     }
-                    
-                    AlertProcessingResult result = prepareThreatAlert(event);
-                    
-                    if (result.isDedup) {
-                        deduplicatedCount++;
-                        if (log.isDebugEnabled()) {
-                            log.debug("事件 {}/{} 被去重: MAC={}, Tier={}", 
-                                    i + 1, batchSize, event.get("attackMac"), event.get("tier"));
-                        }
-                    } else {
-                        alertsToSave.add(result.alert);
-                        if (result.needsNotification) {
-                            notificationsToSend.add(result.notificationInfo);
-                        }
-                    }
-                    processedCount++;
-                    
-                } catch (jakarta.validation.ConstraintViolationException e) {
-                    // 🛡️ 数据验证异常: 记录并跳过，不中断批次
-                    failureCount++;
-                    skippedCount++;
-                    log.error("❌ 事件 {}/{} 数据验证失败（字段约束违反），已跳过: MAC={}, 错误: {}", 
-                            i + 1, batchSize, event.get("attackMac"), e.getMessage());
-                    // 继续处理下一条
-                } catch (IllegalArgumentException e) {
-                    // 🛡️ 非法参数异常: 记录并跳过
-                    failureCount++;
-                    skippedCount++;
-                    log.error("❌ 事件 {}/{} 包含非法数据，已跳过: MAC={}, 错误: {}", 
-                            i + 1, batchSize, event.get("attackMac"), e.getMessage());
                 } catch (Exception e) {
-                    // 🛡️ 其他异常: 记录但继续处理
                     failureCount++;
-                    log.error("❌ 事件 {}/{} 处理失败，已跳过: MAC={}, 错误: {}", 
+                    log.error("处理事件 {}/{} 时发生错误: MAC={}, 错误: {}", 
                             i + 1, batchSize, event.get("attackMac"), e.getMessage(), e);
                     // 继续处理下一条，不中断整个批次
                 }
             }
 
-            // 第二阶段: 批量保存所有告警到数据库
-            List<Alert> savedAlerts = new ArrayList<>();
-            if (!alertsToSave.isEmpty()) {
-                savedAlerts = alertService.saveAllAlerts(alertsToSave);
-                log.info("批量保存完成: 保存了 {} 个告警到数据库", savedAlerts.size());
-            }
-            
-            // 第三阶段: 异步发送通知（不阻塞主流程）
-            if (!notificationsToSend.isEmpty() && !savedAlerts.isEmpty()) {
-                sendNotificationsAsync(savedAlerts, notificationsToSend);
-            }
-
             // 批量提交偏移量（所有消息处理完成后统一提交）
             acknowledgment.acknowledge();
-            log.info("✅ 批量处理完成: 处理={}, 去重={}, 保存={}, 失败={}, 跳过={}, 总数={}", 
-                    processedCount, deduplicatedCount, alertsToSave.size(), failureCount, skippedCount, batchSize);
+            log.info("批量处理完成: 成功={}, 失败={}, 总数={}", successCount, failureCount, batchSize);
 
         } catch (Exception e) {
-            log.error("🚨 批量处理威胁检测事件时发生严重错误: 批量大小={}, 错误: {}", 
-                    batchSize, e.getMessage(), e);
-            // 🛡️ 不提交偏移量，让 DefaultErrorHandler 处理重试逻辑
-            // 超过重试次数后会自动跳过该批次
+            log.error("批量处理威胁检测事件时发生严重错误: 批量大小={}", batchSize, e);
+            // 不提交偏移量，让Kafka重新投递整个批次
             throw e;
         }
     }
 
     /**
-     * 🛡️ 验证事件数据的有效性
-     * 
-     * 防止无效数据导致后续处理失败和无限重试
+     * 处理单个威胁检测事件
      */
-    private boolean isValidEvent(Map<String, Object> event) {
-        if (event == null || event.isEmpty()) {
-            return false;
-        }
-        
-        // 验证必需字段
-        String customerId = (String) event.get("customerId");
-        String attackMac = (String) event.get("attackMac");
-        
-        if (customerId == null || customerId.trim().isEmpty()) {
-            log.warn("⚠️ 事件缺少 customerId 字段");
-            return false;
-        }
-        
-        if (attackMac == null || attackMac.trim().isEmpty()) {
-            log.warn("⚠️ 事件缺少 attackMac 字段");
-            return false;
-        }
-        
-        // 验证 MAC 地址格式（标准格式: 17 字符）
-        if (attackMac.length() > 17) {
-            log.warn("⚠️ attackMac 长度超过限制: {} (最大: 17)", attackMac.length());
-            return false;
-        }
-        
-        return true;
-    }
-
-    /**
-     * 告警处理结果（内部类）
-     */
-    private static class AlertProcessingResult {
-        Alert alert;
-        boolean isDedup;
-        boolean needsNotification;
-        AlertNotificationInfo notificationInfo;
-    }
-    
-    /**
-     * 告警通知信息（内部类）
-     */
-    private static class AlertNotificationInfo {
-        String customerId;
-        AlertSeverity severity;
-        String attackMac;
-    }
-    
-    /**
-     * 准备单个威胁告警（不保存，返回处理结果）
-     */
-    private AlertProcessingResult prepareThreatAlert(Map<String, Object> event) {
+    private void processThreatEvent(Map<String, Object> event) {
         try {
             // 从 threat-alerts 主题接收的标准格式: ThreatAlertMessage
             // 包含字段: customerId, attackMac, threatScore, threatLevel, attackCount, uniqueIps, uniquePorts, uniqueDevices, timestamp
@@ -302,67 +169,29 @@ public class KafkaConsumerService {
                     .updatedAt(LocalDateTime.now())
                     .build();
 
-            // 构建处理结果
-            AlertProcessingResult result = new AlertProcessingResult();
-            result.alert = alert;
-            
             // 检查是否为重复告警
             if (deduplicationService.isDuplicate(alert)) {
-                result.isDedup = true;
-                if (log.isDebugEnabled()) {
-                    log.debug("检测到重复告警，已标记: {}", alert.getTitle());
+                log.info("检测到重复告警，已跳过: {}", alert.getTitle());
+                return;
+            }
+
+            // 保存告警
+            Alert savedAlert = alertService.createAlert(alert);
+            log.info("成功创建告警: ID={}, 标题={}, 严重程度={}",
+                    savedAlert.getId(), savedAlert.getTitle(), savedAlert.getSeverity());
+
+            // 对于CRITICAL级别的告警，自动发送邮件通知
+            if (savedAlert.getSeverity() == AlertSeverity.CRITICAL) {
+                try {
+                    sendCriticalAlertNotification(savedAlert, customerId);
+                } catch (Exception e) {
+                    log.error("发送CRITICAL告警邮件通知失败: alertId={}", savedAlert.getId(), e);
                 }
-                return result;
             }
-            
-            result.isDedup = false;
-            
-            // 检查是否需要发送通知（CRITICAL级别）
-            if (alertSeverity == AlertSeverity.CRITICAL) {
-                result.needsNotification = true;
-                AlertNotificationInfo notifInfo = new AlertNotificationInfo();
-                notifInfo.customerId = customerId;
-                notifInfo.severity = alertSeverity;
-                notifInfo.attackMac = attackMac;
-                result.notificationInfo = notifInfo;
-            }
-            
-            return result;
 
         } catch (Exception e) {
-            log.error("准备威胁告警时发生错误: {}", event, e);
-            throw new RuntimeException("Failed to prepare threat alert", e);
+            log.error("处理威胁事件时发生错误: {}", event, e);
         }
-    }
-    
-    /**
-     * 异步发送告警通知（批量模式）
-     * 使用异步方式避免阻塞主流程
-     */
-    @Async("notificationTaskExecutor")
-    public void sendNotificationsAsync(List<Alert> savedAlerts, List<AlertNotificationInfo> notificationsToSend) {
-        log.info("开始异步发送 {} 个通知", notificationsToSend.size());
-        
-        int successCount = 0;
-        int failureCount = 0;
-        
-        // 为每个需要通知的告警发送邮件
-        for (int i = 0; i < Math.min(notificationsToSend.size(), savedAlerts.size()); i++) {
-            Alert savedAlert = savedAlerts.get(i);
-            AlertNotificationInfo notifInfo = notificationsToSend.get(i);
-            
-            try {
-                sendCriticalAlertNotification(savedAlert, notifInfo.customerId);
-                successCount++;
-            } catch (Exception e) {
-                failureCount++;
-                log.error("异步发送CRITICAL告警通知失败: alertId={}, customerId={}", 
-                         savedAlert.getId(), notifInfo.customerId, e);
-            }
-        }
-        
-        log.info("异步通知发送完成: 成功={}, 失败={}, 总数={}", 
-                successCount, failureCount, notificationsToSend.size());
     }
     
     /**
@@ -481,36 +310,14 @@ public class KafkaConsumerService {
     }
 
     /**
-     * 格式化时间窗口描述
-     */
-    private String formatWindowDescription(Integer tier, String windowType) {
-        if (tier == null) {
-            return "未知时间窗口";
-        }
-        
-        // 根据窗口类型生成描述
-        String windowName = windowType != null ? windowType : "未知";
-        
-        switch (tier) {
-            case 1:
-                return String.format("30秒窗口(%s)", windowName);
-            case 2:
-                return String.format("5分钟窗口(%s)", windowName);
-            case 3:
-                return String.format("15分钟窗口(%s)", windowName);
-            default:
-                return String.format("Tier-%d窗口(%s)", tier, windowName);
-        }
-    }
-
-    /**
-     * 根据威胁等级映射告警严重程度
+     * 将威胁等级映射为告警严重程度
+     * 根据威胁评分系统的等级分类: INFO, LOW, MEDIUM, HIGH, CRITICAL
      */
     private AlertSeverity mapThreatLevelToSeverity(String threatLevel) {
         if (threatLevel == null) {
-            return AlertSeverity.INFO;
+            return AlertSeverity.MEDIUM;
         }
-
+        
         switch (threatLevel.toUpperCase()) {
             case "CRITICAL":
                 return AlertSeverity.CRITICAL;
@@ -520,52 +327,105 @@ public class KafkaConsumerService {
                 return AlertSeverity.MEDIUM;
             case "LOW":
                 return AlertSeverity.LOW;
-            default:
+            case "INFO":
                 return AlertSeverity.INFO;
+            default:
+                log.warn("未知的威胁等级: {}, 使用默认值 MEDIUM", threatLevel);
+                return AlertSeverity.MEDIUM;
         }
     }
-
+    
     /**
-     * 获取整数值（安全）
+     * 格式化时间窗口描述
+     * 
+     * @param tier 窗口层级 (1=30秒, 2=5分钟, 3=15分钟)
+     * @param windowType 窗口类型 (RANSOMWARE_DETECTION, MAIN_THREAT_DETECTION, APT_SLOW_SCAN)
+     * @return 格式化的窗口描述，如 "30秒窗口(勒索软件检测)"
+     */
+    private String formatWindowDescription(Integer tier, String windowType) {
+        if (tier == null) {
+            return "时间窗口内";
+        }
+        
+        String windowSize;
+        String detectionType;
+        
+        // 根据tier确定窗口大小
+        switch (tier) {
+            case 1:
+                windowSize = "30秒窗口";
+                detectionType = "勒索软件检测";
+                break;
+            case 2:
+                windowSize = "5分钟窗口";
+                detectionType = "主要威胁检测";
+                break;
+            case 3:
+                windowSize = "15分钟窗口";
+                detectionType = "APT慢速扫描检测";
+                break;
+            default:
+                windowSize = "未知窗口";
+                detectionType = "威胁检测";
+        }
+        
+        // 组合窗口描述
+        return String.format("%s(%s)", windowSize, detectionType);
+    }
+    
+    /**
+     * 安全地从Map中获取Integer值
      */
     private Integer getIntValue(Map<String, Object> map, String key) {
         Object value = map.get(key);
         if (value == null) {
-            return null;
+            return 0;
         }
         if (value instanceof Integer) {
             return (Integer) value;
         }
-        if (value instanceof Number) {
-            return ((Number) value).intValue();
+        if (value instanceof Long) {
+            return ((Long) value).intValue();
         }
-        try {
-            return Integer.parseInt(value.toString());
-        } catch (NumberFormatException e) {
-            log.warn("无法解析整数值: key={}, value={}", key, value);
-            return null;
+        if (value instanceof Double) {
+            return ((Double) value).intValue();
         }
+        if (value instanceof String) {
+            try {
+                return Integer.parseInt((String) value);
+            } catch (NumberFormatException e) {
+                log.warn("无法将字符串转换为Integer: key={}, value={}", key, value);
+                return 0;
+            }
+        }
+        return 0;
     }
-
+    
     /**
-     * 获取双精度浮点值（安全）
+     * 安全地从Map中获取Double值
      */
     private Double getDoubleValue(Map<String, Object> map, String key) {
         Object value = map.get(key);
         if (value == null) {
-            return null;
+            return 0.0;
         }
         if (value instanceof Double) {
             return (Double) value;
         }
-        if (value instanceof Number) {
-            return ((Number) value).doubleValue();
+        if (value instanceof Integer) {
+            return ((Integer) value).doubleValue();
         }
-        try {
-            return Double.parseDouble(value.toString());
-        } catch (NumberFormatException e) {
-            log.warn("无法解析浮点值: key={}, value={}", key, value);
-            return null;
+        if (value instanceof Long) {
+            return ((Long) value).doubleValue();
         }
+        if (value instanceof String) {
+            try {
+                return Double.parseDouble((String) value);
+            } catch (NumberFormatException e) {
+                log.warn("无法将字符串转换为Double: key={}, value={}", key, value);
+                return 0.0;
+            }
+        }
+        return 0.0;
     }
 }
