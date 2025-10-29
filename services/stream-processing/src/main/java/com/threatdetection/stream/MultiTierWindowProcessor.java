@@ -168,21 +168,21 @@ public class MultiTierWindowProcessor {
             .map(new AttackEventPreprocessor())
             .name("attack-event-preprocessor");
 
-        // 第1层: 窗口名称和时长可配置
+        // 第1层: Tier 1窗口 (快速威胁检测 - 勒索软件)
         DataStream<AggregatedAttackData> tier1Aggregations = preprocessed
             .keyBy(new AttackEventKeySelector())
             .window(TumblingProcessingTimeWindows.of(Time.seconds(TIER1_WINDOW_SECONDS)))
             .process(new TierWindowProcessor(1, TIER1_WINDOW_NAME))
             .name("tier1-" + TIER1_WINDOW_SECONDS + "s-window");
 
-        // 第2层: 窗口名称和时长可配置
+        // 第2层: Tier 2窗口 (主要威胁检测)
         DataStream<AggregatedAttackData> tier2Aggregations = preprocessed
             .keyBy(new AttackEventKeySelector())
             .window(TumblingProcessingTimeWindows.of(Time.seconds(TIER2_WINDOW_SECONDS)))
             .process(new TierWindowProcessor(2, TIER2_WINDOW_NAME))
             .name("tier2-" + TIER2_WINDOW_SECONDS + "s-window");
 
-        // 第3层: 窗口名称和时长可配置
+        // 第3层: Tier 3窗口 (APT慢速扫描检测)
         DataStream<AggregatedAttackData> tier3Aggregations = preprocessed
             .keyBy(new AttackEventKeySelector())
             .window(TumblingProcessingTimeWindows.of(Time.seconds(TIER3_WINDOW_SECONDS)))

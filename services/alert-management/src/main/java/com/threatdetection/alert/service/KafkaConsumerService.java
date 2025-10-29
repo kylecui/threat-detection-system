@@ -423,6 +423,7 @@ public class KafkaConsumerService {
         notification.setContent(String.format(
             "检测到严重威胁！\n\n" +
             "告警ID: %d\n" +
+            "通知ID: %s\n" +
             "标题: %s\n" +
             "描述: %s\n" +
             "威胁分数: %.2f\n" +
@@ -430,14 +431,24 @@ public class KafkaConsumerService {
             "时间: %s\n\n" +
             "请立即处理！",
             alert.getId(),
+            "<will-be-filled-after-persist>",
             alert.getTitle(),
             alert.getDescription(),
             alert.getThreatScore() != null ? alert.getThreatScore() : 0.0,
             alert.getSource(),
             alert.getCreatedAt()
         ));
-        
-        notificationService.sendNotification(notification);
+
+        // Persist first so we have notification.id available and database mapping is explicit
+        Notification saved = notificationService.createNotification(notification);
+
+        // Update content to include the persisted notification id (replace placeholder)
+        saved.setContent(saved.getContent().replace("<will-be-filled-after-persist>", String.valueOf(saved.getId())));
+        // Persist updated content
+        notificationService.createNotification(saved);
+
+        // Now send (async) using persisted notification
+        notificationService.sendNotification(saved);
     }
     
     /**

@@ -48,7 +48,10 @@ public class AttackEvent {
         this.ipType = ipType;
         this.rawLog = rawLog;
         this.customerId = customerId;
-        this.timestamp = LocalDateTime.now();
+        // 将Unix时间戳(秒)转换为LocalDateTime
+        this.timestamp = logTime > 0 ? 
+            LocalDateTime.ofInstant(java.time.Instant.ofEpochSecond(logTime), java.time.ZoneId.systemDefault()) : 
+            LocalDateTime.now();
         this.severity = determineSeverity(subType);
         this.description = generateDescription();
         this.id = devSerial + "_" + logTime + "_" + lineId;

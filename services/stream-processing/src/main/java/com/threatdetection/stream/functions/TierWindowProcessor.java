@@ -12,6 +12,9 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 /**
  * 时间窗口聚合处理器
@@ -50,6 +53,14 @@ public class TierWindowProcessor
             Iterable<AttackEvent> elements,
             Collector<AggregatedAttackData> out) throws Exception {
         
+        // V4.0 Phase 3: 将Iterable转换为List以便计算时间分布
+        List<AttackEvent> eventList = StreamSupport.stream(elements.spliterator(), false)
+                .collect(Collectors.toList());
+        
+        if (eventList.isEmpty()) {
+            return;
+        }
+        
         // 提取 customerId 和 attackMac
         String[] parts = key.split(":", 2);
         if (parts.length != 2) {
@@ -70,7 +81,7 @@ public class TierWindowProcessor
         String attackIp = null;
         java.util.Map<String, Integer> honeypotAccessCount = new java.util.HashMap<>();
         
-        for (AttackEvent event : elements) {
+        for (AttackEvent event : eventList) {
             attackCount++;
             
             // 收集攻击源IP (所有事件的attackIp应该相同，取第一个)
@@ -96,14 +107,23 @@ public class TierWindowProcessor
         // 计算混合端口权重 (修正：只传入ports Set)
         double mixedPortWeight = portWeightService.calculateMixedPortWeight(uniquePorts);
         
-        // 计算威胁评分
+        // V4.0 Phase 3: 计算时间分布权重
+        long windowStart = context.window().getStart();
+        long windowEnd = context.window().getEnd();
+        long windowSize = windowEnd - windowStart;
+        long eventTimeSpan = calculateEventTimeSpan(eventList);
+        double burstIntensity = calculateBurstIntensity(eventList, windowSize);
+        double timeDistWeight = calculateTimeDistributionWeight(burstIntensity);
+        
+        // 计算威胁评分 (包含时间分布权重)
         double threatScore = calculateThreatScore(
             attackCount, 
             uniqueIps.size(), 
             uniquePorts.size(), 
             uniqueDevices.size(),
             mixedPortWeight,
-            context.window().getEnd()
+            timeDistWeight,  // 新增参数
+            windowEnd
         );
         
         // 确定威胁等级
@@ -122,6 +142,9 @@ public class TierWindowProcessor
                 .mixedPortWeight(mixedPortWeight)
                 .threatScore(threatScore)
                 .threatLevel(threatLevel)
+                .eventTimeSpan(eventTimeSpan)              // V4.0 Phase 3
+                .burstIntensity(burstIntensity)            // V4.0 Phase 3
+                .timeDistributionWeight(timeDistWeight)    // V4.0 Phase 3
                 .tier(tier)
                 .windowType(windowType)
                 .windowStart(Instant.ofEpochMilli(context.window().getStart()))
@@ -130,10 +153,12 @@ public class TierWindowProcessor
                 .build();
         
         log.info("Tier {} window: customerId={}, attackMac={}, attackIp={}, mostAccessedHoneypot={}, " +
-                "threatScore={}, threatLevel={}, count={}, ips={}, ports={}, devices={}",
+                "threatScore={}, threatLevel={}, timeDistWeight={}, burstIntensity={}, " +
+                "count={}, ips={}, ports={}, devices={}, timeSpan={}ms of {}ms window",
                 tier, customerId, attackMac, attackIp, mostAccessedHoneypotIp,
-                threatScore, threatLevel, attackCount, 
-                uniqueIps.size(), uniquePorts.size(), uniqueDevices.size());
+                threatScore, threatLevel, String.format("%.2f", timeDistWeight), String.format("%.3f", burstIntensity),
+                attackCount, uniqueIps.size(), uniquePorts.size(), uniqueDevices.size(),
+                eventTimeSpan, windowSize);
         
         out.collect(aggregated);
     }
@@ -142,18 +167,20 @@ public class TierWindowProcessor
      * 计算威胁评分
      * 
      * <p>公式: threatScore = (attackCount × uniqueIps × uniquePorts × portWeight) 
-     *                     × timeWeight × ipWeight × deviceWeight
+     *                     × timeWeight × ipWeight × deviceWeight × timeDistWeight
      * 
      * @param attackCount 攻击次数
      * @param uniqueIps 唯一诱饵IP数
      * @param uniquePorts 唯一端口数
      * @param uniqueDevices 唯一设备数
      * @param portWeight 端口权重
+     * @param timeDistWeight 时间分布权重
      * @param windowEndMillis 窗口结束时间戳(毫秒)
      * @return 威胁评分
      */
     private double calculateThreatScore(int attackCount, int uniqueIps, int uniquePorts,
-                                       int uniqueDevices, double portWeight, long windowEndMillis) {
+                                       int uniqueDevices, double portWeight, 
+                                       double timeDistWeight, long windowEndMillis) {
         // 1. 基础分数
         double baseScore = attackCount * uniqueIps * uniquePorts * portWeight;
         
@@ -166,7 +193,8 @@ public class TierWindowProcessor
         // 4. 设备权重（多设备攻击）
         double deviceWeight = uniqueDevices > 1 ? 1.5 : 1.0;
         
-        return baseScore * timeWeight * ipWeight * deviceWeight;
+        // 5. V4.0 Phase 3: 时间分布权重
+        return baseScore * timeWeight * ipWeight * deviceWeight * timeDistWeight;
     }
     
     /**
@@ -203,6 +231,91 @@ public class TierWindowProcessor
         if (score >= 50) return "MEDIUM";
         if (score >= 10) return "LOW";
         return "INFO";
+    }
+    
+    /**
+     * V4.0 Phase 3: 计算事件时间跨度
+     * 
+     * <p>过滤异常时间戳（如1970年纪元时间），只计算有效事件的时间跨度
+     * 
+     * @param events 事件列表
+     * @return 时间跨度（毫秒）
+     */
+    private long calculateEventTimeSpan(List<AttackEvent> events) {
+        if (events.size() < 2) {
+            return 0;
+        }
+        
+        // 过滤异常时间戳：排除1970年之前或2000年之前的数据（明显错误）
+        // 正常的威胁事件应该是近期的，至少应该在2020年之后
+        final long MIN_VALID_TIMESTAMP = Instant.parse("2020-01-01T00:00:00Z").toEpochMilli();
+        
+        java.util.List<Long> validTimestamps = events.stream()
+                .map(AttackEvent::getTimestamp)
+                .map(Instant::toEpochMilli)
+                .filter(t -> t >= MIN_VALID_TIMESTAMP)  // 过滤异常时间戳
+                .collect(java.util.stream.Collectors.toList());
+        
+        // 如果过滤后少于2个有效事件，返回0
+        if (validTimestamps.size() < 2) {
+            log.warn("Insufficient valid timestamps for timespan calculation: total={}, valid={}",
+                    events.size(), validTimestamps.size());
+            return 0;
+        }
+        
+        long minTime = validTimestamps.stream()
+                .min(Long::compare)
+                .get();
+        
+        long maxTime = validTimestamps.stream()
+                .max(Long::compare)
+                .get();
+        
+        long timeSpan = maxTime - minTime;
+        
+        log.debug("Calculated event timespan: {}ms from {} valid events (total: {})",
+                timeSpan, validTimestamps.size(), events.size());
+        
+        return timeSpan;
+    }
+    
+    /**
+     * V4.0 Phase 3: 计算爆发强度系数 (Burst Intensity Coefficient)
+     * 
+     * <p>公式: BIC = 1 - (eventTimeSpan / windowSize)
+     * <p>取值范围: [0, 1]
+     * - BIC = 1: 所有事件集中在一个时间点（最高爆发）
+     * - BIC = 0: 事件均匀分布在整个窗口（无爆发）
+     * 
+     * @param events 事件列表
+     * @param windowSize 窗口大小（毫秒）
+     * @return 爆发强度系数
+     */
+    private double calculateBurstIntensity(List<AttackEvent> events, long windowSize) {
+        if (events.size() < 2 || windowSize == 0) {
+            return 0.0;
+        }
+        
+        long timeSpan = calculateEventTimeSpan(events);
+        double intensity = 1.0 - (double) timeSpan / windowSize;
+        
+        // 确保结果在 [0, 1] 范围内
+        return Math.max(0.0, Math.min(1.0, intensity));
+    }
+    
+    /**
+     * V4.0 Phase 3: 计算时间分布权重
+     * 
+     * <p>公式: timeDistWeight = 1.0 + (burstIntensity × 2.0)
+     * <p>取值范围: [1.0, 3.0]
+     * - 1.0: 完全分散（无威胁加成）
+     * - 3.0: 完全集中（勒索软件爆发）
+     * 
+     * @param burstIntensity 爆发强度系数
+     * @return 时间分布权重
+     */
+    private double calculateTimeDistributionWeight(double burstIntensity) {
+        return 1.0 + (burstIntensity * 2.0);
     }
     
 }

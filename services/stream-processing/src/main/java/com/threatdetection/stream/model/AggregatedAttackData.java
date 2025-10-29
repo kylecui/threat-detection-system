@@ -31,6 +31,11 @@ public class AggregatedAttackData implements Serializable {
     private double threatScore;
     private String threatLevel;
     
+    // V4.0 Phase 3: 时间分布权重相关字段
+    private long eventTimeSpan;           // 事件时间跨度（毫秒）
+    private double burstIntensity;        // 爆发强度系数 [0, 1]
+    private double timeDistributionWeight; // 时间分布权重 [1.0, 3.0]
+    
     // Constructors
     public AggregatedAttackData() {}
     
@@ -39,7 +44,8 @@ public class AggregatedAttackData implements Serializable {
                                int uniqueIps, int uniquePorts, int uniqueDevices,
                                double mixedPortWeight, int tier, String windowType,
                                Instant windowStart, Instant windowEnd, Instant timestamp,
-                               double threatScore, String threatLevel) {
+                               double threatScore, String threatLevel,
+                               long eventTimeSpan, double burstIntensity, double timeDistributionWeight) {
         this.customerId = customerId;
         this.attackMac = attackMac;
         this.attackIp = attackIp;
@@ -56,6 +62,9 @@ public class AggregatedAttackData implements Serializable {
         this.timestamp = timestamp;
         this.threatScore = threatScore;
         this.threatLevel = threatLevel;
+        this.eventTimeSpan = eventTimeSpan;
+        this.burstIntensity = burstIntensity;
+        this.timeDistributionWeight = timeDistributionWeight;
     }
     
     // Builder pattern
@@ -80,6 +89,9 @@ public class AggregatedAttackData implements Serializable {
         private Instant timestamp;
         private double threatScore;
         private String threatLevel;
+        private long eventTimeSpan;
+        private double burstIntensity;
+        private double timeDistributionWeight;
         
         public Builder customerId(String customerId) {
             this.customerId = customerId;
@@ -161,11 +173,27 @@ public class AggregatedAttackData implements Serializable {
             return this;
         }
         
+        public Builder eventTimeSpan(long eventTimeSpan) {
+            this.eventTimeSpan = eventTimeSpan;
+            return this;
+        }
+        
+        public Builder burstIntensity(double burstIntensity) {
+            this.burstIntensity = burstIntensity;
+            return this;
+        }
+        
+        public Builder timeDistributionWeight(double timeDistributionWeight) {
+            this.timeDistributionWeight = timeDistributionWeight;
+            return this;
+        }
+        
         public AggregatedAttackData build() {
             return new AggregatedAttackData(customerId, attackMac, attackIp,
                 mostAccessedHoneypotIp, attackCount, uniqueIps, uniquePorts, 
                 uniqueDevices, mixedPortWeight, tier, windowType, windowStart, 
-                windowEnd, timestamp, threatScore, threatLevel);
+                windowEnd, timestamp, threatScore, threatLevel,
+                eventTimeSpan, burstIntensity, timeDistributionWeight);
         }
     }
     
@@ -219,5 +247,16 @@ public class AggregatedAttackData implements Serializable {
     
     public String getThreatLevel() { return threatLevel; }
     public void setThreatLevel(String threatLevel) { this.threatLevel = threatLevel; }
+    
+    public long getEventTimeSpan() { return eventTimeSpan; }
+    public void setEventTimeSpan(long eventTimeSpan) { this.eventTimeSpan = eventTimeSpan; }
+    
+    public double getBurstIntensity() { return burstIntensity; }
+    public void setBurstIntensity(double burstIntensity) { this.burstIntensity = burstIntensity; }
+    
+    public double getTimeDistributionWeight() { return timeDistributionWeight; }
+    public void setTimeDistributionWeight(double timeDistributionWeight) { 
+        this.timeDistributionWeight = timeDistributionWeight; 
+    }
 }
 

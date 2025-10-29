@@ -59,7 +59,13 @@ public class NotificationService {
     @Async
     public void sendNotification(Notification notification) {
         logger.info("Sending notification via {} to {}", notification.getChannel(), notification.getRecipient());
-
+        // Ensure notification is persisted before sending so notification.id is available
+        if (notification.getId() == null) {
+            notification.setStatus(NotificationStatus.PENDING);
+            notification = notificationRepository.save(notification);
+            logger.debug("Persisted notification before send: notificationId={}, alertId={}",
+                    notification.getId(), notification.getAlert() != null ? notification.getAlert().getId() : null);
+        }
         try {
             switch (notification.getChannel()) {
                 case EMAIL:
@@ -97,6 +103,19 @@ public class NotificationService {
         }
 
         notificationRepository.save(notification);
+    }
+
+    /**
+     * 创建并持久化一条通知（不发送）
+     */
+    public Notification createNotification(Notification notification) {
+        if (notification.getStatus() == null) {
+            notification.setStatus(NotificationStatus.PENDING);
+        }
+        Notification saved = notificationRepository.save(notification);
+        logger.debug("Created notification: id={}, alertId={}, recipient={}",
+                saved.getId(), saved.getAlert() != null ? saved.getAlert().getId() : null, saved.getRecipient());
+        return saved;
     }
 
     /**

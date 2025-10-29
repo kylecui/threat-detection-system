@@ -50,7 +50,8 @@ public class AttackEvent {
         this.ipType = ipType;
         this.rawLog = rawLog;
         this.customerId = customerId;
-        this.timestamp = Instant.now();
+        // 将Unix时间戳(秒)转换为Instant
+        this.timestamp = logTime > 0 ? Instant.ofEpochSecond(logTime) : Instant.now();
         this.severity = determineSeverity(subType);
         this.description = generateDescription();
         this.id = devSerial + "_" + logTime + "_" + lineId;
