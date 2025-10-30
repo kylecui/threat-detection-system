@@ -20,7 +20,7 @@ TEST_IPS=("192.168.1.101" "192.168.1.102" "192.168.1.103")
 
 # 清空数据库
 echo "清空测试数据..."
-docker exec postgres psql -U postgres -d threat_detection -c "DELETE FROM alerts WHERE source='stream-processing-service' AND attack_mac LIKE '00:11:22:33:44:0%';" > /dev/null 2>&1
+docker exec postgres psql -U threat_user -d threat_detection -c "DELETE FROM alerts WHERE source='stream-processing-service' AND attack_mac LIKE '00:11:22:33:44:0%';" > /dev/null 2>&1
 
 # 等待清空完成
 sleep 2

@@ -74,10 +74,10 @@ customer-management/
 
 ```bash
 # 创建数据库 (如果尚未创建)
-psql -U postgres -c "CREATE DATABASE threat_detection;"
+psql -U threat_user -c "CREATE DATABASE threat_detection;"
 
 # 执行Schema脚本
-psql -U postgres -d threat_detection -f src/main/resources/schema.sql
+psql -U threat_user -d threat_detection -f src/main/resources/schema.sql
 ```
 
 ### 2. 配置环境变量

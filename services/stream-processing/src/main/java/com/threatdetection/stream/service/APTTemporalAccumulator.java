@@ -79,7 +79,8 @@ public class APTTemporalAccumulator {
                     Instant windowStart = windowEnd.minus(DEFAULT_WINDOW_DAYS, ChronoUnit.DAYS);
 
                     // 推断攻击阶段 (简化实现 - 在实际使用中应该传递端口列表)
-                    AttackPhaseClassifier classifier = new AttackPhaseClassifier();
+                    AttackPhasePortConfigService configService = new AttackPhasePortConfigService();
+                    AttackPhaseClassifier classifier = new AttackPhaseClassifier(configService);
                     AttackPhaseClassifier.AttackPhaseClassification phaseInfo =
                         classifier.classifyPhase(data.getCustomerId(), data.getAttackMac(), null, data.getAttackCount());
 

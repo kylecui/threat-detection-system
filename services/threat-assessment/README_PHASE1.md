@@ -382,7 +382,7 @@ curl http://localhost:8081/api/v1/assessment/assessments?customerId=test-001
 
 ```bash
 # 连接PostgreSQL
-docker exec -it postgres psql -U postgres -d threat_detection
+docker exec -it postgres psql -U threat_user -d threat_detection
 
 # 查询评估记录
 SELECT id, customer_id, attack_mac, threat_level, threat_score, 
@@ -461,7 +461,7 @@ ERROR - Unable to obtain JDBC Connection
 docker ps | grep postgres
 
 # 2. 检查数据库表是否存在
-docker exec -it postgres psql -U postgres -d threat_detection -c "\dt"
+docker exec -it postgres psql -U threat_user -d threat_detection -c "\dt"
 
 # 3. 检查连接配置
 cat services/threat-assessment/src/main/resources/application.yml | grep datasource

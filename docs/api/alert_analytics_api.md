@@ -1464,7 +1464,7 @@ public CompletableFuture<String> exportReportAsync(String customerId) {
 
 ```bash
 # 检查数据库查询
-psql -U postgres -d threat_detection -c "
+psql -U threat_user -d threat_detection -c "
 SELECT 
     COUNT(*) as total,
     COUNT(*) FILTER (WHERE status = 'OPEN') as open,

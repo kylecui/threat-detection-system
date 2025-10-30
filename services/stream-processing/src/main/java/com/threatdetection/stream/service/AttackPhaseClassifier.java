@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -12,17 +13,25 @@ import java.util.Set;
  * <p>基于端口序列和攻击模式推断APT攻击阶段
  * 支持渐进式分类，当数据不足时降级到单阶段分析
  *
+ * <p>配置来源：AttackPhasePortConfigService (从数据库动态加载)
+ *
  * @author Threat Detection Team
- * @version 1.0
+ * @version 2.0 - 支持动态配置
  */
 public class AttackPhaseClassifier {
 
     private static final Logger logger = LoggerFactory.getLogger(AttackPhaseClassifier.class);
 
-    // 关键端口定义
-    private static final Set<Integer> RECON_PORTS = Set.of(21, 22, 23, 25, 53, 80, 110, 143, 443, 993, 995);
-    private static final Set<Integer> EXPLOITATION_PORTS = Set.of(135, 139, 445, 3389, 5985, 5986);
-    private static final Set<Integer> PERSISTENCE_PORTS = Set.of(3306, 5432, 6379, 27017, 1433);
+    // 配置服务 - 从数据库动态加载
+    private final AttackPhasePortConfigService configService;
+
+    /**
+     * 构造函数 - 注入配置服务
+     */
+    public AttackPhaseClassifier(AttackPhasePortConfigService configService) {
+        this.configService = configService;
+        logger.info("AttackPhaseClassifier initialized with dynamic configuration service");
+    }
 
     /**
      * 攻击阶段分类结果
@@ -43,7 +52,7 @@ public class AttackPhaseClassifier {
     /**
      * 分类攻击阶段
      *
-     * @param customerId 客户ID
+     * @param customerId 客户ID (用于多租户配置)
      * @param attackMac 攻击者MAC
      * @param portList 端口列表 (可能为null)
      * @param attackCount 攻击次数
@@ -58,13 +67,13 @@ public class AttackPhaseClassifier {
         }
 
         // 基于端口分析进行精确分类
-        return classifyByPorts(portList, attackCount);
+        return classifyByPorts(customerId, portList, attackCount);
     }
 
     /**
      * 基于端口列表分类攻击阶段
      */
-    private AttackPhaseClassification classifyByPorts(List<Integer> portList, int attackCount) {
+    private AttackPhaseClassification classifyByPorts(String customerId, List<Integer> portList, int attackCount) {
         int totalPorts = portList.size();
 
         // 统计各阶段端口数量
@@ -73,11 +82,11 @@ public class AttackPhaseClassifier {
         int persistenceCount = 0;
 
         for (int port : portList) {
-            if (RECON_PORTS.contains(port)) {
+            if (configService.isPortInCustomerPhase(customerId, port, "RECON")) {
                 reconCount++;
-            } else if (EXPLOITATION_PORTS.contains(port)) {
+            } else if (configService.isPortInCustomerPhase(customerId, port, "EXPLOITATION")) {
                 exploitationCount++;
-            } else if (PERSISTENCE_PORTS.contains(port)) {
+            } else if (configService.isPortInCustomerPhase(customerId, port, "PERSISTENCE")) {
                 persistenceCount++;
             }
         }
@@ -197,5 +206,21 @@ public class AttackPhaseClassifier {
             default:
                 return 1.0;
         }
+    }
+
+    /**
+     * 获取配置统计信息
+     * @return 配置统计
+     */
+    public Map<String, Object> getConfigStatistics() {
+        return configService.getStatistics();
+    }
+
+    /**
+     * 获取所有支持的阶段
+     * @return 阶段集合
+     */
+    public Set<String> getSupportedPhases() {
+        return configService.getAllPhases();
     }
 }

@@ -1430,7 +1430,7 @@ kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
 3. **检查数据库连接**:
 ```bash
 # 检查PostgreSQL连接数
-psql -U postgres -d threat_detection -c "SELECT count(*) FROM pg_stat_activity WHERE datname='threat_detection';"
+psql -U threat_user -d threat_detection -c "SELECT count(*) FROM pg_stat_activity WHERE datname='threat_detection';"
 ```
 
 **解决方案**:

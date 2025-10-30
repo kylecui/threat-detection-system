@@ -54,7 +54,7 @@ docker-compose up -d postgres
 # docker/10-ip-segment-weights-v2.sql (网段权重配置)
 
 # 3. 验证表创建
-docker exec -it <postgres-container> psql -U postgres -d threat_detection \
+docker exec -it <postgres-container> psql -U threat_user -d threat_detection \
   -c "SELECT COUNT(*) FROM ip_segment_weight_config;"
 
 # 预期结果: 14条记录 (12个default + 2个customer-A示例)
@@ -77,7 +77,7 @@ NOTICE:  ✅ Inserted default IP segment weight configurations
 **步骤1**: 备份现有配置
 ```bash
 # 导出客户自定义配置
-docker exec -it <postgres-container> psql -U postgres -d threat_detection \
+docker exec -it <postgres-container> psql -U threat_user -d threat_detection \
   -c "COPY (SELECT * FROM ip_segment_weight_config WHERE segment_name NOT LIKE '%AWS%' AND segment_name NOT LIKE '%Cloud%') TO STDOUT WITH CSV HEADER;" > ip_segments_backup.csv
 ```
 
@@ -149,7 +149,7 @@ ALTER TABLE ip_segment_weight_config_v2 RENAME TO ip_segment_weight_config;
 
 **步骤1**: 备份数据库
 ```bash
-docker exec -it <postgres-container> pg_dump -U postgres threat_detection > backup_$(date +%Y%m%d_%H%M%S).sql
+docker exec -it <postgres-container> pg_dump -U threat_user threat_detection > backup_$(date +%Y%m%d_%H%M%S).sql
 ```
 
 **步骤2**: 添加新字段
@@ -293,7 +293,7 @@ INSERT INTO ip_segment_weight_config (
 # customer_id,segment_name,ip_range_start,ip_range_end,zone_type,zone_level,...
 
 # 2. 导入数据库
-docker exec -i <postgres-container> psql -U postgres -d threat_detection \
+docker exec -i <postgres-container> psql -U threat_user -d threat_detection \
   -c "\COPY ip_segment_weight_config FROM STDIN WITH CSV HEADER" < customer_segments.csv
 ```
 

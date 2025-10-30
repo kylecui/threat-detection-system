@@ -179,7 +179,7 @@ curl -X POST http://localhost:8888/api/v1/logs/ingest \
 
 ```bash
 # 检查数据库一致性
-docker exec threat-db psql -U postgres -d threat_detection -c \
+docker exec threat-db psql -U threat_user -d threat_detection -c \
   "SELECT * FROM device_customer_mapping WHERE customer_id = 'test-customer';"
 
 # 检查Kafka消息
@@ -205,10 +205,10 @@ docker-compose logs -f threat-assessment
 docker-compose restart customer-management
 
 # 进入数据库
-docker exec -it threat-db psql -U postgres threat_detection
+docker exec -it threat-db psql -U threat_user threat_detection
 
 # 查看表结构
-docker exec -it threat-db psql -U postgres threat_detection \
+docker exec -it threat-db psql -U threat_user threat_detection \
   -c "\d+ customer_notification_configs"
 
 # 运行所有测试

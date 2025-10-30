@@ -1,5 +1,5 @@
 -- Phase 2: 端口风险配置表
--- 执行: psql -U postgres -d threat_detection < init-db.sql.phase2
+-- 执行: psql -U threat_user -d threat_detection < init-db.sql.phase2
 
 -- 1. 创建port_risk_config表
 CREATE TABLE IF NOT EXISTS port_risk_config (

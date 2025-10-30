@@ -1501,7 +1501,7 @@ Alert not found: 12345
 
 ```bash
 # 检查数据库
-psql -U postgres -d threat_detection -c \
+psql -U threat_user -d threat_detection -c \
   "SELECT id, title, customer_id FROM alerts WHERE id = 12345;"
 ```
 

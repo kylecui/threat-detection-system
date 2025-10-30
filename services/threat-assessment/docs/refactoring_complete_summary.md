@@ -615,9 +615,9 @@ public void cleanupExpiredWhitelist() {
 **启动步骤**:
 ```bash
 # 1. 初始化数据库
-psql -U postgres -d threat_detection -f init-db.sql.phase2
-psql -U postgres -d threat_detection -f init-db.sql.phase3
-psql -U postgres -d threat_detection -f init-db.sql.phase4
+psql -U threat_user -d threat_detection -f init-db.sql.phase2
+psql -U threat_user -d threat_detection -f init-db.sql.phase3
+psql -U threat_user -d threat_detection -f init-db.sql.phase4
 
 # 2. 编译项目
 mvn clean compile

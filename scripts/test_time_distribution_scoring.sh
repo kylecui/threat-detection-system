@@ -22,7 +22,7 @@ DEV_SERIAL="TEST_BURST_001"
 # 清理函数
 cleanup() {
     echo "清理测试数据..."
-    docker exec postgres psql -U postgres -d threat_detection -c \
+    docker exec postgres psql -U threat_user -d threat_detection -c \
         "DELETE FROM attack_events WHERE customer_id = '$CUSTOMER_ID';" 2>/dev/null || true
 }
 
@@ -173,5 +173,5 @@ echo "查看完整日志:"
 echo "  docker logs stream-processing 2>&1 | grep -E 'timeDistWeight|burstIntensity|timeSpan'"
 echo ""
 echo "清理测试数据:"
-echo "  docker exec postgres psql -U postgres -d threat_detection -c \"DELETE FROM attack_events WHERE customer_id LIKE 'customer_test_%';\""
+echo "  docker exec postgres psql -U threat_user -d threat_detection -c \"DELETE FROM attack_events WHERE customer_id LIKE 'customer_test_%';\""
 echo ""

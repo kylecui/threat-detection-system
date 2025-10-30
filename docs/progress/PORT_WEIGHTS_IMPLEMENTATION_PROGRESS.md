@@ -207,7 +207,7 @@ service.batchImport(configs);
 2. **执行数据库迁移** (10分钟)
    ```bash
    cd docker
-   docker exec -i postgres psql -U postgres -d threat_detection < 13-customer-port-weights.sql
+   docker exec -i postgres psql -U threat_user -d threat_detection < 13-customer-port-weights.sql
    ```
 
 3. **编译和部署** (15分钟)

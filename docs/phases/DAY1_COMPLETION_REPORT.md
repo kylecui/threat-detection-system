@@ -159,7 +159,7 @@ sleep 30
 docker-compose ps
 
 # 3. 检查数据库
-docker exec threat-db psql -U postgres -d threat_detection -c "\dt+"
+docker exec threat-db psql -U threat_user -d threat_detection -c "\dt+"
 
 # 4. 检查Kafka Topics
 docker exec kafka kafka-topics --list --bootstrap-server localhost:9092

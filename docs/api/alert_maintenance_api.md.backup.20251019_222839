@@ -1028,7 +1028,7 @@ public class DisasterRecoveryService {
         );
         
         String command = String.format(
-            "pg_dump -h localhost -U postgres -d threat_detection -t alerts -f %s",
+            "pg_dump -h localhost -U threat_user -d threat_detection -t alerts -f %s",
             backupFile
         );
         
@@ -1055,7 +1055,7 @@ public class DisasterRecoveryService {
     private void restoreFromBackup(String customerId, String backupFile) {
         // 使用psql恢复备份
         String command = String.format(
-            "psql -h localhost -U postgres -d threat_detection -f %s",
+            "psql -h localhost -U threat_user -d threat_detection -f %s",
             backupFile
         );
         
@@ -1671,7 +1671,7 @@ public void quarterlyVacuumFull() {
 df -h /var/lib/postgresql
 
 # 检查归档表大小
-psql -U postgres -d threat_detection -c "
+psql -U threat_user -d threat_detection -c "
 SELECT 
     schemaname,
     tablename,
@@ -1689,7 +1689,7 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 find /backups -name "*.sql" -mtime +30 -delete
 
 # 2. 压缩归档表
-psql -U postgres -d threat_detection -c "
+psql -U threat_user -d threat_detection -c "
 VACUUM FULL alerts_archive;
 "
 
@@ -1697,7 +1697,7 @@ VACUUM FULL alerts_archive;
 pg_dump -t alerts_archive | gzip | aws s3 cp - s3://archive-bucket/alerts_archive.sql.gz
 
 # 4. 清空归档表
-psql -U postgres -d threat_detection -c "
+psql -U threat_user -d threat_detection -c "
 TRUNCATE alerts_archive;
 "
 ```
