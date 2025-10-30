@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.threatdetection.stream.model.AttackEvent;
 import com.threatdetection.stream.model.StatusEvent;
+import com.threatdetection.stream.service.APTTemporalAccumulator;
 import com.threatdetection.stream.sink.AttackEventJdbcSink;
 import org.apache.flink.api.common.eventtime.SerializableTimestampAssigner;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
@@ -148,6 +149,10 @@ public class StreamProcessingJob {
         
         logger.info("PostgreSQL persistence sink configured successfully");
 
+        // ===== 分支2: APT时序累积 (新增功能) =====
+        logger.info("Configuring APT temporal accumulation for long-term threat analysis");
+        // 注意: APT累积将在MultiTierWindowProcessor处理后添加
+
         // Status events stream - enabled for device health monitoring
         logger.info("Starting Status Event Processing for Device Health Monitoring");
         DataStream<StatusEvent> statusStream = env.fromSource(statusSource, WatermarkStrategy.noWatermarks(), "status-events")
@@ -167,11 +172,21 @@ public class StreamProcessingJob {
                 .sinkTo(createDeviceStatusKafkaSink(bootstrapServers))
                 .name("device-health-kafka-sink");
 
-            // ===== MVP PHASE 0: 3层时间窗口架构 =====
+        // ===== MVP PHASE 0: 3层时间窗口架构 =====
         // 替换单一窗口聚合为3层时间窗口 (30s/5min/15min)
         logger.info("Starting Multi-Tier Window Processing for MVP Phase 0");
         DataStream<String> threatAlerts = MultiTierWindowProcessor.processMultiTierWindows(
             attackStream, bootstrapServers);
+
+        // ===== 分支2: APT时序累积 (新增功能) =====
+        logger.info("Adding APT temporal accumulation sink");
+        DataStream<com.threatdetection.stream.model.AggregatedAttackData> aggregatedData =
+            MultiTierWindowProcessor.processMultiTierWindowsInternal(attackStream, bootstrapServers);
+        aggregatedData.addSink(APTTemporalAccumulator.createSinkWithEnvConfig())
+            .name("apt-temporal-accumulation")
+            .uid("apt-temporal-accumulation-sink")
+            .setParallelism(1); // APT累积使用单并行度保证顺序性
+        logger.info("APT temporal accumulation sink configured successfully");
 
         // 备份: 保留原有逻辑用于比较和验证 - 已注释禁用避免序列化问题
         // logger.info("Starting legacy single-window processing for comparison");

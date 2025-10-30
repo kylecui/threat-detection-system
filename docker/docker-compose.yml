@@ -35,6 +35,7 @@ services:
       - ./09-add-missing-fields.sql:/docker-entrypoint-initdb.d/09-add-missing-fields.sql
       - ./12-ip-segment-weights-v4.sql:/docker-entrypoint-initdb.d/12-ip-segment-weights-v4.sql
       - ./13-customer-port-weights.sql:/docker-entrypoint-initdb.d/13-customer-port-weights.sql
+      - ./14-apt-temporal-accumulations.sql:/docker-entrypoint-initdb.d/14-apt-temporal-accumulations.sql
     networks:
       - threat-detection-network
     healthcheck:

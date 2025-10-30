@@ -10,6 +10,24 @@
 
 **每次代码修改后，必须完整执行以下三个步骤，缺一不可**
 
+### ⚠️ **特别提醒：ClassNotFoundException 排查要点**
+
+**当出现 `ClassNotFoundException` 时，首先检查 `stream-processing` 和 `taskmanager` 两个容器的 JAR 文件版本！**
+
+**为什么容易被忽略**：
+- `stream-processing` 容器包含 JAR 文件的构建逻辑
+- `taskmanager` 容器（Flink TaskManager）负责实际执行，但 JAR 文件需要从 `stream-processing` 镜像复制
+- 修改代码后只重建 `stream-processing` 容器，`taskmanager` 仍使用旧 JAR 文件
+
+**快速检查命令**：
+```bash
+# 检查两个关键容器的 JAR 文件时间戳
+docker exec stream-processing ls -lh /opt/flink/lib/stream-processing.jar
+docker exec taskmanager ls -lh /opt/flink/lib/stream-processing.jar
+
+# 如果时间戳不同，说明需要重建 taskmanager
+```
+
 ---
 
 ## 📋 标准流程
@@ -358,7 +376,84 @@ curl -X POST http://localhost:8083/api/v1/assessment/evaluate \
 
 ---
 
-## 📚 相关文档
+### 问题4: ClassNotFoundException - JAR文件版本不一致
+
+**症状**: 出现 `ClassNotFoundException` 或 `NoClassDefFoundError`
+
+**原因**: 
+- `stream-processing` 服务代码已修改，但容器中的 JAR 文件未更新
+- `taskmanager` 容器（Flink TaskManager）仍在使用旧版本的 JAR 文件
+- Docker 缓存导致镜像未重新构建
+
+**⚠️ 特别注意**: `taskmanager` 容器容易被忽略！
+
+**排查步骤**:
+```bash
+# 1. 检查所有相关容器的 JAR 文件版本
+echo "=== 检查 stream-processing 容器 ==="
+docker exec stream-processing ls -lh /opt/flink/lib/stream-processing.jar
+
+echo "=== 检查 taskmanager 容器 ==="
+docker exec taskmanager ls -lh /opt/flink/lib/stream-processing.jar
+
+echo "=== 检查 jobmanager 容器 ==="
+docker exec jobmanager ls -lh /opt/flink/lib/stream-processing.jar
+
+# 2. 比较文件修改时间（应该都是最新的）
+# 预期：所有容器的 JAR 文件时间戳应该相同且是最近的
+
+# 3. 如果时间戳不同，强制重建所有 Flink 容器
+cd ~/threat-detection-system/docker
+docker compose down -v stream-processing taskmanager jobmanager
+docker compose build --no-cache stream-processing taskmanager jobmanager
+docker compose up -d --force-recreate stream-processing taskmanager jobmanager
+
+# 4. 验证重建结果
+docker compose ps | grep -E "(stream-processing|taskmanager|jobmanager)"
+```
+
+**Flink 集群重建命令**:
+```bash
+# 停止所有 Flink 相关服务
+docker compose down -v stream-processing taskmanager jobmanager
+
+# 重新构建（注意：stream-processing 镜像包含 JAR 文件）
+docker compose build --no-cache stream-processing taskmanager jobmanager
+
+# 重新启动
+docker compose up -d --force-recreate stream-processing taskmanager jobmanager
+
+# 等待服务启动
+sleep 10
+
+# 检查状态
+docker compose ps
+```
+
+**验证方法**:
+```bash
+# 检查 Flink Web UI 是否可访问
+curl -s http://localhost:8081/overview | grep -o '"state":"RUNNING"'
+
+# 检查作业状态
+curl -s http://localhost:8081/jobs | jq '.jobs[0].state'
+
+# 查看详细日志
+docker logs stream-processing --tail 50
+docker logs taskmanager --tail 50
+```
+
+**常见场景**:
+- 修改了 `APTTemporalAccumulator.java` 后出现类找不到错误
+- 添加了新的依赖包但容器中没有
+- 重构了包结构但旧的类路径仍在缓存中
+
+**预防措施**:
+- 每次修改 `stream-processing` 代码后，必须重建所有 Flink 容器
+- 不要只重建 `stream-processing` 容器，`taskmanager` 和 `jobmanager` 也需要重建
+- 使用 `--no-cache` 确保 Docker 镜像完全重新构建
+
+---
 
 - **Docker Compose 配置**: `docker/docker-compose.yml`
 - **Dockerfile**: `services/threat-assessment/Dockerfile`

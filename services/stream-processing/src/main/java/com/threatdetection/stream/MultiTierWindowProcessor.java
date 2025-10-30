@@ -154,15 +154,41 @@ public class MultiTierWindowProcessor {
     }
 
     /**
-     * 处理3层时间窗口
+     * 处理3层时间窗口 - 返回聚合数据流用于APT累积
      * @param attackStream 攻击事件流
      * @param bootstrapServers Kafka地址
      * @return 处理后的威胁告警流
      */
     public static DataStream<String> processMultiTierWindows(
-            DataStream<AttackEvent> attackStream, 
+            DataStream<AttackEvent> attackStream,
             String bootstrapServers) {
-        
+
+        // 获取聚合数据流
+        DataStream<AggregatedAttackData> aggregatedData = processMultiTierWindowsInternal(attackStream, bootstrapServers);
+
+        // 转换为JSON字符串输出
+        DataStream<String> allAlerts = aggregatedData
+            .map(new AggregationToJsonMapper())
+            .name("aggregation-to-json");
+
+        logger.info("✅ 3层时间窗口处理器已启动: Tier1={}s, Tier2={}s({}min), Tier3={}s({}min)",
+                   TIER1_WINDOW_SECONDS,
+                   TIER2_WINDOW_SECONDS, TIER2_WINDOW_SECONDS / 60,
+                   TIER3_WINDOW_SECONDS, TIER3_WINDOW_SECONDS / 60);
+
+        return allAlerts;
+    }
+
+    /**
+     * 处理3层时间窗口 - 返回聚合数据流 (内部方法)
+     * @param attackStream 攻击事件流
+     * @param bootstrapServers Kafka地址
+     * @return 聚合数据流
+     */
+    public static DataStream<AggregatedAttackData> processMultiTierWindowsInternal(
+            DataStream<AttackEvent> attackStream,
+            String bootstrapServers) {
+
         // 数据预处理：转换为Tuple2<customerId:attackMac, AttackEvent>
         DataStream<AttackEvent> preprocessed = attackStream
             .map(new AttackEventPreprocessor())
@@ -192,17 +218,7 @@ public class MultiTierWindowProcessor {
         // 合并所有层级的聚合数据
         DataStream<AggregatedAttackData> allAggregations = tier1Aggregations
             .union(tier2Aggregations, tier3Aggregations);
-        
-        // 转换为JSON字符串输出
-        DataStream<String> allAlerts = allAggregations
-            .map(new AggregationToJsonMapper())
-            .name("aggregation-to-json");
 
-        logger.info("✅ 3层时间窗口处理器已启动: Tier1={}s, Tier2={}s({}min), Tier3={}s({}min)",
-                   TIER1_WINDOW_SECONDS, 
-                   TIER2_WINDOW_SECONDS, TIER2_WINDOW_SECONDS / 60,
-                   TIER3_WINDOW_SECONDS, TIER3_WINDOW_SECONDS / 60);
-        
-        return allAlerts;
+        return allAggregations;
     }
 }
