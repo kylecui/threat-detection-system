@@ -53,6 +53,32 @@ public class AlertController {
     private EscalationService escalationService;
 
     /**
+     * 将Java字段名映射到数据库列名
+     */
+    private String mapToDatabaseColumn(String fieldName) {
+        switch (fieldName) {
+            case "createdAt":
+                return "created_at";
+            case "updatedAt":
+                return "updated_at";
+            case "threatScore":
+                return "threat_score";
+            case "attackMac":
+                return "attack_mac";
+            case "lastNotifiedAt":
+                return "last_notified_at";
+            case "resolvedAt":
+                return "resolved_at";
+            case "escalationLevel":
+                return "escalation_level";
+            case "escalationReason":
+                return "escalation_reason";
+            default:
+                return fieldName; // 对于其他字段，假设它们与数据库列名相同
+        }
+    }
+
+    /**
      * 创建新告警
      */
     @PostMapping
@@ -92,17 +118,20 @@ public class AlertController {
     @GetMapping
     @Operation(summary = "查询告警", description = "分页查询告警列表，支持多种过滤条件")
     public ResponseEntity<Page<Alert>> getAlerts(
+            @Parameter(description = "客户ID") @RequestParam(required = false) String customerId,
             @Parameter(description = "告警状态") @RequestParam(required = false) AlertStatus status,
             @Parameter(description = "告警严重程度") @RequestParam(required = false) AlertSeverity severity,
             @Parameter(description = "开始时间") @RequestParam(required = false) LocalDateTime startTime,
             @Parameter(description = "结束时间") @RequestParam(required = false) LocalDateTime endTime,
             @Parameter(description = "页码（从0开始）") @RequestParam(defaultValue = "0") @Min(0) int page,
             @Parameter(description = "每页大小") @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
-            @Parameter(description = "排序字段") @RequestParam(defaultValue = "createdAt") String sortBy,
+            @Parameter(description = "排序字段") @RequestParam(defaultValue = "created_at") String sortBy,
             @Parameter(description = "排序方向") @RequestParam(defaultValue = "DESC") Sort.Direction sortDir) {
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDir, sortBy));
-        Page<Alert> alerts = alertService.findAlerts(status, severity, startTime, endTime, pageable);
+        // 映射Java字段名到数据库列名
+        String dbSortBy = mapToDatabaseColumn(sortBy);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDir, dbSortBy));
+        Page<Alert> alerts = alertService.findAlerts(customerId, status, severity, startTime, endTime, pageable);
 
         return ResponseEntity.ok(alerts);
     }

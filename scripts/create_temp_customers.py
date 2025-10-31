@@ -2,6 +2,7 @@
 """
 创建临时客户数据脚本
 基于 tmp/客户和设备对应关系.xlsx 文件创建客户和设备映射关系
+使用时间版本的device_customer_mapping表
 """
 
 import pandas as pd
@@ -99,19 +100,41 @@ def create_customers_and_mappings():
                 processed_customers.add(customer_id)
                 print(f"创建客户: {customer_id} - {customer_name}")
 
-            # 创建设备映射关系
-            insert_mapping_sql = """
-            INSERT INTO device_customer_mapping (dev_serial, customer_id, description)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (dev_serial) DO UPDATE SET
-                customer_id = EXCLUDED.customer_id,
-                description = EXCLUDED.description,
-                updated_at = CURRENT_TIMESTAMP
+            # 创建设备映射关系 (时间版本)
+            # 首先检查是否已有活跃映射，如果有则先解绑
+            check_existing_sql = """
+            SELECT id FROM device_customer_mapping
+            WHERE dev_serial = %s AND unbind_time IS NULL
             """
 
-            description = f"设备 {device_serial} 属于客户 {customer_name}"
+            cursor.execute(check_existing_sql, (device_serial,))
+            existing = cursor.fetchone()
 
-            cursor.execute(insert_mapping_sql, (device_serial, customer_id, description))
+            if existing:
+                # 解绑现有映射
+                unbind_sql = """
+                UPDATE device_customer_mapping
+                SET unbind_time = %s, updated_at = %s
+                WHERE id = %s
+                """
+                now = datetime.now(timezone.utc)
+                cursor.execute(unbind_sql, (now, now, existing[0]))
+                print(f"解绑现有映射: {device_serial}")
+
+            # 创建新映射 (2025-01-01开始，持续有效)
+            insert_mapping_sql = """
+            INSERT INTO device_customer_mapping (
+                dev_serial, customer_id, bind_time, description, created_at, updated_at
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+            """
+
+            bind_time = datetime(2025, 1, 1, tzinfo=timezone.utc)  # 2025年1月1日开始
+            now = datetime.now(timezone.utc)
+            description = f"设备 {device_serial} 属于客户 {customer_name} (2025+配置)"
+
+            cursor.execute(insert_mapping_sql, (
+                device_serial, customer_id, bind_time, description, now, now
+            ))
             print(f"创建设备映射: {device_serial} -> {customer_id}")
 
         # 提交事务
@@ -122,10 +145,10 @@ def create_customers_and_mappings():
         cursor.execute("SELECT COUNT(*) FROM customers")
         customer_count = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COUNT(*) FROM device_customer_mapping")
+        cursor.execute("SELECT COUNT(*) FROM device_customer_mapping WHERE unbind_time IS NULL")
         mapping_count = cursor.fetchone()[0]
 
-        print(f"验证结果: {customer_count} 个客户, {mapping_count} 个设备映射")
+        print(f"验证结果: {customer_count} 个客户, {mapping_count} 个活跃设备映射")
 
     except Exception as e:
         print(f"数据库操作失败: {e}")

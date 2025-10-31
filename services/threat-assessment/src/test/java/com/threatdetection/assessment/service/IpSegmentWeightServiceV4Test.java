@@ -51,8 +51,8 @@ class IpSegmentWeightServiceV4Test {
         // Given: IoT设备配置（权重0.9）
         AttackSourceWeight iotWeight = AttackSourceWeight.builder()
             .customerId(CUSTOMER_ID)
-            .ipSegment("192.168.50.0/24")
-            .attackSourceWeight(new BigDecimal("0.90"))
+            .segmentName("192.168.50.0/24")
+            .weight(new BigDecimal("0.90"))
             .isActive(true)
             .build();
         
@@ -89,8 +89,8 @@ class IpSegmentWeightServiceV4Test {
         // Given: 数据库服务器配置（权重3.0）
         AttackSourceWeight dbWeight = AttackSourceWeight.builder()
             .customerId(CUSTOMER_ID)
-            .ipSegment("10.0.3.0/24")
-            .attackSourceWeight(new BigDecimal("3.00"))
+            .segmentName("10.0.3.0/24")
+            .weight(new BigDecimal("3.00"))
             .isActive(true)
             .build();
         
@@ -120,8 +120,8 @@ class IpSegmentWeightServiceV4Test {
         // Given: 办公区设备配置（权重1.0）
         AttackSourceWeight officeWeight = AttackSourceWeight.builder()
             .customerId(CUSTOMER_ID)
-            .ipSegment("192.168.10.0/24")
-            .attackSourceWeight(new BigDecimal("1.00"))
+            .segmentName("192.168.10.0/24")
+            .weight(new BigDecimal("1.00"))
             .isActive(true)
             .build();
         
@@ -151,8 +151,8 @@ class IpSegmentWeightServiceV4Test {
         // Given: 访客网络配置（权重0.6）
         AttackSourceWeight guestWeight = AttackSourceWeight.builder()
             .customerId(CUSTOMER_ID)
-            .ipSegment("192.168.100.0/24")
-            .attackSourceWeight(new BigDecimal("0.60"))
+            .segmentName("192.168.100.0/24")
+            .weight(new BigDecimal("0.60"))
             .isActive(true)
             .build();
         

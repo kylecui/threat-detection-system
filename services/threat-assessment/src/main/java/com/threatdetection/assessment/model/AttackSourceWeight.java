@@ -16,12 +16,13 @@ import java.time.Instant;
 @Entity
 @Table(name = "attack_source_weights",
        uniqueConstraints = @UniqueConstraint(
-           name = "uk_customer_ip_segment",
-           columnNames = {"customer_id", "ip_segment"}
+           name = "uk_customer_source_segment",
+           columnNames = {"customer_id", "segment_name"}
        ),
        indexes = {
            @Index(name = "idx_attack_source_customer_active", columnList = "customer_id, is_active"),
-           @Index(name = "idx_attack_source_ip_segment", columnList = "ip_segment")
+           @Index(name = "idx_attack_source_ip_range", columnList = "customer_id, ip_range_start, ip_range_end"),
+           @Index(name = "idx_attack_source_risk_level", columnList = "risk_level")
        })
 @Data
 @Builder
@@ -40,16 +41,40 @@ public class AttackSourceWeight {
     private String customerId;
     
     /**
-     * IP段标识 (如: "192.168.1.0/24", "10.0.0.0/8")
+     * 网段名称
      */
-    @Column(name = "ip_segment", nullable = false, length = 50)
-    private String ipSegment;
+    @Column(name = "segment_name", nullable = false, length = 255)
+    private String segmentName;
     
     /**
-     * 攻击源权重 (0.0-10.0)
+     * IP范围起始地址
      */
-    @Column(name = "attack_source_weight", nullable = false, precision = 5, scale = 2)
-    private BigDecimal attackSourceWeight;
+    @Column(name = "ip_range_start", nullable = false, length = 15)
+    private String ipRangeStart;
+    
+    /**
+     * IP范围结束地址
+     */
+    @Column(name = "ip_range_end", nullable = false, length = 15)
+    private String ipRangeEnd;
+    
+    /**
+     * 网段类型
+     */
+    @Column(name = "segment_type", nullable = false, length = 50)
+    private String segmentType;
+    
+    /**
+     * 风险等级
+     */
+    @Column(name = "risk_level", nullable = false, length = 20)
+    private String riskLevel;
+    
+    /**
+     * 攻击源权重 (0.5-3.0)
+     */
+    @Column(name = "weight", nullable = false, precision = 3, scale = 2)
+    private BigDecimal weight;
     
     /**
      * 描述信息
@@ -63,6 +88,13 @@ public class AttackSourceWeight {
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = true;
+    
+    /**
+     * 优先级
+     */
+    @Column(name = "priority", nullable = false)
+    @Builder.Default
+    private Integer priority = 50;
     
     /**
      * 创建时间
@@ -83,53 +115,13 @@ public class AttackSourceWeight {
         if (isActive == null) {
             isActive = true;
         }
+        if (priority == null) {
+            priority = 50;
+        }
     }
     
     @PreUpdate
     protected void onUpdate() {
         updatedAt = Instant.now();
-    }
-    
-    /**
-     * 获取权重值 (兼容旧接口)
-     */
-    public BigDecimal getWeight() {
-        return attackSourceWeight;
-    }
-    
-    /**
-     * 设置权重值 (兼容旧接口)
-     */
-    public void setWeight(BigDecimal weight) {
-        this.attackSourceWeight = weight;
-    }
-    
-    /**
-     * 获取网段名称 (兼容旧接口)
-     */
-    public String getSegmentName() {
-        return ipSegment;
-    }
-    
-    /**
-     * 设置网段名称 (兼容旧接口)
-     */
-    public void setSegmentName(String segmentName) {
-        this.ipSegment = segmentName;
-    }
-    
-    /**
-     * 获取网段类型 (兼容旧接口)
-     */
-    public String getSegmentType() {
-        // 从IP段推断类型
-        if (ipSegment == null) return "UNKNOWN";
-        if (ipSegment.startsWith("192.168.") || ipSegment.startsWith("10.") || ipSegment.startsWith("172.")) {
-            return "PRIVATE";
-        } else if (ipSegment.startsWith("127.")) {
-            return "LOOPBACK";
-        } else {
-            return "PUBLIC";
-        }
     }
 }

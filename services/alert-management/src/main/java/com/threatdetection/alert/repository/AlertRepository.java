@@ -22,17 +22,23 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     /**
      * 根据状态查找告警
      */
-    Page<Alert> findByStatus(AlertStatus status, Pageable pageable);
+    @Query(value = "SELECT * FROM alerts WHERE status = :status ORDER BY created_at DESC",
+           nativeQuery = true)
+    Page<Alert> findByStatus(@Param("status") String status, Pageable pageable);
 
     /**
      * 根据严重程度查找告警
      */
-    Page<Alert> findBySeverity(AlertSeverity severity, Pageable pageable);
+    @Query(value = "SELECT * FROM alerts WHERE severity = :severity ORDER BY created_at DESC",
+           nativeQuery = true)
+    Page<Alert> findBySeverity(@Param("severity") String severity, Pageable pageable);
 
     /**
      * 根据状态和严重程度查找告警
      */
-    Page<Alert> findByStatusAndSeverity(AlertStatus status, AlertSeverity severity, Pageable pageable);
+    @Query(value = "SELECT * FROM alerts WHERE status = :status AND severity = :severity ORDER BY created_at DESC",
+           nativeQuery = true)
+    Page<Alert> findByStatusAndSeverity(@Param("status") String status, @Param("severity") String severity, Pageable pageable);
 
     /**
      * 根据攻击MAC地址查找告警
@@ -42,22 +48,37 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     /**
      * 根据时间范围查找告警
      */
-    Page<Alert> findByCreatedAtBetween(LocalDateTime startTime, LocalDateTime endTime, Pageable pageable);
+    @Query(value = "SELECT * FROM alerts WHERE created_at BETWEEN :startTime AND :endTime ORDER BY created_at DESC",
+           nativeQuery = true)
+    Page<Alert> findByCreatedAtBetween(@Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime, Pageable pageable);
 
     /**
      * 根据状态和时间范围查找告警
      */
-    Page<Alert> findByStatusAndCreatedAtBetween(AlertStatus status, LocalDateTime startTime, LocalDateTime endTime, Pageable pageable);
+    @Query(value = "SELECT * FROM alerts WHERE status = :status AND created_at BETWEEN :startTime AND :endTime ORDER BY created_at DESC",
+           nativeQuery = true)
+    Page<Alert> findByStatusAndCreatedAtBetween(@Param("status") String status, @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime, Pageable pageable);
 
     /**
      * 根据严重程度和时间范围查找告警
      */
-    Page<Alert> findBySeverityAndCreatedAtBetween(AlertSeverity severity, LocalDateTime startTime, LocalDateTime endTime, Pageable pageable);
+    @Query(value = "SELECT * FROM alerts WHERE severity = :severity AND created_at BETWEEN :startTime AND :endTime ORDER BY created_at DESC",
+           nativeQuery = true)
+    Page<Alert> findBySeverityAndCreatedAtBetween(@Param("severity") String severity, @Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime, Pageable pageable);
 
     /**
      * 根据源系统查找告警
      */
-    Page<Alert> findBySource(String source, Pageable pageable);
+    @Query(value = "SELECT * FROM alerts WHERE source = :source ORDER BY created_at DESC",
+           nativeQuery = true)
+    Page<Alert> findBySource(@Param("source") String source, Pageable pageable);
+
+    /**
+     * 查找所有告警（分页）
+     */
+    @Query(value = "SELECT * FROM alerts ORDER BY created_at DESC",
+           nativeQuery = true)
+    Page<Alert> findAllAlerts(Pageable pageable);
 
     /**
      * 查找需要升级的告警（未解决且未通知超过指定时间）
@@ -104,6 +125,36 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
                                            @Param("since") LocalDateTime since);
 
     /**
+     * 根据客户ID查找告警（通过metadata中的customer_id）
+     */
+    @Query(value = "SELECT * FROM alerts WHERE (CAST(metadata AS jsonb) ->> 'customer_id') = :customerId",
+           nativeQuery = true)
+    Page<Alert> findByCustomerId(@Param("customerId") String customerId, Pageable pageable);
+
+    /**
+     * 根据客户ID和状态查找告警
+     */
+    @Query(value = "SELECT * FROM alerts WHERE (CAST(metadata AS jsonb) ->> 'customer_id') = :customerId AND status = :status",
+           nativeQuery = true)
+    Page<Alert> findByCustomerIdAndStatus(@Param("customerId") String customerId,
+                                         @Param("status") String status, Pageable pageable);
+
+    /**
+     * 根据客户ID和严重程度查找告警
+     */
+    @Query(value = "SELECT * FROM alerts WHERE (CAST(metadata AS jsonb) ->> 'customer_id') = :customerId AND severity = :severity",
+           nativeQuery = true)
+    Page<Alert> findByCustomerIdAndSeverity(@Param("customerId") String customerId,
+                                           @Param("severity") String severity, Pageable pageable);
+
+    /**
+     * 根据客户ID、状态和严重程度查找告警
+     */
+    @Query(value = "SELECT * FROM alerts WHERE (CAST(metadata AS jsonb) ->> 'customer_id') = :customerId AND status = :status AND severity = :severity",
+           nativeQuery = true)
+    Page<Alert> findByCustomerIdAndStatusAndSeverity(@Param("customerId") String customerId,
+                                                    @Param("status") String status,
+                                                    @Param("severity") String severity, Pageable pageable);    /**
      * 查找相似告警（用于智能去重）
      */
     @Query("SELECT a FROM Alert a WHERE a.title LIKE %:titleKeyword% AND a.createdAt > :since")

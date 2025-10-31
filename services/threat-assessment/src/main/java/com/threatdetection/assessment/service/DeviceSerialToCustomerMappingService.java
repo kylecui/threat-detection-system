@@ -10,8 +10,8 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -100,9 +100,11 @@ public class DeviceSerialToCustomerMappingService {
         }
 
         // Query database for active mapping at the specified timestamp
-        Optional<DeviceCustomerMapping> mapping = repository.findActiveMappingAtTime(devSerial.toUpperCase(), timestamp);
-        if (mapping.isPresent()) {
-            String customerId = mapping.get().getCustomerId();
+        List<DeviceCustomerMapping> mappings = repository.findActiveMappingsAtTime(devSerial.toUpperCase(), timestamp);
+        if (!mappings.isEmpty()) {
+            // Return the most recent mapping (first in the list due to ORDER BY DESC)
+            DeviceCustomerMapping mapping = mappings.get(0);
+            String customerId = mapping.getCustomerId();
             logger.debug("Resolved devSerial {} to customerId {} at timestamp {} (from database)",
                         devSerial, customerId, timestamp);
             return customerId;
@@ -122,11 +124,22 @@ public class DeviceSerialToCustomerMappingService {
             return Collections.emptyMap();
         }
 
-        return repository.findAllCurrentlyActive().stream()
-                .collect(Collectors.toMap(
-                        mapping -> mapping.getDevSerial().toUpperCase(),
-                        DeviceCustomerMapping::getCustomerId
-                ));
+        try {
+            return repository.findAllCurrentlyActive().stream()
+                    .filter(mapping -> mapping.getDevSerial() != null && !mapping.getDevSerial().trim().isEmpty())
+                    .collect(Collectors.toMap(
+                            mapping -> mapping.getDevSerial().toUpperCase(),
+                            DeviceCustomerMapping::getCustomerId,
+                            (existing, replacement) -> {
+                                logger.warn("Duplicate active mapping for device {}, keeping existing customer {}",
+                                           existing, replacement);
+                                return existing; // 保留第一个找到的映射
+                            }
+                    ));
+        } catch (Exception e) {
+            logger.error("Error getting all mappings", e);
+            return Collections.emptyMap();
+        }
     }
 
     /**
@@ -165,9 +178,9 @@ public class DeviceSerialToCustomerMappingService {
                    devSerial, customerId, bindTime, bindReason);
 
         // 检查是否已有当前有效的绑定，如果有则先解绑
-        Optional<DeviceCustomerMapping> currentMapping = repository.findActiveMappingAtTime(devSerial, bindTime);
-        if (currentMapping.isPresent()) {
-            unbindDevice(currentMapping.get(), bindTime, "自动解绑-重新分配给" + customerId);
+        List<DeviceCustomerMapping> currentMappings = repository.findActiveMappingsAtTime(devSerial.toUpperCase(), bindTime);
+        if (!currentMappings.isEmpty()) {
+            unbindDevice(currentMappings.get(0), bindTime, "自动解绑-重新分配给" + customerId);
         }
 
         DeviceCustomerMapping newMapping = new DeviceCustomerMapping(devSerial, customerId, bindTime, bindReason);
@@ -212,10 +225,10 @@ public class DeviceSerialToCustomerMappingService {
             unbindTime = Instant.now();
         }
 
-        Optional<DeviceCustomerMapping> currentMapping = repository.findActiveMappingAtTime(devSerial, unbindTime);
-        if (currentMapping.isPresent()) {
-            unbindDevice(currentMapping.get(), unbindTime, unbindReason);
-            return currentMapping.get();
+        List<DeviceCustomerMapping> currentMappings = repository.findActiveMappingsAtTime(devSerial, unbindTime);
+        if (!currentMappings.isEmpty()) {
+            unbindDevice(currentMappings.get(0), unbindTime, unbindReason);
+            return currentMappings.get(0);
         } else {
             logger.warn("No active mapping found for device {} at time {}", devSerial, unbindTime);
             return null;
@@ -257,10 +270,10 @@ public class DeviceSerialToCustomerMappingService {
                    devSerial, newCustomerId, transferTime, transferReason);
 
         // 查找当前活跃的映射
-        Optional<DeviceCustomerMapping> currentMapping = repository.findActiveMappingAtTime(devSerial, transferTime);
+        List<DeviceCustomerMapping> currentMappings = repository.findActiveMappingsAtTime(devSerial, transferTime);
 
-        if (currentMapping.isPresent()) {
-            DeviceCustomerMapping oldMapping = currentMapping.get();
+        if (!currentMappings.isEmpty()) {
+            DeviceCustomerMapping oldMapping = currentMappings.get(0);
 
             // 如果新客户与当前客户相同，不需要转移
             if (oldMapping.getCustomerId().equals(newCustomerId)) {

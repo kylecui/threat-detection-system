@@ -17,12 +17,13 @@ import java.util.Optional;
 public interface DeviceCustomerMappingRepository extends JpaRepository<DeviceCustomerMapping, Long> {
 
     /**
-     * 查找设备在特定时间点的有效映射
+     * 查找设备在特定时间点的有效映射（只返回最新的）
      */
     @Query("SELECT m FROM DeviceCustomerMapping m WHERE UPPER(m.devSerial) = UPPER(:devSerial) " +
-           "AND m.bindTime <= :timestamp AND (m.unbindTime IS NULL OR m.unbindTime > :timestamp)")
-    Optional<DeviceCustomerMapping> findActiveMappingAtTime(@Param("devSerial") String devSerial,
-                                                           @Param("timestamp") Instant timestamp);
+           "AND m.bindTime <= :timestamp AND (m.unbindTime IS NULL OR m.unbindTime > :timestamp) " +
+           "ORDER BY m.bindTime DESC")
+    List<DeviceCustomerMapping> findActiveMappingsAtTime(@Param("devSerial") String devSerial,
+                                                        @Param("timestamp") Instant timestamp);
 
     /**
      * 查找设备的历史映射记录（按绑定时间倒序）

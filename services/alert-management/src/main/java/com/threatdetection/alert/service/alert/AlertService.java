@@ -143,19 +143,36 @@ public class AlertService {
     /**
      * 查找告警（分页）
      */
-    public Page<Alert> findAlerts(AlertStatus status, AlertSeverity severity,
+    public Page<Alert> findAlerts(String customerId, AlertStatus status, AlertSeverity severity,
                                  LocalDateTime startTime, LocalDateTime endTime,
                                  Pageable pageable) {
-        if (status != null && severity != null) {
-            return alertRepository.findByStatusAndSeverity(status, severity, pageable);
-        } else if (status != null) {
-            return alertRepository.findByStatus(status, pageable);
-        } else if (severity != null) {
-            return alertRepository.findBySeverity(severity, pageable);
-        } else if (startTime != null && endTime != null) {
-            return alertRepository.findByCreatedAtBetween(startTime, endTime, pageable);
+        if (customerId != null) {
+            // 有customerId过滤
+            String statusStr = status != null ? status.name() : null;
+            String severityStr = severity != null ? severity.name() : null;
+
+            if (statusStr != null && severityStr != null) {
+                return alertRepository.findByCustomerIdAndStatusAndSeverity(customerId, statusStr, severityStr, pageable);
+            } else if (statusStr != null) {
+                return alertRepository.findByCustomerIdAndStatus(customerId, statusStr, pageable);
+            } else if (severityStr != null) {
+                return alertRepository.findByCustomerIdAndSeverity(customerId, severityStr, pageable);
+            } else {
+                return alertRepository.findByCustomerId(customerId, pageable);
+            }
         } else {
-            return alertRepository.findAll(pageable);
+            // 无customerId过滤，使用原有逻辑
+            if (status != null && severity != null) {
+                return alertRepository.findByStatusAndSeverity(status.name(), severity.name(), pageable);
+            } else if (status != null) {
+                return alertRepository.findByStatus(status.name(), pageable);
+            } else if (severity != null) {
+                return alertRepository.findBySeverity(severity.name(), pageable);
+            } else if (startTime != null && endTime != null) {
+                return alertRepository.findByCreatedAtBetween(startTime, endTime, pageable);
+            } else {
+                return alertRepository.findAllAlerts(pageable);
+            }
         }
     }
 

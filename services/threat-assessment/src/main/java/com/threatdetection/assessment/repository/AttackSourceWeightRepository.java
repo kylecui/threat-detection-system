@@ -67,11 +67,7 @@ public interface AttackSourceWeightRepository extends JpaRepository<AttackSource
         SELECT a FROM AttackSourceWeight a
         WHERE a.customerId = :customerId
           AND a.isActive = TRUE
-          AND (
-              (:segmentType = 'PRIVATE' AND (a.ipSegment LIKE '192.168.%' OR a.ipSegment LIKE '10.%' OR a.ipSegment LIKE '172.%')) OR
-              (:segmentType = 'LOOPBACK' AND a.ipSegment LIKE '127.%') OR
-              (:segmentType = 'PUBLIC' AND NOT (a.ipSegment LIKE '192.168.%' OR a.ipSegment LIKE '10.%' OR a.ipSegment LIKE '172.%' OR a.ipSegment LIKE '127.%'))
-          )
+          AND a.segmentType = :segmentType
         """)
     List<AttackSourceWeight> findByCustomerIdAndSegmentType(@Param("customerId") String customerId, @Param("segmentType") String segmentType);
     
@@ -79,18 +75,14 @@ public interface AttackSourceWeightRepository extends JpaRepository<AttackSource
      * 根据风险等级查询
      *
      * @param customerId 客户ID
-     * @param riskLevel 风险等级 (HIGH/MEDIUM/LOW)
+     * @param riskLevel 风险等级
      * @return 匹配的配置列表
      */
     @Query("""
         SELECT a FROM AttackSourceWeight a
         WHERE a.customerId = :customerId
           AND a.isActive = TRUE
-          AND (
-              (:riskLevel = 'HIGH' AND a.attackSourceWeight >= 2.0) OR
-              (:riskLevel = 'MEDIUM' AND a.attackSourceWeight >= 1.5 AND a.attackSourceWeight < 2.0) OR
-              (:riskLevel = 'LOW' AND a.attackSourceWeight < 1.5)
-          )
+          AND a.riskLevel = :riskLevel
         """)
     List<AttackSourceWeight> findByCustomerIdAndRiskLevel(@Param("customerId") String customerId, @Param("riskLevel") String riskLevel);
     
@@ -101,7 +93,7 @@ public interface AttackSourceWeightRepository extends JpaRepository<AttackSource
      * @param threshold 权重阈值
      * @return 高危配置列表
      */
-    @Query("SELECT a FROM AttackSourceWeight a WHERE a.customerId = :customerId AND a.isActive = TRUE AND a.attackSourceWeight >= :threshold ORDER BY a.attackSourceWeight DESC")
+    @Query("SELECT a FROM AttackSourceWeight a WHERE a.customerId = :customerId AND a.isActive = TRUE AND a.weight >= :threshold ORDER BY a.weight DESC")
     List<AttackSourceWeight> findHighRiskConfigs(
         @Param("customerId") String customerId,
         @Param("threshold") BigDecimal threshold
@@ -122,21 +114,10 @@ public interface AttackSourceWeightRepository extends JpaRepository<AttackSource
      * @return 统计结果 [segmentType, count]
      */
     @Query("""
-        SELECT 
-            CASE 
-                WHEN a.ipSegment LIKE '192.168.%' OR a.ipSegment LIKE '10.%' OR a.ipSegment LIKE '172.%' THEN 'PRIVATE'
-                WHEN a.ipSegment LIKE '127.%' THEN 'LOOPBACK'
-                ELSE 'PUBLIC'
-            END as segmentType,
-            COUNT(a)
+        SELECT a.segmentType, COUNT(a)
         FROM AttackSourceWeight a 
         WHERE a.customerId = :customerId AND a.isActive = TRUE 
-        GROUP BY 
-            CASE 
-                WHEN a.ipSegment LIKE '192.168.%' OR a.ipSegment LIKE '10.%' OR a.ipSegment LIKE '172.%' THEN 'PRIVATE'
-                WHEN a.ipSegment LIKE '127.%' THEN 'LOOPBACK'
-                ELSE 'PUBLIC'
-            END
+        GROUP BY a.segmentType
         ORDER BY COUNT(a) DESC
         """)
     List<Object[]> countBySegmentType(@Param("customerId") String customerId);

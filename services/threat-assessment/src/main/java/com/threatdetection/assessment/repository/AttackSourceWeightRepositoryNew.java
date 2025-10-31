@@ -23,13 +23,23 @@ import java.util.Optional;
 public interface AttackSourceWeightRepositoryNew extends JpaRepository<AttackSourceWeight, Long> {
     
     /**
-     * 根据客户ID和IP段查询权重配置
+     * 根据客户ID和网段名称查询权重配置
+     * 
+     * @param customerId 客户ID
+     * @param segmentName 网段名称
+     * @return 权重配置 (Optional)
+     */
+    Optional<AttackSourceWeight> findByCustomerIdAndSegmentName(String customerId, String segmentName);
+    
+    /**
+     * 根据客户ID和IP段查询权重配置 (兼容旧接口)
      * 
      * @param customerId 客户ID
      * @param ipSegment IP段标识
      * @return 权重配置 (Optional)
      */
-    Optional<AttackSourceWeight> findByCustomerIdAndIpSegment(String customerId, String ipSegment);
+    @Query("SELECT a FROM AttackSourceWeight a WHERE a.customerId = :customerId AND a.segmentName = :ipSegment AND a.isActive = TRUE")
+    Optional<AttackSourceWeight> findByCustomerIdAndIpSegment(@Param("customerId") String customerId, @Param("ipSegment") String ipSegment);
     
     /**
      * 查询客户的所有启用配置
@@ -54,7 +64,7 @@ public interface AttackSourceWeightRepositoryNew extends JpaRepository<AttackSou
      * @param threshold 权重阈值
      * @return 高危配置列表
      */
-    @Query("SELECT a FROM AttackSourceWeight a WHERE a.customerId = :customerId AND a.isActive = TRUE AND a.attackSourceWeight >= :threshold ORDER BY a.attackSourceWeight DESC")
+    @Query("SELECT a FROM AttackSourceWeight a WHERE a.customerId = :customerId AND a.isActive = TRUE AND a.weight >= :threshold ORDER BY a.weight DESC")
     List<AttackSourceWeight> findHighRiskConfigs(
         @Param("customerId") String customerId,
         @Param("threshold") BigDecimal threshold
@@ -83,7 +93,8 @@ public interface AttackSourceWeightRepositoryNew extends JpaRepository<AttackSou
      * @param ipSegment IP段标识
      * @return 是否存在
      */
-    boolean existsByCustomerIdAndIpSegment(String customerId, String ipSegment);
+    @Query("SELECT COUNT(a) > 0 FROM AttackSourceWeight a WHERE a.customerId = :customerId AND a.segmentName = :ipSegment")
+    boolean existsByCustomerIdAndIpSegment(@Param("customerId") String customerId, @Param("ipSegment") String ipSegment);
     
     /**
      * 删除客户的所有配置
@@ -98,7 +109,8 @@ public interface AttackSourceWeightRepositoryNew extends JpaRepository<AttackSou
      * @param customerId 客户ID
      * @param ipSegment IP段标识
      */
-    void deleteByCustomerIdAndIpSegment(String customerId, String ipSegment);
+    @Query("DELETE FROM AttackSourceWeight a WHERE a.customerId = :customerId AND a.segmentName = :ipSegment")
+    void deleteByCustomerIdAndIpSegment(@Param("customerId") String customerId, @Param("ipSegment") String ipSegment);
     
     /**
      * 获取权重统计信息
@@ -106,7 +118,7 @@ public interface AttackSourceWeightRepositoryNew extends JpaRepository<AttackSou
      * @param customerId 客户ID
      * @return 统计信息 [count, avg_weight, max_weight, min_weight]
      */
-    @Query("SELECT COUNT(a), AVG(a.attackSourceWeight), MAX(a.attackSourceWeight), MIN(a.attackSourceWeight) " +
+    @Query("SELECT COUNT(a), AVG(a.weight), MAX(a.weight), MIN(a.weight) " +
            "FROM AttackSourceWeight a WHERE a.customerId = :customerId AND a.isActive = TRUE")
     Object[] getStatistics(@Param("customerId") String customerId);
 }

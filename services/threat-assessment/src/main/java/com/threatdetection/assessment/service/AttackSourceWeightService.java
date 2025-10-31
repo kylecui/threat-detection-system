@@ -41,15 +41,15 @@ public class AttackSourceWeightService {
         log.info("Saving attack source weight config: customerId={}, ipSegment={}", 
                  dto.getCustomerId(), dto.getIpSegment());
         
-        // 检查是否已存在
-        Optional<AttackSourceWeight> existingOpt = repository.findByCustomerIdAndIpSegment(
+        // 检查是否已存在 (使用segment_name作为唯一标识)
+        Optional<AttackSourceWeight> existingOpt = repository.findByCustomerIdAndSegmentName(
             dto.getCustomerId(), dto.getIpSegment());
         
         AttackSourceWeight entity;
         if (existingOpt.isPresent()) {
             // 更新现有记录
             entity = existingOpt.get();
-            entity.setAttackSourceWeight(dto.getAttackSourceWeight());
+            entity.setWeight(dto.getAttackSourceWeight());
             entity.setDescription(dto.getDescription());
             if (dto.getIsActive() != null) {
                 entity.setIsActive(dto.getIsActive());
@@ -227,10 +227,15 @@ public class AttackSourceWeightService {
         AttackSourceWeight entity = new AttackSourceWeight();
         entity.setId(dto.getId());
         entity.setCustomerId(dto.getCustomerId());
-        entity.setIpSegment(dto.getIpSegment());
-        entity.setAttackSourceWeight(dto.getAttackSourceWeight());
+        entity.setSegmentName(dto.getIpSegment());  // DTO的ipSegment映射到实体的segmentName
+        entity.setWeight(dto.getAttackSourceWeight());  // DTO的attackSourceWeight映射到实体的weight
         entity.setDescription(dto.getDescription());
         entity.setIsActive(dto.getIsActive());
+        // 设置默认值
+        entity.setIpRangeStart("0.0.0.0");  // 默认值，需要根据实际需求调整
+        entity.setIpRangeEnd("255.255.255.255");  // 默认值，需要根据实际需求调整
+        entity.setSegmentType("UNKNOWN");  // 默认值
+        entity.setRiskLevel("MEDIUM");  // 默认值
         return entity;
     }
     
@@ -241,8 +246,8 @@ public class AttackSourceWeightService {
         return AttackSourceWeightDto.builder()
                 .id(entity.getId())
                 .customerId(entity.getCustomerId())
-                .ipSegment(entity.getIpSegment())
-                .attackSourceWeight(entity.getAttackSourceWeight())
+                .ipSegment(entity.getSegmentName())  // 实体的segmentName映射到DTO的ipSegment
+                .attackSourceWeight(entity.getWeight())  // 实体的weight映射到DTO的attackSourceWeight
                 .description(entity.getDescription())
                 .isActive(entity.getIsActive())
                 .createdAt(entity.getCreatedAt())
