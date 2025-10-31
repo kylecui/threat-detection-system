@@ -115,6 +115,9 @@ public class TierWindowProcessor
         double burstIntensity = calculateBurstIntensity(eventList, windowSize);
         double timeDistWeight = calculateTimeDistributionWeight(burstIntensity);
         
+        // 计算基于事件时间的权重（使用事件列表中的最新时间）
+        long latestEventTime = getLatestEventTime(eventList);
+        
         // 计算威胁评分 (包含时间分布权重)
         double threatScore = calculateThreatScore(
             attackCount, 
@@ -123,7 +126,7 @@ public class TierWindowProcessor
             uniqueDevices.size(),
             mixedPortWeight,
             timeDistWeight,  // 新增参数
-            windowEnd
+            latestEventTime  // 使用事件时间而不是窗口时间
         );
         
         // 确定威胁等级
@@ -301,6 +304,20 @@ public class TierWindowProcessor
         
         // 确保结果在 [0, 1] 范围内
         return Math.max(0.0, Math.min(1.0, intensity));
+    }
+    
+    /**
+     * 获取事件列表中最晚的时间戳
+     */
+    private long getLatestEventTime(List<AttackEvent> events) {
+        if (events.isEmpty()) {
+            return System.currentTimeMillis();
+        }
+        
+        return events.stream()
+                .mapToLong(event -> event.getTimestamp().toEpochMilli())
+                .max()
+                .orElse(System.currentTimeMillis());
     }
     
     /**

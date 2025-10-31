@@ -90,7 +90,18 @@ public class ApiGatewayApplication {
                         .setName("dataIngestionCB")
                         .setFallbackUri("forward:/fallback/data-ingestion")))
                 .uri("http://data-ingestion:8080"))
-            
+
+            // Data Ingestion Service - Scenario Aware Import (8080)
+            .route("data-ingestion-scenario-aware", r -> r
+                .path("/api/v1/logs/import/**")
+                .filters(f -> f
+                    .stripPrefix(0)
+                    .addRequestHeader("X-Gateway-Service", "data-ingestion")
+                    .circuitBreaker(c -> c
+                        .setName("dataIngestionScenarioAwareCB")
+                        .setFallbackUri("forward:/fallback/data-ingestion")))
+                .uri("http://data-ingestion:8080"))
+
             // Threat Assessment Service (8083)
             .route("threat-assessment", r -> r
                 .path("/api/v1/assessment/**")

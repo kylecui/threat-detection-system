@@ -532,14 +532,18 @@ public class StreamProcessingJob {
     }
 
     /**
-     * 时间戳分配器 - 替代lambda避免序列化问题
+     * 时间戳分配器 - 使用原始日志时间而不是处理时间
      */
     public static class AttackEventTimestampAssigner implements SerializableTimestampAssigner<AttackEvent> {
         private static final long serialVersionUID = 1L;
         
         @Override
         public long extractTimestamp(AttackEvent event, long recordTimestamp) {
-            return System.currentTimeMillis(); // 使用当前时间作为处理时间
+            // 使用原始日志时间 (logTime 是秒，转换为毫秒)
+            long eventTimeMillis = event.getLogTime() * 1000;
+            logger.debug("Assigning timestamp for attack event {}: logTime={}, eventTimeMillis={}", 
+                        event.getId(), event.getLogTime(), eventTimeMillis);
+            return eventTimeMillis;
         }
     }
 

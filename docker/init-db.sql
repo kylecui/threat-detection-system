@@ -1,7 +1,10 @@
+-- !! do NOT use this script in production environments !!
 -- Database initialization script for threat detection system
 -- This script creates the necessary tables and inserts sample data
 
 -- Drop existing table if it exists to ensure clean recreation
+-- ⚠️  WARNING: This will DELETE ALL existing device mappings!
+-- In production, this table should be preserved across deployments
 DROP TABLE IF EXISTS device_customer_mapping CASCADE;
 
 -- Create device_customer_mapping table

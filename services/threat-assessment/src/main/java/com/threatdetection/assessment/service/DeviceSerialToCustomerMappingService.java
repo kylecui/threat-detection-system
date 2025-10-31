@@ -194,8 +194,8 @@ public class DeviceSerialToCustomerMappingService {
     }
 
     /**
-     * 解绑设备
-     * @param mapping 要解绑的映射记录
+     * 解绑设备（通过映射对象）
+     * @param mapping 要解绑的映射对象
      * @param unbindTime 解绑时间
      * @param reason 解绑原因
      */
@@ -204,6 +204,7 @@ public class DeviceSerialToCustomerMappingService {
                    mapping.getDevSerial(), mapping.getCustomerId(), unbindTime, reason);
 
         mapping.setUnbindTime(unbindTime);
+        mapping.setIsActive(false);  // ✅ 修复：解绑时设置is_active为false
         mapping.setDescription(reason);
         repository.save(mapping);
 

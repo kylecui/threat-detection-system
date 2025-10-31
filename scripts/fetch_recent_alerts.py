@@ -35,20 +35,25 @@ def fetch_recent_alerts(hours=24, limit=50):
         # 查询最近的告警
         query = """
         SELECT
-            id,
-            title,
-            description,
-            status,
-            severity,
-            source,
-            attack_mac,
-            threat_score,
-            created_at,
-            updated_at,
-            metadata
-        FROM alerts
-        WHERE created_at >= %s
-        ORDER BY created_at DESC
+            a.id,
+            a.title,
+            a.description,
+            a.status,
+            a.severity,
+            a.source,
+            a.attack_mac,
+            a.threat_score,
+            a.created_at,
+            a.updated_at,
+            a.metadata,
+            COALESCE(c.name, 'Unknown Customer') as customer_name
+        FROM alerts a
+        LEFT JOIN customers c ON (
+            c.customer_id = (a.metadata::jsonb ->> 'customer_id') OR
+            c.customer_id = (a.metadata::jsonb ->> 'customerId')
+        )
+        WHERE a.created_at >= %s
+        ORDER BY a.created_at DESC
         LIMIT %s
         """
 
@@ -64,7 +69,7 @@ def fetch_recent_alerts(hours=24, limit=50):
 
         # 显示告警详情
         for i, alert in enumerate(alerts, 1):
-            alert_id, title, description, status, severity, source, attack_mac, threat_score, created_at, updated_at, metadata = alert
+            alert_id, title, description, status, severity, source, attack_mac, threat_score, created_at, updated_at, metadata, customer_name = alert
 
             print(f"🚨 告警 #{i}")
             print(f"   ID: {alert_id}")
@@ -76,8 +81,9 @@ def fetch_recent_alerts(hours=24, limit=50):
             print(f"   威胁分数: {threat_score or 'N/A'}")
             print(f"   创建时间: {created_at}")
             print(f"   更新时间: {updated_at}")
+            print(f"   客户ID: {customer_name}")
 
-            # 从metadata中提取客户ID
+            # 从metadata中提取客户ID（用于兼容性）
             customer_id = "N/A"
             if metadata:
                 try:
@@ -85,7 +91,7 @@ def fetch_recent_alerts(hours=24, limit=50):
                     customer_id = metadata_dict.get('customer_id', metadata_dict.get('customerId', 'N/A'))
                 except:
                     pass
-            print(f"   客户ID: {customer_id}")
+            print(f"   客户原始ID: {customer_id}")
 
             if description:
                 print(f"   描述: {description[:200]}{'...' if len(description) > 200 else ''}")
@@ -146,28 +152,36 @@ def fetch_alerts_by_customer(customer_id, hours=24):
         # 计算时间范围
         since_time = datetime.now() - timedelta(hours=hours)
 
-        # 查询特定客户的告警（通过metadata中的customer_id）
+        # 查询特定客户的告警（通过metadata中的customer_id或customerId）
         query = """
         SELECT
-            id,
-            title,
-            description,
-            status,
-            severity,
-            source,
-            attack_mac,
-            threat_score,
-            created_at,
-            updated_at,
-            metadata
-        FROM alerts
-        WHERE created_at >= %s
-        AND metadata::jsonb ->> 'customer_id' = %s
-        ORDER BY created_at DESC
+            a.id,
+            a.title,
+            a.description,
+            a.status,
+            a.severity,
+            a.source,
+            a.attack_mac,
+            a.threat_score,
+            a.created_at,
+            a.updated_at,
+            a.metadata,
+            COALESCE(c.name, 'Unknown Customer') as customer_name
+        FROM alerts a
+        LEFT JOIN customers c ON (
+            c.customer_id = (a.metadata::jsonb ->> 'customer_id') OR
+            c.customer_id = (a.metadata::jsonb ->> 'customerId')
+        )
+        WHERE a.created_at >= %s
+        AND (
+            a.metadata::jsonb ->> 'customer_id' = %s
+            OR a.metadata::jsonb ->> 'customerId' = %s
+        )
+        ORDER BY a.created_at DESC
         LIMIT 20
         """
 
-        cursor.execute(query, (since_time, customer_id))
+        cursor.execute(query, (since_time, customer_id, customer_id))
         alerts = cursor.fetchall()
 
         if not alerts:
@@ -179,11 +193,11 @@ def fetch_alerts_by_customer(customer_id, hours=24):
 
         # 显示告警详情
         for i, alert in enumerate(alerts, 1):
-            alert_id, title, description, status, severity, source, attack_mac, threat_score, created_at, updated_at, metadata = alert
+            alert_id, title, description, status, severity, source, attack_mac, threat_score, created_at, updated_at, metadata, customer_name = alert
 
             print(f"🚨 告警 #{i}")
             print(f"   ID: {alert_id}")
-            print(f"   客户ID: {customer_id}")
+            print(f"   客户名称: {customer_name}")
             print(f"   标题: {title}")
             print(f"   状态: {status}")
             print(f"   严重程度: {severity}")

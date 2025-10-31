@@ -125,6 +125,9 @@
   </dependencyManagement>
 
   <modules>
+    <module>services/alert-management</module>
+    <module>services/api-gateway</module>
+    <module>services/customer-management</module>
     <module>services/data-ingestion/data-ingestion-service</module>
     <module>services/stream-processing</module>
     <module>services/threat-assessment</module>

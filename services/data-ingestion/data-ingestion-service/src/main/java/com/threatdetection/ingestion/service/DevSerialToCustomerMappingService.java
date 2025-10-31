@@ -156,7 +156,13 @@ public class DevSerialToCustomerMappingService {
         return repository.findByIsActiveTrue().stream()
                 .collect(Collectors.toMap(
                         mapping -> mapping.getDevSerial().toUpperCase(),
-                        DeviceCustomerMapping::getCustomerId
+                        DeviceCustomerMapping::getCustomerId,
+                        (existing, replacement) -> {
+                            // Handle duplicate keys by keeping the most recent record
+                            logger.warn("Duplicate mapping found for devSerial: {}, keeping existing customerId: {}, ignoring: {}",
+                                       existing, replacement);
+                            return existing; // Keep the first one encountered
+                        }
                 ));
     }
 

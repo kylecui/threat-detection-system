@@ -24,10 +24,12 @@ services:
       POSTGRES_PASSWORD: threat_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./01-init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
+      - ./01-init-db-production-safe.sql:/docker-entrypoint-initdb.d/01-init-db-production-safe.sql
+      - ./17-customers-init.sql:/docker-entrypoint-initdb.d/17-customers-init.sql
       - ./02-attack-events-storage.sql:/docker-entrypoint-initdb.d/02-attack-events-storage.sql
       - ./03-port-weights.sql:/docker-entrypoint-initdb.d/03-port-weights.sql
       - ./04-alert-management-tables.sql:/docker-entrypoint-initdb.d/04-alert-management-tables.sql
+      - ./04-threat-assessment-tables.sql:/docker-entrypoint-initdb.d/04-threat-assessment-tables.sql
       - ./05-notification-config-tables.sql:/docker-entrypoint-initdb.d/05-notification-config-tables.sql
       - ./06-ip-segment-weights.sql:/docker-entrypoint-initdb.d/06-ip-segment-weights.sql
       - ./07-whitelist-config.sql:/docker-entrypoint-initdb.d/07-whitelist-config.sql
@@ -135,6 +137,7 @@ services:
     container_name: data-ingestion-service
     depends_on:
       - kafka
+      - redis
     ports: ["8080:8080"]
     environment:
       <<: *common-env

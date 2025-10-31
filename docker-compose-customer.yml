@@ -20,8 +20,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init-db.sql
-      - ./services/customer-management/src/main/resources/schema.sql:/docker-entrypoint-initdb.d/02-customer-schema.sql
+      - ./docker/01-init-db-production-safe.sql:/docker-entrypoint-initdb.d/01-init-db-production-safe.sql
+      - ./docker/17-customers-init.sql:/docker-entrypoint-initdb.d/17-customers-init.sql
     networks:
       - threat-detection-network
     healthcheck:
