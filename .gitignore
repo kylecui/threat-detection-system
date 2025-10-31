@@ -37,6 +37,7 @@ logs/
 
 # Temporary files
 tmp/
+tmp/production_test_logs/
 
 # References
 old/
