@@ -51,20 +51,17 @@ class IpSegmentWeightServiceV4Test {
         // Given: IoT设备配置（权重0.9）
         AttackSourceWeight iotWeight = AttackSourceWeight.builder()
             .customerId(CUSTOMER_ID)
-            .segmentName("IoT-Devices")
-            .segmentType("IOT")
-            .riskLevel("LOW")
-            .weight(new BigDecimal("0.90"))
+            .ipSegment("192.168.50.0/24")
+            .attackSourceWeight(new BigDecimal("0.90"))
+            .isActive(true)
             .build();
         
         // Given: 管理区蜜罐配置（权重3.5）
         HoneypotSensitivityWeight managementHoneypot = HoneypotSensitivityWeight.builder()
             .customerId(CUSTOMER_ID)
-            .honeypotName("Honeypot-Management-Bastion")
-            .deploymentZone("MANAGEMENT")
-            .sensitivityLevel("CRITICAL")
-            .weight(new BigDecimal("3.50"))
-            .attackIntent("尝试控制全网，获取最高权限")
+            .ipSegment("10.0.100.0/24")
+            .honeypotSensitivityWeight(new BigDecimal("3.50"))
+            .isActive(true)
             .build();
         
         when(attackSourceWeightRepository.findByCustomerIdAndIpAddress(CUSTOMER_ID, "192.168.50.10"))
@@ -92,20 +89,17 @@ class IpSegmentWeightServiceV4Test {
         // Given: 数据库服务器配置（权重3.0）
         AttackSourceWeight dbWeight = AttackSourceWeight.builder()
             .customerId(CUSTOMER_ID)
-            .segmentName("Database-Servers")
-            .segmentType("DATABASE")
-            .riskLevel("CRITICAL")
-            .weight(new BigDecimal("3.00"))
+            .ipSegment("10.0.3.0/24")
+            .attackSourceWeight(new BigDecimal("3.00"))
+            .isActive(true)
             .build();
         
         // Given: 办公区蜜罐配置（权重1.3）
         HoneypotSensitivityWeight officeHoneypot = HoneypotSensitivityWeight.builder()
             .customerId(CUSTOMER_ID)
-            .honeypotName("Honeypot-Office-General")
-            .deploymentZone("OFFICE")
-            .sensitivityLevel("MEDIUM")
-            .weight(new BigDecimal("1.30"))
-            .attackIntent("横向移动探测")
+            .ipSegment("192.168.10.0/24")
+            .honeypotSensitivityWeight(new BigDecimal("1.30"))
+            .isActive(true)
             .build();
         
         when(attackSourceWeightRepository.findByCustomerIdAndIpAddress(CUSTOMER_ID, "10.0.3.50"))
@@ -126,19 +120,17 @@ class IpSegmentWeightServiceV4Test {
         // Given: 办公区设备配置（权重1.0）
         AttackSourceWeight officeWeight = AttackSourceWeight.builder()
             .customerId(CUSTOMER_ID)
-            .segmentName("Office-General")
-            .segmentType("OFFICE")
-            .riskLevel("LOW")
-            .weight(new BigDecimal("1.00"))
+            .ipSegment("192.168.10.0/24")
+            .attackSourceWeight(new BigDecimal("1.00"))
+            .isActive(true)
             .build();
         
         // Given: 办公区蜜罐配置（权重1.3）
         HoneypotSensitivityWeight officeHoneypot = HoneypotSensitivityWeight.builder()
             .customerId(CUSTOMER_ID)
-            .honeypotName("Honeypot-Office-General")
-            .deploymentZone("OFFICE")
-            .sensitivityLevel("MEDIUM")
-            .weight(new BigDecimal("1.30"))
+            .ipSegment("192.168.10.0/24")
+            .honeypotSensitivityWeight(new BigDecimal("1.30"))
+            .isActive(true)
             .build();
         
         when(attackSourceWeightRepository.findByCustomerIdAndIpAddress(CUSTOMER_ID, "192.168.10.100"))
@@ -159,20 +151,17 @@ class IpSegmentWeightServiceV4Test {
         // Given: 访客网络配置（权重0.6）
         AttackSourceWeight guestWeight = AttackSourceWeight.builder()
             .customerId(CUSTOMER_ID)
-            .segmentName("Office-Guest")
-            .segmentType("GUEST")
-            .riskLevel("VERY_LOW")
-            .weight(new BigDecimal("0.60"))
+            .ipSegment("192.168.100.0/24")
+            .attackSourceWeight(new BigDecimal("0.60"))
+            .isActive(true)
             .build();
         
         // Given: 数据库蜜罐配置（权重3.5）
         HoneypotSensitivityWeight dbHoneypot = HoneypotSensitivityWeight.builder()
             .customerId(CUSTOMER_ID)
-            .honeypotName("Honeypot-Database-ProdDB")
-            .deploymentZone("DATABASE")
-            .sensitivityLevel("CRITICAL")
-            .weight(new BigDecimal("3.50"))
-            .attackIntent("尝试窃取数据，数据泄露风险")
+            .ipSegment("10.0.3.0/24")
+            .honeypotSensitivityWeight(new BigDecimal("3.50"))
+            .isActive(true)
             .build();
         
         when(attackSourceWeightRepository.findByCustomerIdAndIpAddress(CUSTOMER_ID, "192.168.100.20"))

@@ -6,6 +6,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +51,7 @@ import java.util.Optional;
 public class IpSegmentWeightService {
     
     private final IpSegmentWeightConfigRepository repository;
+    private final Environment environment;
     
     /**
      * 默认权重 (未匹配到任何网段时使用)
@@ -181,6 +183,12 @@ public class IpSegmentWeightService {
     @PostConstruct
     @Transactional
     public void initializeDefaultSegments() {
+        // 在测试环境中跳过数据库初始化
+        if (environment.matchesProfiles("test", "h2-test")) {
+            log.info("Skipping IP segment initialization in test environment");
+            return;
+        }
+        
         long count = repository.countConfiguredSegments();
         
         if (count > 0) {

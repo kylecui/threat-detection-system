@@ -6,6 +6,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -44,6 +45,7 @@ import java.util.stream.Collectors;
 public class ThreatLabelService {
     
     private final ThreatLabelRepository repository;
+    private final Environment environment;
     
     /**
      * 根据标签代码查询标签
@@ -216,6 +218,12 @@ public class ThreatLabelService {
      */
     @PostConstruct
     public void initializeDefaultLabels() {
+        // Skip database initialization in test environments
+        if (isTestEnvironment()) {
+            log.info("Skipped database initialization in test environment");
+            return;
+        }
+
         long count = repository.count();
         
         if (count > 0) {
@@ -231,5 +239,15 @@ public class ThreatLabelService {
         }
         
         log.warn("⚠️ No threat labels found. Please run init-db.sql.phase4");
+    }
+
+    private boolean isTestEnvironment() {
+        String[] activeProfiles = environment.getActiveProfiles();
+        for (String profile : activeProfiles) {
+            if (profile.contains("test") || profile.contains("h2")) {
+                return true;
+            }
+        }
+        return false;
     }
 }

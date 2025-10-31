@@ -207,30 +207,32 @@ CREATE OR REPLACE FUNCTION get_port_customer_phases(p_customer_id VARCHAR(50), p
 RETURNS TABLE(phase VARCHAR(20), source TEXT) AS $$
 BEGIN
     RETURN QUERY
-    -- 客户自定义配置
-    SELECT DISTINCT apc.phase, 'CUSTOM'::TEXT as source
-    FROM attack_phase_port_configs apc
-    WHERE apc.customer_id = p_customer_id
-      AND apc.port_number = p_port_number
-      AND apc.enabled = TRUE
+    SELECT * FROM (
+        -- 客户自定义配置
+        SELECT DISTINCT apc.phase, 'CUSTOM'::TEXT as source
+        FROM attack_phase_port_configs apc
+        WHERE apc.customer_id = p_customer_id
+          AND apc.port_number = p_port_number
+          AND apc.enabled = TRUE
 
-    UNION
+        UNION
 
-    -- 全局默认配置 (仅当客户没有自定义时)
-    SELECT DISTINCT apc.phase, 'GLOBAL'::TEXT as source
-    FROM attack_phase_port_configs apc
-    WHERE apc.customer_id IS NULL
-      AND apc.port_number = p_port_number
-      AND apc.enabled = TRUE
-      AND NOT EXISTS (
-          SELECT 1 FROM attack_phase_port_configs custom
-          WHERE custom.customer_id = p_customer_id
-            AND custom.port_number = p_port_number
-            AND custom.phase = apc.phase
-            AND custom.enabled = TRUE
-      )
+        -- 全局默认配置 (仅当客户没有自定义时)
+        SELECT DISTINCT apc.phase, 'GLOBAL'::TEXT as source
+        FROM attack_phase_port_configs apc
+        WHERE apc.customer_id IS NULL
+          AND apc.port_number = p_port_number
+          AND apc.enabled = TRUE
+          AND NOT EXISTS (
+              SELECT 1 FROM attack_phase_port_configs custom
+              WHERE custom.customer_id = p_customer_id
+                AND custom.port_number = p_port_number
+                AND custom.phase = apc.phase
+                AND custom.enabled = TRUE
+          )
+    ) AS combined_results(phase, source)
     ORDER BY
-        CASE phase
+        CASE combined_results.phase
             WHEN 'RECON' THEN 1
             WHEN 'EXPLOITATION' THEN 2
             WHEN 'PERSISTENCE' THEN 3

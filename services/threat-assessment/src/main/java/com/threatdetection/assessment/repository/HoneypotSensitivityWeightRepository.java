@@ -63,25 +63,57 @@ public interface HoneypotSensitivityWeightRepository extends JpaRepository<Honey
      * @param deploymentZone 部署区域
      * @return 匹配的配置列表
      */
-    List<HoneypotSensitivityWeight> findByCustomerIdAndDeploymentZone(String customerId, String deploymentZone);
+    @Query("""
+        SELECT h FROM HoneypotSensitivityWeight h
+        WHERE h.customerId = :customerId
+          AND h.isActive = TRUE
+          AND (
+              (:deploymentZone = 'MANAGEMENT' AND (h.ipSegment LIKE '192.168.1.%' OR h.ipSegment LIKE '10.0.%')) OR
+              (:deploymentZone = 'DATABASE' AND (h.ipSegment LIKE '192.168.2.%' OR h.ipSegment LIKE '10.1.%')) OR
+              (:deploymentZone = 'WEB_SERVERS' AND (h.ipSegment LIKE '192.168.3.%' OR h.ipSegment LIKE '10.2.%')) OR
+              (:deploymentZone = 'FILE_SERVERS' AND (h.ipSegment LIKE '192.168.4.%' OR h.ipSegment LIKE '10.3.%')) OR
+              (:deploymentZone = 'GENERAL' AND NOT (h.ipSegment LIKE '192.168.%' OR h.ipSegment LIKE '10.%'))
+          )
+        """)
+    List<HoneypotSensitivityWeight> findByCustomerIdAndDeploymentZone(@Param("customerId") String customerId, @Param("deploymentZone") String deploymentZone);
     
     /**
      * 根据敏感度等级查询
      * 
      * @param customerId 客户ID
-     * @param sensitivityLevel 敏感度等级
+     * @param sensitivityLevel 敏感度等级 (HIGH/MEDIUM/LOW)
      * @return 匹配的配置列表
      */
-    List<HoneypotSensitivityWeight> findByCustomerIdAndSensitivityLevel(String customerId, String sensitivityLevel);
+    @Query("""
+        SELECT h FROM HoneypotSensitivityWeight h
+        WHERE h.customerId = :customerId
+          AND h.isActive = TRUE
+          AND (
+              (:sensitivityLevel = 'HIGH' AND h.honeypotSensitivityWeight >= 2.0) OR
+              (:sensitivityLevel = 'MEDIUM' AND h.honeypotSensitivityWeight >= 1.5 AND h.honeypotSensitivityWeight < 2.0) OR
+              (:sensitivityLevel = 'LOW' AND h.honeypotSensitivityWeight < 1.5)
+          )
+        """)
+    List<HoneypotSensitivityWeight> findByCustomerIdAndSensitivityLevel(@Param("customerId") String customerId, @Param("sensitivityLevel") String sensitivityLevel);
     
     /**
      * 根据蜜罐层级查询
      * 
      * @param customerId 客户ID
-     * @param honeypotTier 蜜罐层级
+     * @param honeypotTier 蜜罐层级 (HIGH/MEDIUM/LOW)
      * @return 匹配的配置列表
      */
-    List<HoneypotSensitivityWeight> findByCustomerIdAndHoneypotTier(String customerId, String honeypotTier);
+    @Query("""
+        SELECT h FROM HoneypotSensitivityWeight h
+        WHERE h.customerId = :customerId
+          AND h.isActive = TRUE
+          AND (
+              (:honeypotTier = 'HIGH' AND h.honeypotSensitivityWeight >= 2.5) OR
+              (:honeypotTier = 'MEDIUM' AND h.honeypotSensitivityWeight >= 1.8 AND h.honeypotSensitivityWeight < 2.5) OR
+              (:honeypotTier = 'LOW' AND h.honeypotSensitivityWeight < 1.8)
+          )
+        """)
+    List<HoneypotSensitivityWeight> findByCustomerIdAndHoneypotTier(@Param("customerId") String customerId, @Param("honeypotTier") String honeypotTier);
     
     /**
      * 查询敏感度 >= 阈值的高敏感蜜罐
@@ -90,7 +122,7 @@ public interface HoneypotSensitivityWeightRepository extends JpaRepository<Honey
      * @param threshold 敏感度阈值
      * @return 高敏感蜜罐列表
      */
-    @Query("SELECT h FROM HoneypotSensitivityWeight h WHERE h.customerId = :customerId AND h.isActive = TRUE AND h.weight >= :threshold ORDER BY h.weight DESC")
+    @Query("SELECT h FROM HoneypotSensitivityWeight h WHERE h.customerId = :customerId AND h.isActive = TRUE AND h.honeypotSensitivityWeight >= :threshold ORDER BY h.honeypotSensitivityWeight DESC")
     List<HoneypotSensitivityWeight> findHighSensitivityHoneypots(
         @Param("customerId") String customerId,
         @Param("threshold") BigDecimal threshold
@@ -110,6 +142,27 @@ public interface HoneypotSensitivityWeightRepository extends JpaRepository<Honey
      * @param customerId 客户ID
      * @return 统计结果 [deploymentZone, count]
      */
-    @Query("SELECT h.deploymentZone, COUNT(h) FROM HoneypotSensitivityWeight h WHERE h.customerId = :customerId AND h.isActive = TRUE GROUP BY h.deploymentZone ORDER BY COUNT(h) DESC")
+    @Query("""
+        SELECT 
+            CASE 
+                WHEN h.ipSegment LIKE '192.168.1.%' OR h.ipSegment LIKE '10.0.%' THEN 'MANAGEMENT'
+                WHEN h.ipSegment LIKE '192.168.2.%' OR h.ipSegment LIKE '10.1.%' THEN 'DATABASE'
+                WHEN h.ipSegment LIKE '192.168.3.%' OR h.ipSegment LIKE '10.2.%' THEN 'WEB_SERVERS'
+                WHEN h.ipSegment LIKE '192.168.4.%' OR h.ipSegment LIKE '10.3.%' THEN 'FILE_SERVERS'
+                ELSE 'GENERAL'
+            END as deploymentZone,
+            COUNT(h)
+        FROM HoneypotSensitivityWeight h 
+        WHERE h.customerId = :customerId AND h.isActive = TRUE 
+        GROUP BY 
+            CASE 
+                WHEN h.ipSegment LIKE '192.168.1.%' OR h.ipSegment LIKE '10.0.%' THEN 'MANAGEMENT'
+                WHEN h.ipSegment LIKE '192.168.2.%' OR h.ipSegment LIKE '10.1.%' THEN 'DATABASE'
+                WHEN h.ipSegment LIKE '192.168.3.%' OR h.ipSegment LIKE '10.2.%' THEN 'WEB_SERVERS'
+                WHEN h.ipSegment LIKE '192.168.4.%' OR h.ipSegment LIKE '10.3.%' THEN 'FILE_SERVERS'
+                ELSE 'GENERAL'
+            END
+        ORDER BY COUNT(h) DESC
+        """)
     List<Object[]> countByDeploymentZone(@Param("customerId") String customerId);
 }

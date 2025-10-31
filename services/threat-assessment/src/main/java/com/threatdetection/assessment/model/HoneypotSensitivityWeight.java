@@ -10,34 +10,18 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
- * 蜜罐敏感度权重配置实体 (V4.0)
- * 
- * <p>评估问题: 攻击者尝试访问这个诱饵，意图有多严重？
- * 
- * <p>权重范围: 1.0-3.5
- * - 3.5: 管理区/数据库蜜罐 (尝试控制全网/窃取数据)
- * - 3.0: 核心业务蜜罐 (尝试破坏业务)
- * - 2.5: 文件服务器蜜罐 (勒索软件目标)
- * - 2.0: Web服务器蜜罐 (跳板攻击)
- * - 1.5: 高管办公区蜜罐 (高价值目标)
- * - 1.3: 办公区蜜罐 (横向移动探测)
- * - 1.0: 低价值蜜罐 (基准)
- * 
- * @author ThreatDetection Team
- * @version 4.0
- * @since 2025-10-24
+ * 蜜罐敏感度权重配置实体
+ * 对应数据库表: honeypot_sensitivity_weights
  */
 @Entity
 @Table(name = "honeypot_sensitivity_weights",
        uniqueConstraints = @UniqueConstraint(
-           name = "uk_customer_honeypot",
-           columnNames = {"customer_id", "honeypot_name"}
+           name = "uk_customer_honeypot_ip_segment",
+           columnNames = {"customer_id", "ip_segment"}
        ),
        indexes = {
            @Index(name = "idx_honeypot_customer_active", columnList = "customer_id, is_active"),
-           @Index(name = "idx_honeypot_ip_range", columnList = "customer_id, ip_range_start, ip_range_end"),
-           @Index(name = "idx_honeypot_sensitivity_level", columnList = "sensitivity_level"),
-           @Index(name = "idx_honeypot_deployment_zone", columnList = "deployment_zone")
+           @Index(name = "idx_honeypot_ip_segment", columnList = "ip_segment")
        })
 @Data
 @Builder
@@ -56,67 +40,19 @@ public class HoneypotSensitivityWeight {
     private String customerId;
     
     /**
-     * 蜜罐名称 (客户自定义标识)
+     * IP段标识 (如: "192.168.1.0/24", "10.0.0.0/8")
      */
-    @Column(name = "honeypot_name", nullable = false)
-    private String honeypotName;
+    @Column(name = "ip_segment", nullable = false, length = 50)
+    private String ipSegment;
     
     /**
-     * 蜜罐IP范围起始地址
+     * 蜜罐敏感度权重 (0.0-10.0)
      */
-    @Column(name = "ip_range_start", nullable = false, length = 15)
-    private String ipRangeStart;
+    @Column(name = "honeypot_sensitivity_weight", nullable = false, precision = 5, scale = 2)
+    private BigDecimal honeypotSensitivityWeight;
     
     /**
-     * 蜜罐IP范围结束地址
-     */
-    @Column(name = "ip_range_end", nullable = false, length = 15)
-    private String ipRangeEnd;
-    
-    /**
-     * 蜜罐层级
-     * CRITICAL_ASSET, HIGH_VALUE, MEDIUM_VALUE, LOW_VALUE, DECOY
-     */
-    @Column(name = "honeypot_tier", nullable = false, length = 50)
-    private String honeypotTier;
-    
-    /**
-     * 部署区域
-     * MANAGEMENT, DATABASE, CORE_SERVER, APP_SERVER, OFFICE, DMZ
-     */
-    @Column(name = "deployment_zone", nullable = false, length = 50)
-    private String deploymentZone;
-    
-    /**
-     * 敏感度等级
-     * CRITICAL, HIGH, MEDIUM, LOW, VERY_LOW
-     */
-    @Column(name = "sensitivity_level", nullable = false, length = 20)
-    private String sensitivityLevel;
-    
-    /**
-     * 敏感度权重 (1.0-3.5)
-     * 评估攻击者意图的严重程度
-     */
-    @Column(name = "weight", nullable = false, precision = 3, scale = 2)
-    private BigDecimal weight;
-    
-    /**
-     * 蜜罐模拟的服务类型
-     * 如: SSH, RDP, Database, FileShare
-     */
-    @Column(name = "simulated_service", length = 100)
-    private String simulatedService;
-    
-    /**
-     * 反映的攻击意图
-     * 如: 全网控制, 数据窃取, 横向移动
-     */
-    @Column(name = "attack_intent", length = 100)
-    private String attackIntent;
-    
-    /**
-     * 蜜罐描述信息
+     * 描述信息
      */
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
@@ -127,14 +63,6 @@ public class HoneypotSensitivityWeight {
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = true;
-    
-    /**
-     * 优先级 (用于IP范围重叠时的匹配顺序)
-     * 数值越大优先级越高
-     */
-    @Column(name = "priority", nullable = false)
-    @Builder.Default
-    private Integer priority = 50;
     
     /**
      * 创建时间
@@ -155,13 +83,90 @@ public class HoneypotSensitivityWeight {
         if (isActive == null) {
             isActive = true;
         }
-        if (priority == null) {
-            priority = 50;
-        }
     }
     
     @PreUpdate
     protected void onUpdate() {
         updatedAt = Instant.now();
+    }
+    
+    /**
+     * 获取权重值 (兼容旧接口)
+     */
+    public BigDecimal getWeight() {
+        return honeypotSensitivityWeight;
+    }
+    
+    /**
+     * 设置权重值 (兼容旧接口)
+     */
+    public void setWeight(BigDecimal weight) {
+        this.honeypotSensitivityWeight = weight;
+    }
+    
+    /**
+     * 获取蜜罐名称 (兼容旧接口)
+     */
+    public String getHoneypotName() {
+        return ipSegment;
+    }
+    
+    /**
+     * 设置蜜罐名称 (兼容旧接口)
+     */
+    public void setHoneypotName(String honeypotName) {
+        this.ipSegment = honeypotName;
+    }
+    
+    /**
+     * 获取部署区域 (兼容旧接口)
+     */
+    public String getDeploymentZone() {
+        // 从IP段推断部署区域
+        if (ipSegment == null) return "UNKNOWN";
+        if (ipSegment.startsWith("192.168.1.") || ipSegment.startsWith("10.0.")) {
+            return "MANAGEMENT";
+        } else if (ipSegment.startsWith("192.168.2.") || ipSegment.startsWith("10.1.")) {
+            return "DATABASE";
+        } else if (ipSegment.startsWith("192.168.3.") || ipSegment.startsWith("10.2.")) {
+            return "WEB_SERVERS";
+        } else if (ipSegment.startsWith("192.168.4.") || ipSegment.startsWith("10.3.")) {
+            return "FILE_SERVERS";
+        } else {
+            return "GENERAL";
+        }
+    }
+    
+    /**
+     * 设置部署区域 (兼容旧接口)
+     */
+    public void setDeploymentZone(String deploymentZone) {
+        // 这个方法主要用于兼容性，实际不修改数据
+    }
+    
+    /**
+     * 获取攻击意图 (兼容旧接口)
+     */
+    public String getAttackIntent() {
+        // 从IP段推断攻击意图
+        if (ipSegment == null) return "UNKNOWN";
+        if (ipSegment.startsWith("192.168.1.") || ipSegment.startsWith("10.0.")) {
+            return "PRIVILEGE_ESCALATION";
+        } else if (ipSegment.startsWith("192.168.2.") || ipSegment.startsWith("10.1.")) {
+            return "DATA_THEFT";
+        } else if (ipSegment.startsWith("192.168.3.") || ipSegment.startsWith("10.2.")) {
+            return "PIVOTING";
+        } else if (ipSegment.startsWith("192.168.4.") || ipSegment.startsWith("10.3.")) {
+            return "RANSOMWARE";
+        } else {
+            return "RECONNAISSANCE";
+        }
+    }
+    
+    /**
+     * 设置攻击意图 (兼容旧接口)
+     */
+    public void setAttackIntent(String attackIntent) {
+        // 这个方法主要用于兼容性，实际不修改数据
     }
 }

@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS apt_temporal_accumulations (
     CONSTRAINT chk_phase_confidence CHECK (phase_confidence >= 0.0 AND phase_confidence <= 1.0),
     CONSTRAINT chk_half_life CHECK (half_life_days > 0),
     CONSTRAINT chk_window_order CHECK (window_start <= window_end),
-    CONSTRAINT uk_apt_temporal_customer_mac UNIQUE (customer_id, attack_mac)
+    CONSTRAINT uk_apt_temporal_customer_mac_window UNIQUE (customer_id, attack_mac, window_start)
 );
 
 -- 创建索引以优化查询性能

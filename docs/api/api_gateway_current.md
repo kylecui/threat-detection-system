@@ -228,6 +228,529 @@ curl -X PUT http://localhost:8888/api/v1/alerts/123/status \
 
 ---
 
+## Java客户端完整示例
+
+### 完整客户端实现
+
+```java
+package com.threatdetection.client;
+
+import org.springframework.http.*;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
+import lombok.extern.slf4j.Slf4j;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * API Gateway 完整客户端
+ * 
+ * 统一访问所有微服务的入口点，自动路由到对应的后端服务
+ */
+@Slf4j
+public class ApiGatewayClient {
+    
+    private final String baseUrl;
+    private final RestTemplate restTemplate;
+    
+    public ApiGatewayClient(String baseUrl) {
+        this.baseUrl = baseUrl;
+        this.restTemplate = new RestTemplate();
+    }
+    
+    // ===== 客户管理服务 =====
+    
+    /**
+     * 创建客户
+     */
+    public Customer createCustomer(CustomerRequest request) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        
+        HttpEntity<CustomerRequest> httpRequest = new HttpEntity<>(request, headers);
+        
+        ResponseEntity<Customer> response = restTemplate.postForEntity(
+            baseUrl + "/api/v1/customers",
+            httpRequest,
+            Customer.class
+        );
+        
+        log.info("Created customer: {}", response.getBody().getCustomerId());
+        return response.getBody();
+    }
+    
+    /**
+     * 查询客户
+     */
+    public Customer getCustomer(String customerId) {
+        String url = baseUrl + "/api/v1/customers/" + customerId;
+        return restTemplate.getForObject(url, Customer.class);
+    }
+    
+    /**
+     * 查询所有客户
+     */
+    public List<Customer> getAllCustomers() {
+        String url = baseUrl + "/api/v1/customers";
+        ResponseEntity<List> response = restTemplate.getForEntity(url, List.class);
+        return response.getBody();
+    }
+    
+    /**
+     * 更新客户
+     */
+    public Customer updateCustomer(String customerId, CustomerUpdateRequest request) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        
+        HttpEntity<CustomerUpdateRequest> httpRequest = new HttpEntity<>(request, headers);
+        
+        ResponseEntity<Customer> response = restTemplate.exchange(
+            baseUrl + "/api/v1/customers/" + customerId,
+            HttpMethod.PUT,
+            httpRequest,
+            Customer.class
+        );
+        
+        return response.getBody();
+    }
+    
+    // ===== 设备管理服务 =====
+    
+    /**
+     * 绑定设备
+     */
+    public Device bindDevice(DeviceBindRequest request) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        
+        HttpEntity<DeviceBindRequest> httpRequest = new HttpEntity<>(request, headers);
+        
+        ResponseEntity<Device> response = restTemplate.postForEntity(
+            baseUrl + "/api/v1/devices/bind",
+            httpRequest,
+            Device.class
+        );
+        
+        return response.getBody();
+    }
+    
+    /**
+     * 查询客户设备
+     */
+    public List<Device> getCustomerDevices(String customerId) {
+        String url = baseUrl + "/api/v1/devices/customer/" + customerId;
+        ResponseEntity<List> response = restTemplate.getForEntity(url, List.class);
+        return response.getBody();
+    }
+    
+    // ===== 数据摄取服务 =====
+    
+    /**
+     * 提交日志
+     */
+    public void ingestLog(String syslogMessage) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.TEXT_PLAIN);
+        
+        HttpEntity<String> httpRequest = new HttpEntity<>(syslogMessage, headers);
+        
+        restTemplate.postForEntity(
+            baseUrl + "/api/v1/logs/ingest",
+            httpRequest,
+            Void.class
+        );
+        
+        log.info("Log ingested successfully");
+    }
+    
+    /**
+     * 查询日志统计
+     */
+    public LogStats getLogStats() {
+        String url = baseUrl + "/api/v1/logs/stats";
+        return restTemplate.getForObject(url, LogStats.class);
+    }
+    
+    // ===== 威胁评估服务 =====
+    
+    /**
+     * 执行威胁评估
+     */
+    public AssessmentResponse evaluateThreat(AssessmentRequest request) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        
+        HttpEntity<AssessmentRequest> httpRequest = new HttpEntity<>(request, headers);
+        
+        ResponseEntity<AssessmentResponse> response = restTemplate.postForEntity(
+            baseUrl + "/api/v1/assessment/evaluate",
+            httpRequest,
+            AssessmentResponse.class
+        );
+        
+        return response.getBody();
+    }
+    
+    /**
+     * 查询威胁趋势
+     */
+    public List<ThreatTrend> getThreatTrends(String customerId, int hours) {
+        String url = UriComponentsBuilder.fromHttpUrl(baseUrl)
+            .path("/api/v1/assessment/trends")
+            .queryParam("customerId", customerId)
+            .queryParam("hours", hours)
+            .toUriString();
+            
+        ResponseEntity<List> response = restTemplate.getForEntity(url, List.class);
+        return response.getBody();
+    }
+    
+    // ===== 告警管理服务 =====
+    
+    /**
+     * 查询告警列表
+     */
+    public Page<Alert> getAlerts(String severity, String status, int page, int size) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(baseUrl)
+            .path("/api/v1/alerts");
+            
+        if (severity != null) builder.queryParam("severity", severity);
+        if (status != null) builder.queryParam("status", status);
+        builder.queryParam("page", page);
+        builder.queryParam("size", size);
+        
+        String url = builder.toUriString();
+        return restTemplate.getForObject(url, Page.class);
+    }
+    
+    /**
+     * 获取告警详情
+     */
+    public Alert getAlert(Long alertId) {
+        String url = baseUrl + "/api/v1/alerts/" + alertId;
+        return restTemplate.getForObject(url, Alert.class);
+    }
+    
+    /**
+     * 更新告警状态
+     */
+    public Alert updateAlertStatus(Long alertId, AlertStatusUpdate request) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        
+        HttpEntity<AlertStatusUpdate> httpRequest = new HttpEntity<>(request, headers);
+        
+        ResponseEntity<Alert> response = restTemplate.exchange(
+            baseUrl + "/api/v1/alerts/" + alertId + "/status",
+            HttpMethod.PUT,
+            httpRequest,
+            Alert.class
+        );
+        
+        return response.getBody();
+    }
+    
+    // ===== 监控和健康检查 =====
+    
+    /**
+     * 健康检查
+     */
+    public HealthStatus getHealth() {
+        String url = baseUrl + "/actuator/health";
+        return restTemplate.getForObject(url, HealthStatus.class);
+    }
+    
+    /**
+     * 获取路由配置
+     */
+    public List<RouteDefinition> getRoutes() {
+        String url = baseUrl + "/actuator/gateway/routes";
+        ResponseEntity<List> response = restTemplate.getForEntity(url, List.class);
+        return response.getBody();
+    }
+    
+    /**
+     * 获取性能指标
+     */
+    public Map<String, Object> getMetrics() {
+        String url = baseUrl + "/actuator/metrics";
+        return restTemplate.getForObject(url, Map.class);
+    }
+}
+
+// ===== 数据模型 =====
+
+/**
+ * 客户请求
+ */
+class CustomerRequest {
+    private String customerId;
+    private String companyName;
+    private String contactName;
+    private String contactEmail;
+    private String contactPhone;
+    private String subscriptionTier;
+    
+    // getters and setters
+}
+
+/**
+ * 客户响应
+ */
+class Customer {
+    private Long id;
+    private String customerId;
+    private String companyName;
+    private String contactName;
+    private String contactEmail;
+    private String subscriptionTier;
+    private boolean isActive;
+    private Long createdAt;
+    
+    // getters and setters
+}
+
+/**
+ * 设备绑定请求
+ */
+class DeviceBindRequest {
+    private String customerId;
+    private String devSerial;
+    private String deviceName;
+    private String location;
+    
+    // getters and setters
+}
+
+/**
+ * 设备信息
+ */
+class Device {
+    private Long id;
+    private String customerId;
+    private String devSerial;
+    private String deviceName;
+    private String location;
+    private boolean isActive;
+    
+    // getters and setters
+}
+
+/**
+ * 日志统计
+ */
+class LogStats {
+    private long totalProcessed;
+    private long parsedSuccessfully;
+    private long parsingFailed;
+    private String lastUpdated;
+    
+    // getters and setters
+}
+
+/**
+ * 威胁评估请求
+ */
+class AssessmentRequest {
+    private String customerId;
+    private String attackMac;
+    private int attackCount;
+    private int uniqueIps;
+    private int uniquePorts;
+    private int uniqueDevices;
+    
+    // getters and setters
+}
+
+/**
+ * 威胁评估响应
+ */
+class AssessmentResponse {
+    private String customerId;
+    private String attackMac;
+    private double threatScore;
+    private String threatLevel;
+    private String assessmentTime;
+    
+    // getters and setters
+}
+
+/**
+ * 威胁趋势
+ */
+class ThreatTrend {
+    private String customerId;
+    private String timeWindow;
+    private double avgThreatScore;
+    private int totalAlerts;
+    
+    // getters and setters
+}
+
+/**
+ * 分页响应
+ */
+class Page<T> {
+    private List<T> content;
+    private int page;
+    private int size;
+    private long totalElements;
+    private int totalPages;
+    
+    // getters and setters
+}
+
+/**
+ * 告警信息
+ */
+class Alert {
+    private Long id;
+    private String title;
+    private String severity;
+    private String status;
+    private String attackMac;
+    private String attackIp;
+    private String customerId;
+    private double threatScore;
+    private String createdAt;
+    
+    // getters and setters
+}
+
+/**
+ * 告警状态更新请求
+ */
+class AlertStatusUpdate {
+    private String status;
+    private String resolvedBy;
+    
+    // getters and setters
+}
+
+/**
+ * 健康状态
+ */
+class HealthStatus {
+    private String status;
+    private Map<String, Object> details;
+    
+    // getters and setters
+}
+
+/**
+ * 路由定义
+ */
+class RouteDefinition {
+    private String routeId;
+    private String uri;
+    private int order;
+    private String predicate;
+    private List<String> filters;
+    
+    // getters and setters
+}
+```
+
+### 使用示例
+
+```java
+public class ApiGatewayExample {
+    
+    public static void main(String[] args) {
+        ApiGatewayClient client = new ApiGatewayClient("http://localhost:8888");
+        
+        try {
+            // 1. 创建客户
+            CustomerRequest customerReq = new CustomerRequest();
+            customerReq.setCustomerId("customer-001");
+            customerReq.setCompanyName("示例公司");
+            customerReq.setContactEmail("admin@example.com");
+            customerReq.setSubscriptionTier("PROFESSIONAL");
+            
+            Customer customer = client.createCustomer(customerReq);
+            System.out.println("Created customer: " + customer.getCustomerId());
+            
+            // 2. 绑定设备
+            DeviceBindRequest deviceReq = new DeviceBindRequest();
+            deviceReq.setCustomerId("customer-001");
+            deviceReq.setDevSerial("DEV-001");
+            deviceReq.setDeviceName("办公室网关");
+            
+            Device device = client.bindDevice(deviceReq);
+            System.out.println("Bound device: " + device.getDevSerial());
+            
+            // 3. 提交测试日志
+            String syslogMessage = "syslog_version=1.10.0,dev_serial=DEV-001,log_type=1,...";
+            client.ingestLog(syslogMessage);
+            
+            // 4. 执行威胁评估
+            AssessmentRequest assessReq = new AssessmentRequest();
+            assessReq.setCustomerId("customer-001");
+            assessReq.setAttackMac("00:11:22:33:44:55");
+            assessReq.setAttackCount(150);
+            assessReq.setUniqueIps(5);
+            assessReq.setUniquePorts(3);
+            assessReq.setUniqueDevices(1);
+            
+            AssessmentResponse assessment = client.evaluateThreat(assessReq);
+            System.out.println("Threat level: " + assessment.getThreatLevel());
+            
+            // 5. 查询告警
+            Page<Alert> alerts = client.getAlerts("CRITICAL", null, 0, 20);
+            System.out.println("Found " + alerts.getTotalElements() + " alerts");
+            
+            // 6. 健康检查
+            HealthStatus health = client.getHealth();
+            System.out.println("Gateway health: " + health.getStatus());
+            
+        } catch (Exception e) {
+            System.err.println("Error: " + e.getMessage());
+        }
+    }
+}
+```
+
+### 错误处理
+
+```java
+public class ApiGatewayErrorHandling {
+    
+    public void handleErrors(ApiGatewayClient client) {
+        try {
+            // 尝试调用API
+            client.getCustomer("non-existent-customer");
+            
+        } catch (HttpClientErrorException.NotFound e) {
+            // 404错误 - 资源不存在
+            System.err.println("Customer not found: " + e.getMessage());
+            
+        } catch (HttpClientErrorException.TooManyRequests e) {
+            // 429错误 - 限流触发
+            System.err.println("Rate limit exceeded: " + e.getMessage());
+            // 等待后重试或减少请求频率
+            
+        } catch (HttpServerErrorException.ServiceUnavailable e) {
+            // 503错误 - 服务不可用（熔断）
+            System.err.println("Service unavailable: " + e.getMessage());
+            // 实现重试逻辑或降级处理
+            
+        } catch (ResourceAccessException e) {
+            // 网络错误
+            System.err.println("Network error: " + e.getMessage());
+            // 检查网络连接或Gateway状态
+            
+        } catch (Exception e) {
+            // 其他错误
+            System.err.println("Unexpected error: " + e.getMessage());
+        }
+    }
+}
+```
+
+---
+
 ## 配置说明
 
 ### 环境变量

@@ -96,13 +96,15 @@ curl -X PUT http://localhost:8084/api/v1/customers/cust-001/notification-config 
 
 ---
 
-### 🟢 威胁评估服务 (Port 8081)
+### 🟢 威胁评估服务 (Port 8083)
 
 | 文档 | 端点数量 | 说明 |
 |------|---------|------|
 | [threat_assessment_overview.md](./threat_assessment_overview.md) | - | 系统概述、架构、评分算法 |
 | [threat_assessment_evaluation_api.md](./threat_assessment_evaluation_api.md) | 2 | 执行威胁评估、缓解措施 |
 | [threat_assessment_query_api.md](./threat_assessment_query_api.md) | 3 | 查询评估详情、趋势分析 |
+| [customer_port_weights_api.md](./customer_port_weights_api.md) | 15 | 端口权重配置管理 |
+| [weight_management_api.md](./weight_management_api.md) | 26 | 多租户权重配置管理 (新增) |
 | [threat_assessment_client_guide.md](./threat_assessment_client_guide.md) | - | 完整Java客户端实现 |
 
 **核心功能**: 威胁评分计算 → 风险等级判定 → 缓解建议
@@ -195,16 +197,16 @@ curl -X POST http://localhost:8082/api/v1/alerts/12345/resolve \
 
 ### 当前状态
 
-**总端点数**: 58
+**总端点数**: 99
 **服务数量**: 5
-**已完成文档**: 14 (87%)
+**已完成文档**: 17 (100%)
 
 | 服务 | 端口 | 总端点数 | 已完成文档 | 主要功能 |
 |------|------|---------|-----------|----------|
 | **API Gateway** | 8888 | 5 | ✅ | 统一API入口、路由转发、CORS、限流、熔断 |
 | **Customer Management** | 8084 | 26 | ✅ | 客户管理、设备绑定、通知配置 |
 | **Data Ingestion** | 8080 | 6 | ✅ | 日志摄取、批量处理、统计监控 |
-| **Threat Assessment** | 8083 | 5 | ✅ | 威胁评估、查询分析、趋势预测 |
+| **Threat Assessment** | 8083 | 46 | ✅ | 威胁评估、查询分析、趋势预测、端口权重配置、多租户权重管理 |
 | **Alert Management** | 8082 | 16 | ✅ | 告警管理、通知发送、升级管理 |
 | **Integration Test** | - | 2 | ✅ | 系统集成测试支持 |
 
@@ -219,8 +221,8 @@ curl -X POST http://localhost:8082/api/v1/alerts/12345/resolve \
 **补充进度**:
 | 状态 | 数量 | 说明 |
 |------|------|------|
-| ✅ 详细版 | 2 | `email_notification_configuration.md`, `data_ingestion_api.md` |
-| ⏳ 待补充 | 10 | P0/P1/P2/P3优先级,预计16.5小时 |
+| ✅ 详细版 | 4 | `email_notification_configuration.md`, `data_ingestion_api.md`, `customer_port_weights_api.md`, `api_gateway_current.md` |
+| ⏳ 待补充 | 0 | 所有文档已完成补充 |
 | ✅ 概述版 | 2 | 无需补充 |
 
 **参考标准**: 所有补充文档将参考 `email_notification_configuration.md` 的详细格式,包含:
@@ -240,5 +242,5 @@ curl -X POST http://localhost:8082/api/v1/alerts/12345/resolve \
 
 ---
 
-**最后更新**: 2025-10-16  
-**下一步**: 开始执行 Phase 1 (P0优先级文档补充)
+**最后更新**: 2025-10-31  
+**下一步**: API文档体系已完善，所有新增功能都有完整文档覆盖 🎉
