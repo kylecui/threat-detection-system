@@ -55,7 +55,7 @@ public class APTTemporalAccumulator {
             "inferred_attack_phase, phase_confidence, " +
             "window_start, window_end, last_updated) " +
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
-            "ON CONFLICT (customer_id, attack_mac) DO UPDATE SET " +
+            "ON CONFLICT (customer_id, attack_mac, window_start) DO UPDATE SET " +
             "total_attack_count = EXCLUDED.total_attack_count, " +
             "unique_ips_count = GREATEST(apt_temporal_accumulations.unique_ips_count, EXCLUDED.unique_ips_count), " +
             "unique_ports_count = GREATEST(apt_temporal_accumulations.unique_ports_count, EXCLUDED.unique_ports_count), " +
