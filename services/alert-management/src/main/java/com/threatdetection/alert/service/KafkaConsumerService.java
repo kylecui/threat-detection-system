@@ -50,8 +50,8 @@ public class KafkaConsumerService {
     private final CustomerNotificationConfigRepository customerNotificationConfigRepository;
     private final ObjectMapper objectMapper;
     
-    @Value("${integration-test.email.recipient:kylecui@outlook.com}")
-    private String defaultEmailRecipient;
+    // @Value("${integration-test.email.recipient}")
+    private String defaultEmailRecipient = "";
 
     /**
      * 监听威胁检测事件（批量模式，提升性能）
@@ -389,6 +389,10 @@ public class KafkaConsumerService {
         
         if (configOpt.isEmpty()) {
             log.warn("客户 {} 没有激活的通知配置，使用默认邮箱", customerId);
+            if (defaultEmailRecipient == null || defaultEmailRecipient.trim().isEmpty()) {
+                log.info("默认邮箱未配置，跳过邮件通知: customerId={}", customerId);
+                return;
+            }
             sendEmailNotification(alert, defaultEmailRecipient);
             return;
         }

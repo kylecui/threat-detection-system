@@ -77,6 +77,16 @@ def fetch_recent_alerts(hours=24, limit=50):
             print(f"   创建时间: {created_at}")
             print(f"   更新时间: {updated_at}")
 
+            # 从metadata中提取客户ID
+            customer_id = "N/A"
+            if metadata:
+                try:
+                    metadata_dict = json.loads(metadata)
+                    customer_id = metadata_dict.get('customer_id', metadata_dict.get('customerId', 'N/A'))
+                except:
+                    pass
+            print(f"   客户ID: {customer_id}")
+
             if description:
                 print(f"   描述: {description[:200]}{'...' if len(description) > 200 else ''}")
 

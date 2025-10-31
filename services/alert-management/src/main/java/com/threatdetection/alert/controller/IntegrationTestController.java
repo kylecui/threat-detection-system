@@ -46,7 +46,7 @@ public class IntegrationTestController {
     public ResponseEntity<Map<String, Object>> getIntegrationTestStatus() {
         Map<String, Object> response = new HashMap<>();
         response.put("enabled", true);
-        response.put("emailRecipient", "kylecui@outlook.com");
+        response.put("emailRecipient", integrationTestService.getTestEmailRecipient());
         response.put("notificationRules", "仅CRITICAL等级告警，每10分钟最多5封邮件");
         response.put("description", "集成测试服务正在运行，监听威胁事件并发送邮件通知");
 

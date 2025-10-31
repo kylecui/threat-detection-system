@@ -107,14 +107,26 @@ def format_alert(alert):
         try:
             metadata_dict = json.loads(metadata)
             customer_id = metadata_dict.get('customer_id', 'N/A')
-            print(f"   客户ID: {customer_id}")
+            customerId = metadata_dict.get('customerId', 'N/A')  # 兼容旧格式
 
-            # 显示其他metadata信息
+            # 显示客户ID
+            if customer_id != 'N/A':
+                print(f"   客户ID: {customer_id}")
+            elif customerId != 'N/A':
+                print(f"   客户ID: {customerId}")
+            else:
+                print(f"   客户ID: N/A")
+
+            # 显示所有metadata信息（排除一些重复的字段）
+            exclude_fields = ['customer_id', 'customerId', 'title', 'description', 'status', 'severity', 'source', 'attack_mac', 'threat_score', 'created_at', 'updated_at']
             for key, value in metadata_dict.items():
-                if key != 'customer_id' and key not in ['attack_ip', 'response_ip', 'response_port']:
+                if key not in exclude_fields:
                     print(f"   {key}: {value}")
-        except:
-            print(f"   元数据: {metadata[:200]}{'...' if len(metadata) > 200 else ''}")
+        except Exception as e:
+            print(f"   元数据解析失败: {e}")
+            print(f"   元数据原始内容: {metadata[:200]}{'...' if len(metadata) > 200 else ''}")
+    else:
+        print(f"   客户ID: N/A")
 
     print("-" * 60)
 

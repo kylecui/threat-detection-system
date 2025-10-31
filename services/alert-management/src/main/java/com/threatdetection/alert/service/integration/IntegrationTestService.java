@@ -12,6 +12,7 @@ import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
+import jakarta.annotation.PostConstruct;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -31,8 +32,8 @@ public class IntegrationTestService {
     private final NotificationService notificationService;
     private final AlertService alertService;
 
-    @Value("${integration-test.email.recipient:kylecui@outlook.com}")
-    private String testEmailRecipient;
+    // @Value("${integration-test.email.recipient}")
+    private String testEmailRecipient = "";
 
     // 通知频率控制：每10分钟最多5封邮件
     private static final int MAX_EMAILS_PER_WINDOW = 5;
@@ -244,6 +245,13 @@ public class IntegrationTestService {
         content.append("威胁检测系统自动告警");
 
         return content.toString();
+    }
+
+    /**
+     * 获取测试邮件接收者
+     */
+    public String getTestEmailRecipient() {
+        return testEmailRecipient;
     }
 
     /**
