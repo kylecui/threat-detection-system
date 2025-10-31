@@ -41,8 +41,8 @@ public class HoneypotSensitivityWeightService {
         return convertToDto(saved);
     }
     
-    public Optional<HoneypotSensitivityWeightDto> findByCustomerIdAndIpSegment(String customerId, String ipSegment) {
-        return repository.findByCustomerIdAndIpSegment(customerId, ipSegment)
+    public Optional<HoneypotSensitivityWeightDto> findByCustomerIdAndHoneypotIp(String customerId, String honeypotIp) {
+        return repository.findByCustomerIdAndHoneypotIp(customerId, honeypotIp)
                 .map(this::convertToDto);
     }
     
@@ -68,40 +68,40 @@ public class HoneypotSensitivityWeightService {
     }
     
     @Transactional
-    public boolean enable(String customerId, String ipSegment) {
-        Optional<HoneypotSensitivityWeight> entityOpt = repository.findByCustomerIdAndIpSegment(customerId, ipSegment);
+    public boolean enable(String customerId, String honeypotIp) {
+        Optional<HoneypotSensitivityWeight> entityOpt = repository.findByCustomerIdAndHoneypotIp(customerId, honeypotIp);
         if (entityOpt.isPresent()) {
             HoneypotSensitivityWeight entity = entityOpt.get();
             entity.setIsActive(true);
             repository.save(entity);
-            log.info("Enabled honeypot sensitivity weight config: customerId={}, ipSegment={}", customerId, ipSegment);
+            log.info("Enabled honeypot sensitivity weight config: customerId={}, honeypotIp={}", customerId, honeypotIp);
             return true;
         }
         return false;
     }
     
     @Transactional
-    public boolean disable(String customerId, String ipSegment) {
-        Optional<HoneypotSensitivityWeight> entityOpt = repository.findByCustomerIdAndIpSegment(customerId, ipSegment);
+    public boolean disable(String customerId, String honeypotIp) {
+        Optional<HoneypotSensitivityWeight> entityOpt = repository.findByCustomerIdAndHoneypotIp(customerId, honeypotIp);
         if (entityOpt.isPresent()) {
             HoneypotSensitivityWeight entity = entityOpt.get();
             entity.setIsActive(false);
             repository.save(entity);
-            log.info("Disabled honeypot sensitivity weight config: customerId={}, ipSegment={}", customerId, ipSegment);
+            log.info("Disabled honeypot sensitivity weight config: customerId={}, honeypotIp={}", customerId, honeypotIp);
             return true;
         }
         return false;
     }
     
     @Transactional
-    public boolean delete(String customerId, String ipSegment) {
+    public boolean delete(String customerId, String honeypotIp) {
         try {
-            repository.deleteByCustomerIdAndIpSegment(customerId, ipSegment);
-            log.info("Deleted honeypot sensitivity weight config: customerId={}, ipSegment={}", customerId, ipSegment);
+            repository.deleteByCustomerIdAndHoneypotIp(customerId, honeypotIp);
+            log.info("Deleted honeypot sensitivity weight config: customerId={}, honeypotIp={}", customerId, honeypotIp);
             return true;
         } catch (Exception e) {
-            log.error("Failed to delete honeypot sensitivity weight config: customerId={}, ipSegment={}", 
-                     customerId, ipSegment, e);
+            log.error("Failed to delete honeypot sensitivity weight config: customerId={}, honeypotIp={}", 
+                     customerId, honeypotIp, e);
             return false;
         }
     }
@@ -110,8 +110,8 @@ public class HoneypotSensitivityWeightService {
         return repository.getStatistics(customerId);
     }
     
-    public boolean exists(String customerId, String ipSegment) {
-        return repository.existsByCustomerIdAndIpSegment(customerId, ipSegment);
+    public boolean exists(String customerId, String honeypotIp) {
+        return repository.existsByCustomerIdAndHoneypotIp(customerId, honeypotIp);
     }
     
     public long count(String customerId) {

@@ -13,6 +13,7 @@ path.logs: /usr/share/logstash/logs
 pipeline.workers: 4
 pipeline.batch.size: 125
 pipeline.batch.delay: 50
+path.config: /usr/share/logstash/pipeline/attack-events.conf
 
 # 监控配置
 monitoring.enabled: false

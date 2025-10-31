@@ -59,7 +59,8 @@ class IpSegmentWeightServiceV4Test {
         // Given: 管理区蜜罐配置（权重3.5）
         HoneypotSensitivityWeight managementHoneypot = HoneypotSensitivityWeight.builder()
             .customerId(CUSTOMER_ID)
-            .ipSegment("10.0.100.0/24")
+            .ipRangeStart("10.0.100.0")
+            .ipRangeEnd("10.0.100.255")
             .honeypotSensitivityWeight(new BigDecimal("3.50"))
             .isActive(true)
             .build();
@@ -97,7 +98,8 @@ class IpSegmentWeightServiceV4Test {
         // Given: 办公区蜜罐配置（权重1.3）
         HoneypotSensitivityWeight officeHoneypot = HoneypotSensitivityWeight.builder()
             .customerId(CUSTOMER_ID)
-            .ipSegment("192.168.10.0/24")
+            .ipRangeStart("192.168.10.0")
+            .ipRangeEnd("192.168.10.255")
             .honeypotSensitivityWeight(new BigDecimal("1.30"))
             .isActive(true)
             .build();
@@ -128,7 +130,8 @@ class IpSegmentWeightServiceV4Test {
         // Given: 办公区蜜罐配置（权重1.3）
         HoneypotSensitivityWeight officeHoneypot = HoneypotSensitivityWeight.builder()
             .customerId(CUSTOMER_ID)
-            .ipSegment("192.168.10.0/24")
+            .ipRangeStart("192.168.10.0")
+            .ipRangeEnd("192.168.10.255")
             .honeypotSensitivityWeight(new BigDecimal("1.30"))
             .isActive(true)
             .build();
@@ -159,7 +162,8 @@ class IpSegmentWeightServiceV4Test {
         // Given: 数据库蜜罐配置（权重3.5）
         HoneypotSensitivityWeight dbHoneypot = HoneypotSensitivityWeight.builder()
             .customerId(CUSTOMER_ID)
-            .ipSegment("10.0.3.0/24")
+            .ipRangeStart("10.0.3.0")
+            .ipRangeEnd("10.0.3.255")
             .honeypotSensitivityWeight(new BigDecimal("3.50"))
             .isActive(true)
             .build();

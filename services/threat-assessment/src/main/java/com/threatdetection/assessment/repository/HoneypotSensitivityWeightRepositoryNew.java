@@ -2,6 +2,7 @@ package com.threatdetection.assessment.repository;
 
 import com.threatdetection.assessment.model.HoneypotSensitivityWeight;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -23,13 +24,21 @@ import java.util.Optional;
 public interface HoneypotSensitivityWeightRepositoryNew extends JpaRepository<HoneypotSensitivityWeight, Long> {
     
     /**
-     * 根据客户ID和IP段查询权重配置
+     * 根据客户ID和蜜罐IP查询匹配的权重配置
      * 
      * @param customerId 客户ID
-     * @param ipSegment IP段标识
+     * @param honeypotIp 蜜罐IP
      * @return 权重配置 (Optional)
      */
-    Optional<HoneypotSensitivityWeight> findByCustomerIdAndIpSegment(String customerId, String ipSegment);
+    @Query(value = """
+        SELECT * FROM honeypot_sensitivity_weights h
+        WHERE h.customer_id = :customerId
+          AND h.is_active = TRUE
+          AND CAST(:honeypotIp AS inet) BETWEEN CAST(h.ip_range_start AS inet) AND CAST(h.ip_range_end AS inet)
+        ORDER BY h.priority DESC, h.id DESC
+        LIMIT 1
+        """, nativeQuery = true)
+    Optional<HoneypotSensitivityWeight> findByCustomerIdAndHoneypotIp(@Param("customerId") String customerId, @Param("honeypotIp") String honeypotIp);
     
     /**
      * 查询客户的所有启用配置
@@ -77,13 +86,19 @@ public interface HoneypotSensitivityWeightRepositoryNew extends JpaRepository<Ho
     long countByCustomerIdAndIsActive(String customerId, Boolean isActive);
     
     /**
-     * 检查客户和IP段是否已存在配置
+     * 检查客户和蜜罐IP是否已存在配置
      * 
      * @param customerId 客户ID
-     * @param ipSegment IP段标识
+     * @param honeypotIp 蜜罐IP
      * @return 是否存在
      */
-    boolean existsByCustomerIdAndIpSegment(String customerId, String ipSegment);
+    @Query(value = """
+        SELECT COUNT(*) > 0 FROM honeypot_sensitivity_weights h
+        WHERE h.customer_id = :customerId
+          AND h.is_active = TRUE
+          AND CAST(:honeypotIp AS inet) BETWEEN CAST(h.ip_range_start AS inet) AND CAST(h.ip_range_end AS inet)
+        """, nativeQuery = true)
+    boolean existsByCustomerIdAndHoneypotIp(@Param("customerId") String customerId, @Param("honeypotIp") String honeypotIp);
     
     /**
      * 删除客户的所有配置
@@ -93,12 +108,18 @@ public interface HoneypotSensitivityWeightRepositoryNew extends JpaRepository<Ho
     void deleteByCustomerId(String customerId);
     
     /**
-     * 删除客户的特定IP段配置
+     * 删除客户的特定蜜罐IP配置
      * 
      * @param customerId 客户ID
-     * @param ipSegment IP段标识
+     * @param honeypotIp 蜜罐IP
      */
-    void deleteByCustomerIdAndIpSegment(String customerId, String ipSegment);
+    @Modifying
+    @Query(value = """
+        DELETE FROM honeypot_sensitivity_weights h
+        WHERE h.customer_id = :customerId
+          AND CAST(:honeypotIp AS inet) BETWEEN CAST(h.ip_range_start AS inet) AND CAST(h.ip_range_end AS inet)
+        """, nativeQuery = true)
+    void deleteByCustomerIdAndHoneypotIp(@Param("customerId") String customerId, @Param("honeypotIp") String honeypotIp);
     
     /**
      * 获取权重统计信息

@@ -16,12 +16,12 @@ import java.time.Instant;
 @Entity
 @Table(name = "honeypot_sensitivity_weights",
        uniqueConstraints = @UniqueConstraint(
-           name = "uk_customer_honeypot_ip_segment",
-           columnNames = {"customer_id", "ip_segment"}
+           name = "uk_customer_honeypot",
+           columnNames = {"customer_id", "honeypot_name"}
        ),
        indexes = {
            @Index(name = "idx_honeypot_customer_active", columnList = "customer_id, is_active"),
-           @Index(name = "idx_honeypot_ip_segment", columnList = "ip_segment")
+           @Index(name = "idx_honeypot_ip_range", columnList = "customer_id, ip_range_start, ip_range_end")
        })
 @Data
 @Builder
@@ -40,16 +40,58 @@ public class HoneypotSensitivityWeight {
     private String customerId;
     
     /**
-     * IP段标识 (如: "192.168.1.0/24", "10.0.0.0/8")
+     * 蜜罐名称
      */
-    @Column(name = "ip_segment", nullable = false, length = 50)
-    private String ipSegment;
+    @Column(name = "honeypot_name", nullable = false, length = 255)
+    private String honeypotName;
+    
+    /**
+     * IP范围起始地址
+     */
+    @Column(name = "ip_range_start", nullable = false, length = 15)
+    private String ipRangeStart;
+    
+    /**
+     * IP范围结束地址
+     */
+    @Column(name = "ip_range_end", nullable = false, length = 15)
+    private String ipRangeEnd;
+    
+    /**
+     * 蜜罐层级
+     */
+    @Column(name = "honeypot_tier", nullable = false, length = 50)
+    private String honeypotTier;
+    
+    /**
+     * 部署区域
+     */
+    @Column(name = "deployment_zone", nullable = false, length = 50)
+    private String deploymentZone;
+    
+    /**
+     * 敏感度等级
+     */
+    @Column(name = "sensitivity_level", nullable = false, length = 20)
+    private String sensitivityLevel;
     
     /**
      * 蜜罐敏感度权重 (0.0-10.0)
      */
-    @Column(name = "honeypot_sensitivity_weight", nullable = false, precision = 5, scale = 2)
+    @Column(name = "weight", nullable = false, precision = 3, scale = 2)
     private BigDecimal honeypotSensitivityWeight;
+    
+    /**
+     * 模拟的服务类型
+     */
+    @Column(name = "simulated_service", length = 100)
+    private String simulatedService;
+    
+    /**
+     * 攻击意图
+     */
+    @Column(name = "attack_intent", length = 100)
+    private String attackIntent;
     
     /**
      * 描述信息
@@ -63,6 +105,12 @@ public class HoneypotSensitivityWeight {
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = true;
+    
+    /**
+     * 优先级
+     */
+    @Column(name = "priority")
+    private Integer priority;
     
     /**
      * 创建时间
@@ -108,65 +156,60 @@ public class HoneypotSensitivityWeight {
      * 获取蜜罐名称 (兼容旧接口)
      */
     public String getHoneypotName() {
-        return ipSegment;
+        return honeypotName;
     }
     
     /**
      * 设置蜜罐名称 (兼容旧接口)
      */
     public void setHoneypotName(String honeypotName) {
-        this.ipSegment = honeypotName;
+        this.honeypotName = honeypotName;
+    }
+    
+    /**
+     * 获取IP段标识 (兼容旧接口)
+     */
+    public String getIpSegment() {
+        return ipRangeStart + "-" + ipRangeEnd;
+    }
+    
+    /**
+     * 设置IP段标识 (兼容旧接口)
+     */
+    public void setIpSegment(String ipSegment) {
+        // 解析IP段范围
+        if (ipSegment != null && ipSegment.contains("-")) {
+            String[] parts = ipSegment.split("-", 2);
+            this.ipRangeStart = parts[0];
+            this.ipRangeEnd = parts[1];
+        }
     }
     
     /**
      * 获取部署区域 (兼容旧接口)
      */
     public String getDeploymentZone() {
-        // 从IP段推断部署区域
-        if (ipSegment == null) return "UNKNOWN";
-        if (ipSegment.startsWith("192.168.1.") || ipSegment.startsWith("10.0.")) {
-            return "MANAGEMENT";
-        } else if (ipSegment.startsWith("192.168.2.") || ipSegment.startsWith("10.1.")) {
-            return "DATABASE";
-        } else if (ipSegment.startsWith("192.168.3.") || ipSegment.startsWith("10.2.")) {
-            return "WEB_SERVERS";
-        } else if (ipSegment.startsWith("192.168.4.") || ipSegment.startsWith("10.3.")) {
-            return "FILE_SERVERS";
-        } else {
-            return "GENERAL";
-        }
+        return deploymentZone;
     }
     
     /**
      * 设置部署区域 (兼容旧接口)
      */
     public void setDeploymentZone(String deploymentZone) {
-        // 这个方法主要用于兼容性，实际不修改数据
+        this.deploymentZone = deploymentZone;
     }
     
     /**
      * 获取攻击意图 (兼容旧接口)
      */
     public String getAttackIntent() {
-        // 从IP段推断攻击意图
-        if (ipSegment == null) return "UNKNOWN";
-        if (ipSegment.startsWith("192.168.1.") || ipSegment.startsWith("10.0.")) {
-            return "PRIVILEGE_ESCALATION";
-        } else if (ipSegment.startsWith("192.168.2.") || ipSegment.startsWith("10.1.")) {
-            return "DATA_THEFT";
-        } else if (ipSegment.startsWith("192.168.3.") || ipSegment.startsWith("10.2.")) {
-            return "PIVOTING";
-        } else if (ipSegment.startsWith("192.168.4.") || ipSegment.startsWith("10.3.")) {
-            return "RANSOMWARE";
-        } else {
-            return "RECONNAISSANCE";
-        }
+        return attackIntent;
     }
     
     /**
      * 设置攻击意图 (兼容旧接口)
      */
     public void setAttackIntent(String attackIntent) {
-        // 这个方法主要用于兼容性，实际不修改数据
+        this.attackIntent = attackIntent;
     }
 }

@@ -1,0 +1,284 @@
+# Logstash Pipeline配置 - 威胁检测系统
+# 接收rsyslog日志（攻击日志 + 心跳日志），解析后转发到Kafka
+# 
+# 日志格式参考: docs/api/data_ingestion_api.md
+#
+# 攻击日志示例 (log_type=1):
+# syslog_version=1.10.0,dev_serial=GSFB2204200410007425,log_type=1,sub_type=1,
+# attack_mac=00:68:eb:bb:c7:c6,attack_ip=192.168.73.98,response_ip=192.168.73.37,
+# response_port=65536,line_id=1,Iface_type=1,Vlan_id=0,log_time=1747274810
+#
+# 心跳日志示例 (log_type=2):
+# syslog_version=1.10.0,dev_serial=GSFB2204200410007425,log_type=2,
+# sentry_count=6453,real_host_count=673,dev_start_time=1747274780,
+# dev_end_time=-1,time=2025-05-15 10:06:50
+
+input {
+  # TCP输入 - 接收rsyslog（无TLS）
+  tcp {
+    port => 9080
+    codec => plain
+    type => "syslog-raw"
+    tags => ["rsyslog"]
+  }
+  
+  # TCP输入 - TLS加密（未来使用）
+  # tcp {
+  #   port => 9081
+  #   codec => plain
+  #   type => "syslog-raw"
+  #   tags => ["rsyslog", "tls"]
+  #   ssl_enable => true
+  #   ssl_cert => "/usr/share/logstash/certs/server.crt"
+  #   ssl_key => "/usr/share/logstash/certs/server.key"
+  #   ssl_verify => false
+  # }
+}
+
+filter {
+  # ========================================================================
+  # 阶段1: 解析key=value格式的syslog日志
+  # ========================================================================
+  if [type] == "syslog-raw" {
+    kv {
+      source => "message"
+      field_split => ","
+      value_split => "="
+      trim_key => " "
+      trim_value => " "
+    }
+    
+    # 保留原始message字段用于HTTP输出
+    # mutate {
+    #   remove_field => ["message"]
+    # }
+  }
+  
+  # ========================================================================
+  # 阶段2: 根据log_type分类处理
+  # ========================================================================
+  
+  # 攻击日志处理 (log_type=1)
+  if [log_type] == "1" {
+    mutate {
+      add_tag => ["attack-log"]
+      
+      # 字段重命名为camelCase (符合Kafka消息规范)
+      rename => {
+        "dev_serial" => "deviceSerial"
+        "attack_mac" => "attackMac"
+        "attack_ip" => "attackIp"
+        "response_ip" => "responseIp"
+        "response_port" => "responsePort"
+        "log_time" => "logTime"
+        "sub_type" => "subType"
+        "line_id" => "lineId"
+        "Iface_type" => "ifaceType"
+        "Vlan_id" => "vlanId"
+        "syslog_version" => "syslogVersion"
+      }
+    }
+    
+    # 解析Unix时间戳 (秒)
+    if [logTime] {
+      date {
+        match => ["logTime", "UNIX"]
+        target => "@timestamp"
+      }
+      
+      # 生成ISO8601格式的timestamp字段
+      ruby {
+        code => "event.set('timestamp', Time.at(event.get('logTime').to_i).utc.iso8601)"
+      }
+    }
+    
+    # MAC地址标准化（大写+冒号分隔）
+    if [attackMac] {
+      mutate {
+        uppercase => ["attackMac"]
+        gsub => [
+          "attackMac", "-", ":"
+        ]
+      }
+    }
+    
+    # 端口号类型转换
+    if [responsePort] {
+      mutate {
+        convert => {
+          "responsePort" => "integer"
+        }
+      }
+    }
+    
+    # 必需字段验证（攻击日志）
+    if ![attackMac] or ![attackIp] or ![responseIp] or ![responsePort] or ![deviceSerial] {
+      mutate {
+        add_tag => ["missing_required_fields", "attack-log-invalid"]
+      }
+    }
+  }
+  
+  # 心跳日志处理 (log_type=2)
+  else if [log_type] == "2" {
+    mutate {
+      add_tag => ["heartbeat-log"]
+      
+      # 字段重命名为camelCase
+      rename => {
+        "dev_serial" => "deviceSerial"
+        "sentry_count" => "sentryCount"
+        "real_host_count" => "realHostCount"
+        "dev_start_time" => "devStartTime"
+        "dev_end_time" => "devEndTime"
+        "syslog_version" => "syslogVersion"
+      }
+    }
+    
+    # 解析心跳时间
+    if [time] {
+      date {
+        match => ["time", "yyyy-MM-dd HH:mm:ss"]
+        target => "@timestamp"
+      }
+      
+      # 保留原始time字段
+      mutate {
+        rename => { "time" => "heartbeatTime" }
+      }
+    }
+    
+    # 类型转换
+    mutate {
+      convert => {
+        "sentryCount" => "integer"
+        "realHostCount" => "integer"
+        "devStartTime" => "integer"
+        "devEndTime" => "integer"
+      }
+    }
+    
+    # 必需字段验证（心跳日志）
+    if ![deviceSerial] or ![sentryCount] or ![realHostCount] {
+      mutate {
+        add_tag => ["missing_required_fields", "heartbeat-log-invalid"]
+      }
+    }
+  }
+  
+  # 未知日志类型
+  else {
+    mutate {
+      add_tag => ["unknown-log-type"]
+    }
+  }
+  
+  # ========================================================================
+  # 阶段3: 添加元数据和查询customerId（待实现）
+  # ========================================================================
+  
+  # 添加处理时间戳
+  ruby {
+    code => "event.set('logstashProcessedAt', Time.now.iso8601)"
+  }
+  
+  # 确保message字段存在（用于HTTP输出）
+  ruby {
+    code => "
+      if event.get('message').nil? || event.get('message').empty?
+        # 如果message字段不存在或为空，从解析的字段重新构建
+        fields = event.to_hash.reject { |k,v| ['@timestamp', '@version', 'tags', 'type', 'logstashProcessedAt'].include?(k) }
+        message_parts = fields.select { |k,v| !k.start_with?('@') }.map { |k,v| k + '=' + v.to_s }
+        event.set('message', message_parts.join(','))
+      end
+    "
+  }
+  
+  # TODO: 通过HTTP Filter查询customerId
+  # 需要调用: GET http://data-ingestion:8080/api/v1/logs/customer-mapping/{deviceSerial}
+  # 暂时使用占位符,后续通过HTTP Filter实现
+  
+  if ![customerId] and [deviceSerial] {
+    # http {
+    #   url => "http://data-ingestion:8080/api/v1/logs/customer-mapping/%{deviceSerial}"
+    #   verb => "GET"
+    #   target_body => "customer_mapping"
+    # }
+    # 
+    # if [customer_mapping][customerId] {
+    #   mutate {
+    #     add_field => { "customerId" => "%{[customer_mapping][customerId]}" }
+    #   }
+    # }
+    
+    # 临时方案: 添加标签,由Data Ingestion服务查询
+    mutate {
+      add_tag => ["customer-mapping-required"]
+    }
+  }
+}
+
+output {
+  # ========================================================================
+  # 输出1: 所有有效日志 → 文件 (用于后续处理)
+  # ========================================================================
+  if ("attack-log" in [tags] or "heartbeat-log" in [tags]) and "missing_required_fields" not in [tags] {
+    file {
+      path => "/tmp/production_test_logs/processed_logs_%{+YYYY-MM-dd}.log"
+      codec => json_lines
+    }
+  }
+
+  # ========================================================================
+  # 输出2: 错误日志 → 文件 (调试用)
+  # ========================================================================
+  if "missing_required_fields" in [tags] or "unknown-log-type" in [tags] or "_kv_filter_error" in [tags] {
+    file {
+      path => "/tmp/production_test_logs/failed_events_%{+YYYY-MM-dd}.log"
+      codec => json_lines
+    }
+  }
+
+  # ========================================================================
+  # 输出3: 调试输出 (开发环境)
+  # ========================================================================
+  if [log_type] {
+    stdout {
+      codec => rubydebug {
+        metadata => true
+      }
+    }
+  }
+}
+
+# ============================================================================
+# Pipeline配置说明
+# ============================================================================
+#
+# 数据流向:
+#   rsyslog (TCP 5140) 
+#   → Logstash解析 (key=value → JSON)
+#   → 分类路由:
+#       - log_type=1 → attack-events (Kafka)
+#       - log_type=2 → status-events (Kafka)
+#       - 缺少customerId → pending_ingestion (File)
+#       - 错误日志 → failed_events (File)
+#
+# 字段映射 (snake_case → camelCase):
+#   - 原因: Kafka消息使用camelCase (符合Java对象序列化规范)
+#   - HTTP API使用snake_case (符合REST API规范)
+#
+# 待实现功能:
+#   1. HTTP Filter查询customerId (需要logstash-filter-http插件)
+#   2. HTTP输出到Data Ingestion Service (备用路径)
+#   3. 地理位置解析 (geoip)
+#   4. 威胁情报enrichment
+#
+# 性能参数:
+#   - batch_size: 16KB (平衡延迟和吞吐量)
+#   - linger_ms: 10ms (快速发送小批量)
+#   - compression: snappy (高性能压缩)
+#   - acks: 1 (leader确认,平衡可靠性和性能)
+#
+# ============================================================================
+
