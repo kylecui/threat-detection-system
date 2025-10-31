@@ -1,11 +1,12 @@
 package com.threatdetection.ingestion.model;
 
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
- * JPA entity for device to customer mapping.
- * This entity represents the relationship between device serial numbers and customer IDs.
+ * JPA entity for device to customer mapping with temporal support.
+ * This entity represents the relationship between device serial numbers and customer IDs
+ * with time-based validity windows to support device circulation between customers.
  */
 @Entity
 @Table(name = "device_customer_mapping")
@@ -15,19 +16,28 @@ public class DeviceCustomerMapping {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "dev_serial", nullable = false, unique = true, length = 50)
+    @Column(name = "dev_serial", nullable = false, length = 50)
     private String devSerial;
 
     @Column(name = "customer_id", nullable = false, length = 100)
     private String customerId;
 
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "bind_time", nullable = false)
+    private Instant bindTime;
 
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    @Column(name = "unbind_time")
+    private Instant unbindTime;
 
-    @Column(name = "is_active", nullable = false)
+    @Column(name = "bind_reason", length = 100)
+    private String bindReason;
+
+    @Column(name = "created_at")
+    private Instant createdAt;
+
+    @Column(name = "updated_at")
+    private Instant updatedAt;
+
+    @Column(name = "is_active")
     private Boolean isActive = true;
 
     @Column(name = "description", length = 500)
@@ -39,14 +49,25 @@ public class DeviceCustomerMapping {
     public DeviceCustomerMapping(String devSerial, String customerId) {
         this.devSerial = devSerial;
         this.customerId = customerId;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        this.bindTime = Instant.now();
+        this.createdAt = Instant.now();
+        this.updatedAt = Instant.now();
         this.isActive = true;
     }
 
     public DeviceCustomerMapping(String devSerial, String customerId, String description) {
         this(devSerial, customerId);
         this.description = description;
+    }
+
+    public DeviceCustomerMapping(String devSerial, String customerId, Instant bindTime, String bindReason) {
+        this.devSerial = devSerial;
+        this.customerId = customerId;
+        this.bindTime = bindTime;
+        this.bindReason = bindReason;
+        this.createdAt = Instant.now();
+        this.updatedAt = Instant.now();
+        this.isActive = true;
     }
 
     // Getters and Setters
@@ -74,19 +95,19 @@ public class DeviceCustomerMapping {
         this.customerId = customerId;
     }
 
-    public LocalDateTime getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
+    public void setCreatedAt(Instant createdAt) {
         this.createdAt = createdAt;
     }
 
-    public LocalDateTime getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
 
-    public void setUpdatedAt(LocalDateTime updatedAt) {
+    public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
     }
 
@@ -106,12 +127,55 @@ public class DeviceCustomerMapping {
         this.description = description;
     }
 
+    // 新增的时效性相关方法
+    public Instant getBindTime() {
+        return bindTime;
+    }
+
+    public void setBindTime(Instant bindTime) {
+        this.bindTime = bindTime;
+    }
+
+    public Instant getUnbindTime() {
+        return unbindTime;
+    }
+
+    public void setUnbindTime(Instant unbindTime) {
+        this.unbindTime = unbindTime;
+    }
+
+    public String getBindReason() {
+        return bindReason;
+    }
+
+    public void setBindReason(String bindReason) {
+        this.bindReason = bindReason;
+    }
+
+    /**
+     * 检查映射在指定时间点是否有效
+     */
+    public boolean isActiveAt(Instant timestamp) {
+        return bindTime != null && bindTime.isBefore(timestamp) &&
+               (unbindTime == null || unbindTime.isAfter(timestamp));
+    }
+
+    /**
+     * 检查映射当前是否有效
+     */
+    public boolean isCurrentlyActive() {
+        return unbindTime == null;
+    }
+
     @Override
     public String toString() {
         return "DeviceCustomerMapping{" +
                 "id=" + id +
                 ", devSerial='" + devSerial + '\'' +
                 ", customerId='" + customerId + '\'' +
+                ", bindTime=" + bindTime +
+                ", unbindTime=" + unbindTime +
+                ", bindReason='" + bindReason + '\'' +
                 ", isActive=" + isActive +
                 ", description='" + description + '\'' +
                 '}';

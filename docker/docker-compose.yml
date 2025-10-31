@@ -37,6 +37,7 @@ services:
       - ./13-customer-port-weights.sql:/docker-entrypoint-initdb.d/13-customer-port-weights.sql
       - ./14-apt-temporal-accumulations.sql:/docker-entrypoint-initdb.d/14-apt-temporal-accumulations.sql
       - ./15-attack-phase-port-configs.sql:/docker-entrypoint-initdb.d/15-attack-phase-port-configs.sql
+      - ./16-temporal-device-mapping.sql:/docker-entrypoint-initdb.d/16-temporal-device-mapping.sql
     networks:
       - threat-detection-network
     healthcheck:
