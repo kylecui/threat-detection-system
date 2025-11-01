@@ -3,7 +3,7 @@
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>com.threatdetection.ingestion</groupId>
-  <artifactId>data-ingestion-service</artifactId>
+  <artifactId>data-ingestion</artifactId>
   <packaging>jar</packaging>
   <version>1.0-SNAPSHOT</version>
   <name>data-ingestion-service</name>
@@ -13,7 +13,7 @@
     <groupId>com.threatdetection</groupId>
     <artifactId>threat-detection-system</artifactId>
     <version>1.0-SNAPSHOT</version>
-    <relativePath>../../../pom.xml</relativePath>
+    <relativePath>../../pom.xml</relativePath>
   </parent>
   
   <dependencies>

@@ -158,7 +158,6 @@ threat-detection-system/
 │   └── README.md          # K8s部署指南
 ├── services/              # 微服务源码
 │   ├── data-ingestion/    # ✅ 数据摄取服务 (批量处理、高可靠性)
-│   │   └── data-ingestion-service/
 │   ├── stream-processing/ # ✅ Flink流处理服务 (增强威胁评分)
 │   ├── threat-assessment/ # ✅ 威胁评估服务 (风险评估、趋势分析)
 │   ├── alert-management/  # ✅ 告警管理服务 (多通道通知、智能去重)
@@ -506,7 +505,6 @@ threat-detection-system/
 │   └── README.md          # K8s部署指南
 ├── services/              # 微服务源码
 │   ├── data-ingestion/    # ✅ 数据摄取服务
-│   │   └── data-ingestion-service/
 │   ├── stream-processing/ # ✅ Flink流处理服务
 │   ├── threat-assessment/ # ✅ 威胁评估服务
 │   ├── alert-management/  # ✅ 告警管理服务 (多通道通知)

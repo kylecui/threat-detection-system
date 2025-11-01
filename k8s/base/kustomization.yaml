@@ -26,7 +26,7 @@ commonLabels:
   app.kubernetes.io/component: base
 
 images:
-  - name: threat-detection/data-ingestion-service
+  - name: threat-detection/data-ingestion
     newTag: latest
   - name: threat-detection/stream-processing
     newTag: "1.0"

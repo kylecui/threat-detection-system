@@ -4,7 +4,7 @@
 # 用法: ./rebuild_service.sh <service-name>
 # 示例: ./rebuild_service.sh threat-assessment
 
-set -e  # 遇到错误立即退出
+set +e  # 遇到错误立即退出
 
 SERVICE_NAME=$1
 
@@ -19,6 +19,7 @@ if [ -z "$SERVICE_NAME" ]; then
     echo "  - stream-processing"
     echo "  - alert-management"
     echo "  - api-gateway"
+    echo "  - customer-management"
     echo ""
     echo "示例: ./rebuild_service.sh threat-assessment"
     exit 1
@@ -74,43 +75,48 @@ echo "✅ 容器重构成功"
 echo ""
 
 # 第三步：检查容器状态
-echo "🔍 [3/3] 检查容器状态..."
-sleep 5  # 等待容器完全启动
+# 加入timer倒计时
+for i in {30..1}; do
+    echo -ne "\r🔍 [3/3] 检查容器状态...等待: $i 秒..."
+    sleep 1
+done
+# sleep 30  # 等待容器完全启动
 
-CONTAINER_STATUS=$(docker compose ps | grep $SERVICE_NAME | awk '{print $NF}')
+
+CONTAINER_STATUS=$(docker compose ps | grep $SERVICE_NAME)
 
 echo ""
 docker compose ps | head -1
 docker compose ps | grep $SERVICE_NAME
 
-if echo "$CONTAINER_STATUS" | grep -q "Up"; then
+if echo "$CONTAINER_STATUS" | grep -q "(healthy)"; then
     echo ""
     echo "✅ 容器运行正常"
+elif echo "$CONTAINER_STATUS" | grep -q "healthy:starting"; then
+    echo ""
+    echo "❌ 容器启动时间过长"
+    echo "请检查日志以获取更多信息"
+    # docker logs ${SERVICE_NAME}-service --tail 30
+    docker compose logs $SERVICE_NAME --tail 30
+elif echo "$CONTAINER_STATUS" | grep -q "unhealthy"; then
+    echo ""
+    echo "❌ 容器状态不健康"
+    echo "请检查日志以获取更多信息"
+    # docker logs ${SERVICE_NAME}-service --tail 30
+    docker compose logs $SERVICE_NAME --tail 30
+elif echo "$CONTAINER_STATUS" | grep -q "Up"; then
+    echo ""
+    echo "⚠️ 警告: 容器正在运行但未通过健康检查"
+    echo "请检查日志以获取更多信息"
+    docker compose logs $SERVICE_NAME --tail 30
 else
     echo ""
     echo "⚠️ 警告: 容器状态异常，请检查日志"
-    docker logs ${SERVICE_NAME}-service --tail 30
+    docker compose logs $SERVICE_NAME --tail 30
 fi
 
 echo ""
 echo "==================================================
 ✅ 重建完成！
-==================================================
-
-📋 下一步:
-
-1. 查看完整日志:
-   docker logs ${SERVICE_NAME}-service --tail 50
-
-2. 实时监控日志:
-   docker logs ${SERVICE_NAME}-service -f
-
-3. 运行集成测试:
-   cd ~/threat-detection-system/scripts
-   bash test_v4_phase1_integration.sh
-
-4. 检查服务健康状态:
-   curl http://localhost:8083/actuator/health
-
 ==================================================
 "

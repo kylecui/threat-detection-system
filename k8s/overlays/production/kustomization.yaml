@@ -15,7 +15,7 @@ patchesStrategicMerge:
   - security-patch.yaml
 
 images:
-  - name: threat-detection/data-ingestion-service
+  - name: threat-detection/data-ingestion
     newTag: "1.0.0"
   - name: threat-detection/stream-processing
     newTag: "1.0.0"

@@ -1,4 +1,5 @@
-version: '3.8'
+# the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion
+# version: '3.8'
 
 # Environment optimization to prevent layer caching issues
 x-common-env: &common-env
@@ -125,7 +126,7 @@ services:
 
   data-ingestion:
     build:
-      context: ../services/data-ingestion/data-ingestion-service
+      context: ../services/data-ingestion
       dockerfile: Dockerfile
       # ✅ Prevent layer caching issues
       cache_from: []
