@@ -1,7 +1,7 @@
 # 端口权重配置API文档
 
 **服务名称**: Threat Assessment Service - Port Weights  
-**服务端口**: 8081  
+**服务端口**: 8083  
 **基础路径**: `/api/port-weights`  
 **版本**: 4.0  
 **更新日期**: 2025-10-31
@@ -241,14 +241,14 @@ public double calculatePortWeight(String customerId, int portNumber, int uniqueP
 
 **curl示例**:
 ```bash
-curl -X GET "http://localhost:8081/api/port-weights/customer-001" \
+curl -X GET "http://localhost:8083/api/port-weights/customer-001" \
   -H "Accept: application/json"
 ```
 
 **Java示例**:
 ```java
 List<CustomerPortWeight> configs = restTemplate.getForObject(
-    "http://localhost:8081/api/port-weights/{customerId}",
+    "http://localhost:8083/api/port-weights/{customerId}",
     List.class,
     customerId
 );
@@ -269,7 +269,7 @@ List<CustomerPortWeight> configs = restTemplate.getForObject(
 
 **curl示例**:
 ```bash
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/all"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/all"
 ```
 
 ---
@@ -295,13 +295,13 @@ curl -X GET "http://localhost:8081/api/port-weights/customer-001/all"
 
 **curl示例**:
 ```bash
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/port/3389"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/port/3389"
 ```
 
 **Java示例**:
 ```java
 Map<String, Object> response = restTemplate.getForObject(
-    "http://localhost:8081/api/port-weights/{customerId}/port/{portNumber}",
+    "http://localhost:8083/api/port-weights/{customerId}/port/{portNumber}",
     Map.class,
     customerId, portNumber
 );
@@ -332,7 +332,7 @@ double weight = (Double) response.get("weight");
 
 **curl示例**:
 ```bash
-curl -X POST "http://localhost:8081/api/port-weights/customer-001/batch" \
+curl -X POST "http://localhost:8083/api/port-weights/customer-001/batch" \
   -H "Content-Type: application/json" \
   -d '[22, 80, 443, 3389]'
 ```
@@ -345,7 +345,7 @@ headers.setContentType(MediaType.APPLICATION_JSON);
 
 HttpEntity<List<Integer>> request = new HttpEntity<>(ports, headers);
 ResponseEntity<Map> response = restTemplate.postForEntity(
-    "http://localhost:8081/api/port-weights/{customerId}/batch",
+    "http://localhost:8083/api/port-weights/{customerId}/batch",
     request,
     Map.class,
     customerId
@@ -378,7 +378,7 @@ ResponseEntity<Map> response = restTemplate.postForEntity(
 
 **curl示例**:
 ```bash
-curl -X POST "http://localhost:8081/api/port-weights/customer-001" \
+curl -X POST "http://localhost:8083/api/port-weights/customer-001" \
   -H "Content-Type: application/json" \
   -d '{
     "portNumber": 3389,
@@ -398,7 +398,7 @@ CustomerPortWeight config = CustomerPortWeight.builder()
     .build();
 
 CustomerPortWeight saved = restTemplate.postForObject(
-    "http://localhost:8081/api/port-weights/{customerId}",
+    "http://localhost:8083/api/port-weights/{customerId}",
     config,
     CustomerPortWeight.class,
     customerId
@@ -437,7 +437,7 @@ CustomerPortWeight saved = restTemplate.postForObject(
 
 **curl示例**:
 ```bash
-curl -X POST "http://localhost:8081/api/port-weights/customer-001/import" \
+curl -X POST "http://localhost:8083/api/port-weights/customer-001/import" \
   -H "Content-Type: application/json" \
   -d '[
     {"portNumber": 22, "weight": 2.5, "description": "SSH服务"},
@@ -463,12 +463,12 @@ curl -X POST "http://localhost:8081/api/port-weights/customer-001/import" \
 
 **curl示例**:
 ```bash
-curl -X PUT "http://localhost:8081/api/port-weights/customer-001/port/3389?weight=9.0&updatedBy=admin"
+curl -X PUT "http://localhost:8083/api/port-weights/customer-001/port/3389?weight=9.0&updatedBy=admin"
 ```
 
 **Java示例**:
 ```java
-String url = UriComponentsBuilder.fromHttpUrl("http://localhost:8081/api/port-weights/{customerId}/port/{portNumber}")
+String url = UriComponentsBuilder.fromHttpUrl("http://localhost:8083/api/port-weights/{customerId}/port/{portNumber}")
     .queryParam("weight", 9.0)
     .queryParam("updatedBy", "admin")
     .build(customerId, portNumber)
@@ -498,13 +498,13 @@ CustomerPortWeight updated = restTemplate.exchange(
 
 **curl示例**:
 ```bash
-curl -X DELETE "http://localhost:8081/api/port-weights/customer-001/port/3389"
+curl -X DELETE "http://localhost:8083/api/port-weights/customer-001/port/3389"
 ```
 
 **Java示例**:
 ```java
 restTemplate.delete(
-    "http://localhost:8081/api/port-weights/{customerId}/port/{portNumber}",
+    "http://localhost:8083/api/port-weights/{customerId}/port/{portNumber}",
     customerId, portNumber
 );
 ```
@@ -524,7 +524,7 @@ restTemplate.delete(
 
 **curl示例**:
 ```bash
-curl -X DELETE "http://localhost:8081/api/port-weights/customer-001"
+curl -X DELETE "http://localhost:8083/api/port-weights/customer-001"
 ```
 
 ---
@@ -544,7 +544,7 @@ curl -X DELETE "http://localhost:8081/api/port-weights/customer-001"
 
 **curl示例**:
 ```bash
-curl -X PATCH "http://localhost:8081/api/port-weights/customer-001/port/3389/enabled?enabled=false"
+curl -X PATCH "http://localhost:8083/api/port-weights/customer-001/port/3389/enabled?enabled=false"
 ```
 
 ---
@@ -578,7 +578,7 @@ curl -X PATCH "http://localhost:8081/api/port-weights/customer-001/port/3389/ena
 
 **curl示例**:
 ```bash
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/statistics"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/statistics"
 ```
 
 ---
@@ -597,7 +597,7 @@ curl -X GET "http://localhost:8081/api/port-weights/customer-001/statistics"
 
 **curl示例**:
 ```bash
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/high-priority?minPriority=70"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/high-priority?minPriority=70"
 ```
 
 ---
@@ -616,7 +616,7 @@ curl -X GET "http://localhost:8081/api/port-weights/customer-001/high-priority?m
 
 **curl示例**:
 ```bash
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/high-weight?minWeight=7.0"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/high-weight?minWeight=7.0"
 ```
 
 ---
@@ -635,7 +635,7 @@ curl -X GET "http://localhost:8081/api/port-weights/customer-001/high-weight?min
 
 **curl示例**:
 ```bash
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/risk-level/CRITICAL"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/risk-level/CRITICAL"
 ```
 
 ---
@@ -661,7 +661,7 @@ curl -X GET "http://localhost:8081/api/port-weights/customer-001/risk-level/CRIT
 
 **curl示例**:
 ```bash
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/port/3389/exists"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/port/3389/exists"
 ```
 
 ---
@@ -674,7 +674,7 @@ curl -X GET "http://localhost:8081/api/port-weights/customer-001/port/3389/exist
 
 ```bash
 # 1. 批量导入常见高风险端口
-curl -X POST "http://localhost:8081/api/port-weights/customer-001/import" \
+curl -X POST "http://localhost:8083/api/port-weights/customer-001/import" \
   -H "Content-Type: application/json" \
   -d '[
     {"portNumber": 22, "weight": 3.0, "description": "SSH服务"},
@@ -684,10 +684,10 @@ curl -X POST "http://localhost:8081/api/port-weights/customer-001/import" \
   ]'
 
 # 2. 验证配置
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/statistics"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/statistics"
 
 # 3. 测试权重查询
-curl -X POST "http://localhost:8081/api/port-weights/customer-001/batch" \
+curl -X POST "http://localhost:8083/api/port-weights/customer-001/batch" \
   -H "Content-Type: application/json" \
   -d '[22, 3389, 3306, 6379]'
 ```
@@ -716,13 +716,13 @@ double threatScore = (attackCount * uniqueIps * uniquePorts)
 
 ```bash
 # 1. 发现RDP端口被频繁攻击
-curl -X PUT "http://localhost:8081/api/port-weights/customer-001/port/3389?weight=9.5&updatedBy=security-admin"
+curl -X PUT "http://localhost:8083/api/port-weights/customer-001/port/3389?weight=9.5&updatedBy=security-admin"
 
 # 2. 临时禁用低风险端口配置
-curl -X PATCH "http://localhost:8081/api/port-weights/customer-001/port/21/enabled?enabled=false"
+curl -X PATCH "http://localhost:8083/api/port-weights/customer-001/port/21/enabled?enabled=false"
 
 # 3. 查看调整后的统计
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/statistics"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/statistics"
 ```
 
 ### 场景4: 定期审查和清理配置
@@ -731,13 +731,13 @@ curl -X GET "http://localhost:8081/api/port-weights/customer-001/statistics"
 
 ```bash
 # 1. 查看所有配置
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/all"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/all"
 
 # 2. 识别低权重配置
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/high-weight?minWeight=1.0"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/high-weight?minWeight=1.0"
 
 # 3. 清理不需要的配置
-curl -X DELETE "http://localhost:8081/api/port-weights/customer-001/port/21"
+curl -X DELETE "http://localhost:8083/api/port-weights/customer-001/port/21"
 ```
 
 ---
@@ -928,7 +928,7 @@ public class PortWeightConfigClient {
 // 使用示例
 public class PortWeightExample {
     public static void main(String[] args) {
-        PortWeightConfigClient client = new PortWeightConfigClient("http://localhost:8081");
+        PortWeightConfigClient client = new PortWeightConfigClient("http://localhost:8083");
         
         String customerId = "customer-001";
         
@@ -1034,13 +1034,13 @@ public class PortWeightExample {
 **排查步骤**:
 ```bash
 # 1. 检查客户配置
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/all"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/all"
 
 # 2. 检查全局默认配置
-curl -X GET "http://localhost:8081/api/port-weights/global/all"
+curl -X GET "http://localhost:8083/api/port-weights/global/all"
 
 # 3. 检查配置是否存在
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/port/3389/exists"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/port/3389/exists"
 ```
 
 **解决方案**:
@@ -1143,7 +1143,7 @@ docker exec -it threat-db psql -U threat_user threat_detection \
   -c "SELECT COUNT(*) as total, COUNT(CASE WHEN enabled THEN 1 END) as enabled FROM customer_port_weights WHERE customer_id = 'customer-001';"
 
 # 2. 比较API响应
-curl -X GET "http://localhost:8081/api/port-weights/customer-001/statistics"
+curl -X GET "http://localhost:8083/api/port-weights/customer-001/statistics"
 
 # 3. 检查统计计算逻辑
 # 查看应用代码中的统计实现

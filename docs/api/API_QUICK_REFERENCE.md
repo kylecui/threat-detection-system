@@ -1,12 +1,12 @@
 ````markdown
 # 📌 后端API快速参考卡片
 
-**更新**: 2025-10-21  
+**更新**: 2025-11-01  
 **用途**: Day 2-5 快速查询
 
 ---
 
-## 🎯 5个关键API组 (快速导航)
+## 🎯 7个关键API组 (快速导航)
 
 ### Group 1: 客户管理 (8084)
 ```
@@ -17,37 +17,62 @@ PUT    /api/v1/customers/{customerId}              更新
 DELETE /api/v1/customers/{customerId}              删除
 ```
 
-### Group 2: 设备绑定 (8084)
+### Group 2: 设备管理 (8083)
 ```
-POST   /api/v1/customers/{customerId}/devices     绑定设备
-GET    /api/v1/customers/{customerId}/devices     列表设备
-PUT    /api/v1/customers/{customerId}/devices/{devSerial}  更新
-DELETE /api/v1/customers/{customerId}/devices/{devSerial}  解绑
-```
-
-### Group 3: 通知配置 (8084)
-```
-GET    /api/v1/customers/{customerId}/notification-config         查询
-PUT    /api/v1/customers/{customerId}/notification-config         设置
-PATCH  /api/v1/customers/{customerId}/notification-config         部分更新
-POST   /api/v1/customers/{customerId}/notification-config/test    测试
+POST   /api/v1/devices/bind                       绑定设备到客户
+POST   /api/v1/devices/unbind                     解绑设备
+GET    /api/v1/devices/customer                   查询设备客户映射
+GET    /api/v1/devices/history/{deviceSerial}     设备映射历史
+GET    /api/v1/devices/active                     活跃映射列表
+POST   /api/v1/devices/transfer                   转移设备
 ```
 
-### Group 4: 告警管理 (8082)
+### Group 3: 端口权重配置 (8083)
+```
+GET    /api/port-weights/{customerId}             获取客户端口权重
+GET    /api/port-weights/{customerId}/port/{port} 获取指定端口权重
+POST   /api/port-weights/{customerId}/batch       批量获取权重
+POST   /api/port-weights/{customerId}             创建端口权重
+PUT    /api/port-weights/{customerId}/port/{port} 更新端口权重
+DELETE /api/port-weights/{customerId}/port/{port} 删除端口权重
+```
+
+### Group 4: 权重管理 (8083)
+```
+GET    /api/v1/weights/attack-source/{customerId}           攻击源权重
+POST   /api/v1/weights/attack-source                       创建攻击源权重
+GET    /api/v1/weights/honeypot-sensitivity/{customerId}   蜜罐敏感度权重
+POST   /api/v1/weights/honeypot-sensitivity               创建蜜罐权重
+GET    /api/v1/weights/attack-phase/{customerId}           攻击阶段端口配置
+POST   /api/v1/weights/attack-phase                       创建攻击阶段配置
+GET    /api/v1/weights/apt-temporal/{customerId}           APT时序累积
+POST   /api/v1/weights/apt-temporal                       创建时序累积
+```
+
+### Group 5: 告警管理 (8082)
 ```
 POST   /api/v1/alerts                             创建
 GET    /api/v1/alerts                             列表
 PUT    /api/v1/alerts/{id}/status                 更新状态
 POST   /api/v1/alerts/{id}/resolve                解决
 POST   /api/v1/alerts/{id}/escalate               升级
+GET    /api/v1/alerts/analytics                   告警统计
 ```
 
-### Group 5: 威胁评估 (8083)
+### Group 6: 威胁评估 (8083)
 ```
 GET    /api/v1/assessment/assessments?customer_id=xxx   列表
 GET    /api/v1/assessment/statistics?customer_id=xxx    统计
 GET    /api/v1/assessment/trend?customer_id=xxx         趋势
 GET    /api/v1/assessment/port-distribution?customer_id=xxx  端口分布
+```
+
+### Group 7: 数据摄取 (8080)
+```
+POST   /api/v1/logs/ingest                        日志摄取
+GET    /api/v1/logs/status                        处理状态
+POST   /api/v1/import/scenario                    场景导入
+POST   /api/v1/import/migration                   迁移导入
 ```
 
 ---
@@ -259,7 +284,7 @@ done
 
 ---
 
-**Last Updated**: 2025-10-21  
-**Next Update**: 测试完成后 (2025-10-23)
+**Last Updated**: 2025-11-01  
+**Next Update**: API测试完成后 (2025-11-03)
 
 ````

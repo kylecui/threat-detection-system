@@ -743,6 +743,7 @@ Customer CRUD API提供完整的客户生命周期管理功能，所有端点都
 |------|------|------|
 | POST | `/api/v1/customers` | 创建客户 |
 | GET | `/api/v1/customers/{customerId}` | 获取单个客户 |
+| GET | `/api/v1/customers/{customerId}/exists` | 检查客户是否存在 |
 | GET | `/api/v1/customers` | 获取客户列表 (分页) |
 | GET | `/api/v1/customers/search` | 搜索客户 |
 | GET | `/api/v1/customers/status/{status}` | 按状态查询客户 |
@@ -906,6 +907,72 @@ Host: localhost:8084
 
 ```bash
 curl -X GET http://localhost:8084/api/v1/customers/customer-001
+```
+
+---
+
+### 2.1. 检查客户是否存在
+
+检查指定客户ID是否存在于系统中，不返回客户详细信息。
+
+#### 请求
+
+```http
+GET /api/v1/customers/customer-001/exists HTTP/1.1
+Host: localhost:8084
+```
+
+#### 路径参数
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `customer_id` | String | 客户唯一标识 |
+
+#### 响应
+
+**客户存在 (200 OK)**:
+```json
+{
+  "exists": true,
+  "customer_id": "customer-001",
+  "status": "ACTIVE",
+  "subscription_tier": "PROFESSIONAL"
+}
+```
+
+**客户不存在 (200 OK)**:
+```json
+{
+  "exists": false,
+  "customer_id": "customer-999",
+  "status": null,
+  "subscription_tier": null
+}
+```
+
+#### 响应字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `exists` | Boolean | 客户是否存在 |
+| `customer_id` | String | 查询的客户ID |
+| `status` | String | 客户状态 (仅当存在时返回) |
+| `subscription_tier` | String | 订阅套餐 (仅当存在时返回) |
+
+#### 使用场景
+
+- **表单验证**: 前端注册表单验证客户ID是否已被使用
+- **API集成**: 第三方系统检查客户是否存在
+- **批量操作**: 预检查批量操作中的客户ID有效性
+
+#### cURL示例
+
+```bash
+# 检查存在的客户
+curl -X GET http://localhost:8084/api/v1/customers/customer-001/exists
+
+# 检查不存在的客户
+curl -X GET http://localhost:8084/api/v1/customers/customer-999/exists
 ```
 
 ---

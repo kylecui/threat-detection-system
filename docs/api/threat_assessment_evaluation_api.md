@@ -1,10 +1,10 @@
 # 威胁评估API - 评估操作
 
 **服务名称**: Threat Assessment Service  
-**服务端口**: 8081  
+**服务端口**: 8083  
 **基础路径**: `/api/v1/assessment`  
 **文档版本**: 2.0  
-**更新日期**: 2025-10-16
+**更新日期**: 2025-11-01
 
 ---
 
@@ -385,7 +385,7 @@ public enum ThreatLevel {
 #### 场景1: CRITICAL级别威胁 (深夜大规模横向移动)
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/assessment/evaluate \
+curl -X POST http://localhost:8083/api/v1/assessment/evaluate \
   -H "Content-Type: application/json" \
   -d '{
     "customer_id": "customer_a",
@@ -402,7 +402,7 @@ curl -X POST http://localhost:8081/api/v1/assessment/evaluate \
 #### 场景2: MEDIUM级别威胁 (工作时间单目标探测)
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/assessment/evaluate \
+curl -X POST http://localhost:8083/api/v1/assessment/evaluate \
   -H "Content-Type: application/json" \
   -d '{
     "customer_id": "customer_a",
@@ -428,7 +428,7 @@ import java.time.Instant;
 
 public class ThreatAssessmentExample {
     
-    private static final String BASE_URL = "http://localhost:8081/api/v1/assessment";
+    private static final String BASE_URL = "http://localhost:8083/api/v1/assessment";
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper()
         .registerModule(new JavaTimeModule());
@@ -697,7 +697,7 @@ public class ThreatAssessmentExample {
 
 ```bash
 # 对CRITICAL威胁立即执行隔离
-curl -X POST http://localhost:8081/api/v1/assessment/mitigation/12345 \
+curl -X POST http://localhost:8083/api/v1/assessment/mitigation/12345 \
   -H "Content-Type: application/json" \
   -d '{
     "mitigationType": "ISOLATE",
@@ -707,7 +707,7 @@ curl -X POST http://localhost:8081/api/v1/assessment/mitigation/12345 \
   }'
 
 # 对MEDIUM威胁执行端口阻断
-curl -X POST http://localhost:8081/api/v1/assessment/mitigation/12346 \
+curl -X POST http://localhost:8083/api/v1/assessment/mitigation/12346 \
   -H "Content-Type: application/json" \
   -d '{
     "mitigationType": "BLOCK",
@@ -722,7 +722,7 @@ curl -X POST http://localhost:8081/api/v1/assessment/mitigation/12346 \
 ```java
 public class MitigationExample {
     
-    private static final String BASE_URL = "http://localhost:8081/api/v1/assessment";
+    private static final String BASE_URL = "http://localhost:8083/api/v1/assessment";
     private final RestTemplate restTemplate = new RestTemplate();
     
     /**
@@ -910,7 +910,7 @@ public class MitigationExample {
 
 ```bash
 # 对CRITICAL威胁立即执行隔离
-curl -X POST http://localhost:8081/api/v1/assessment/mitigation/12345 \
+curl -X POST http://localhost:8083/api/v1/assessment/mitigation/12345 \
   -H "Content-Type: application/json" \
   -d '{
     "mitigationType": "ISOLATE",
@@ -920,7 +920,7 @@ curl -X POST http://localhost:8081/api/v1/assessment/mitigation/12345 \
   }'
 
 # 对MEDIUM威胁执行端口阻断
-curl -X POST http://localhost:8081/api/v1/assessment/mitigation/12346 \
+curl -X POST http://localhost:8083/api/v1/assessment/mitigation/12346 \
   -H "Content-Type: application/json" \
   -d '{
     "mitigationType": "BLOCK",
@@ -935,7 +935,7 @@ curl -X POST http://localhost:8081/api/v1/assessment/mitigation/12346 \
 ```java
 public class MitigationExample {
     
-    private static final String BASE_URL = "http://localhost:8081/api/v1/assessment";
+    private static final String BASE_URL = "http://localhost:8083/api/v1/assessment";
     private final RestTemplate restTemplate = new RestTemplate();
     
     /**
@@ -1110,7 +1110,7 @@ public class MitigationExample {
 #### 请求示例 (curl)
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/assessment/batch-evaluate \
+curl -X POST http://localhost:8083/api/v1/assessment/batch-evaluate \
   -H "Content-Type: application/json" \
   -d '{
     "assessments": [
@@ -1213,7 +1213,7 @@ public static class BatchAssessmentResponse {
 #### 请求示例 (curl)
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/assessment/re-evaluate/12345
+curl -X POST http://localhost:8083/api/v1/assessment/re-evaluate/12345
 ```
 
 #### 请求示例 (Java)
@@ -1618,7 +1618,7 @@ import java.util.*;
  */
 public class ThreatAssessmentClient {
     
-    private static final String BASE_URL = "http://localhost:8081/api/v1/assessment";
+    private static final String BASE_URL = "http://localhost:8083/api/v1/assessment";
     private final RestTemplate restTemplate;
     
     public ThreatAssessmentClient() {
@@ -1968,7 +1968,7 @@ org.springframework.web.client.HttpClientErrorException$BadRequest: 400 Bad Requ
 
 ```bash
 # 检查请求体
-curl -X POST http://localhost:8081/api/v1/assessment/evaluate \
+curl -X POST http://localhost:8083/api/v1/assessment/evaluate \
   -H "Content-Type: application/json" \
   -d '{
     "customer_id": "customer_a",
@@ -2003,10 +2003,10 @@ curl -X POST http://localhost:8081/api/v1/assessment/evaluate \
 
 ```bash
 # 检查数据库连接池
-curl http://localhost:8081/actuator/metrics/hikaricp.connections.active
+curl http://localhost:8083/actuator/metrics/hikaricp.connections.active
 
 # 检查评估API响应时间
-curl -X POST http://localhost:8081/api/v1/assessment/evaluate \
+curl -X POST http://localhost:8083/api/v1/assessment/evaluate \
   -H "Content-Type: application/json" \
   -d '...' \
   -w "\nTime: %{time_total}s\n"
@@ -2050,7 +2050,7 @@ Mitigation execution failed: Network isolation command failed
 
 ```bash
 # 检查评估记录是否存在
-curl http://localhost:8081/api/v1/assessment/12345
+curl http://localhost:8083/api/v1/assessment/12345
 
 # 检查服务日志
 kubectl logs -f deployment/threat-assessment -n threat-detection

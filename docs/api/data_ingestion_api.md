@@ -162,6 +162,11 @@ syslog_version=1.10.0,dev_serial=GSFB2204200410007425,log_type=2,sentry_count=56
 | `POST` | `/api/v1/logs/stats/reset` | 重置统计数据 | 清零统计计数器 |
 | `GET` | `/api/v1/logs/health` | 健康检查 | 服务状态检查 |
 | `GET` | `/api/v1/logs/customer-mapping/{devSerial}` | 设备客户映射 | 根据设备序列号查询customerId |
+| `POST` | `/api/v1/import/scenario` | 场景感知导入 | 通用场景日志导入 (迁移/补全/离线) |
+| `POST` | `/api/v1/import/migration` | 系统迁移导入 | 批量导入历史迁移日志 |
+| `POST` | `/api/v1/import/completion/{customerId}` | 客户补全导入 | 为特定客户补全缺失数据 |
+| `POST` | `/api/v1/import/offline` | 离线研究导入 | 导入离线安全研究日志 |
+| `GET` | `/api/v1/import/modes` | 获取导入模式 | 获取支持的导入模式列表 |
 
 ---
 
@@ -747,7 +752,844 @@ public class CustomerMappingExample {
 
 ---
 
+## 导入功能API
+
+### 6.1 场景感知导入
+
+**描述**: 通用场景日志导入API，支持系统迁移、客户数据补全和离线安全研究等多种场景。自动根据模式选择合适的处理策略，包括去重、合并和发布逻辑。
+
+**端点**: `POST /api/v1/import/scenario`
+
+**请求体**: `Content-Type: application/json`
+
+**请求参数**:
+
+| 字段 | 类型 | 必需 | 说明 |
+|-----|------|------|------|
+| `mode` | String | ✅ | 导入模式: `migration` (系统迁移), `completion` (客户补全), `offline` (离线研究) |
+| `customerId` | String | 条件 | completion模式时必需，指定补全的客户ID |
+| `logs` | String[] | ✅ | syslog日志数组，每条为完整syslog字符串 |
+
+**请求示例 (系统迁移)**:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/import/scenario \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "migration",
+    "logs": [
+      "syslog_version=1.10.0,dev_serial=GSFB2204200410007425,log_type=1,sub_type=1,attack_mac=04:42:1a:8e:e3:65,attack_ip=192.168.75.188,response_ip=192.168.75.67,response_port=3389,line_id=1,Iface_type=1,Vlan_id=0,log_time=1747274685",
+      "syslog_version=1.10.0,dev_serial=GSFB2204200410007425,log_type=2,sentry_count=5691,real_host_count=677,dev_start_time=1747274655,dev_end_time=1778688000,time=2025-05-15 10:04:45"
+    ]
+  }'
+```
+
+**请求示例 (客户补全)**:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/import/scenario \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "completion",
+    "customerId": "customer-001",
+    "logs": [
+      "syslog_version=1.10.0,dev_serial=GSFB2204200410007425,log_type=1,sub_type=1,attack_mac=04:42:1a:8e:e3:65,attack_ip=192.168.75.188,response_ip=192.168.75.67,response_port=3389,line_id=1,Iface_type=1,Vlan_id=0,log_time=1747274685"
+    ]
+  }'
+```
+
+**请求示例 (Java)**:
+
+```java
+import org.springframework.http.*;
+import org.springframework.web.client.RestTemplate;
+import java.util.Arrays;
+import java.util.List;
+
+public class ScenarioImportExample {
+    
+    private static final String BASE_URL = "http://localhost:8080/api/v1/import";
+    private final RestTemplate restTemplate = new RestTemplate();
+    
+    /**
+     * 系统迁移导入
+     */
+    public ImportResult importMigrationLogs() {
+        ScenarioImportRequest request = new ScenarioImportRequest();
+        request.setMode("migration");
+        request.setLogs(Arrays.asList(
+            "syslog_version=1.10.0,dev_serial=GSFB2204200410007425,log_type=1," +
+            "sub_type=1,attack_mac=04:42:1a:8e:e3:65,attack_ip=192.168.75.188," +
+            "response_ip=192.168.75.67,response_port=3389,line_id=1,Iface_type=1," +
+            "Vlan_id=0,log_time=1747274685",
+            "syslog_version=1.10.0,dev_serial=GSFB2204200410007425,log_type=2," +
+            "sentry_count=5691,real_host_count=677,dev_start_time=1747274655," +
+            "dev_end_time=1778688000,time=2025-05-15 10:04:45"
+        ));
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        
+        HttpEntity<ScenarioImportRequest> httpRequest = new HttpEntity<>(request, headers);
+        
+        ResponseEntity<ImportResult> response = restTemplate.postForEntity(
+            BASE_URL + "/scenario",
+            httpRequest,
+            ImportResult.class
+        );
+        
+        return response.getBody();
+    }
+    
+    /**
+     * 客户数据补全
+     */
+    public ImportResult completeCustomerData(String customerId) {
+        ScenarioImportRequest request = new ScenarioImportRequest();
+        request.setMode("completion");
+        request.setCustomerId(customerId);
+        request.setLogs(Arrays.asList(
+            "syslog_version=1.10.0,dev_serial=GSFB2204200410007425,log_type=1," +
+            "sub_type=1,attack_mac=04:42:1a:8e:e3:65,attack_ip=192.168.75.188," +
+            "response_ip=192.168.75.67,response_port=3389,line_id=1,Iface_type=1," +
+            "Vlan_id=0,log_time=1747274685"
+        ));
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        
+        HttpEntity<ScenarioImportRequest> httpRequest = new HttpEntity<>(request, headers);
+        
+        ResponseEntity<ImportResult> response = restTemplate.postForEntity(
+            BASE_URL + "/scenario",
+            httpRequest,
+            ImportResult.class
+        );
+        
+        return response.getBody();
+    }
+    
+    // DTO类
+    public static class ScenarioImportRequest {
+        private String mode;
+        private String customerId;
+        private List<String> logs;
+        
+        public String getMode() { return mode; }
+        public void setMode(String mode) { this.mode = mode; }
+        public String getCustomerId() { return customerId; }
+        public void setCustomerId(String customerId) { this.customerId = customerId; }
+        public List<String> getLogs() { return logs; }
+        public void setLogs(List<String> logs) { this.logs = logs; }
+    }
+    
+    public static class ImportResult {
+        private int totalReceived;
+        private int successfullyProcessed;
+        private int duplicatesFiltered;
+        private int failed;
+        private List<String> errors;
+        private String mode;
+        private String customerId;
+        
+        // Getters
+        public int getTotalReceived() { return totalReceived; }
+        public int getSuccessfullyProcessed() { return successfullyProcessed; }
+        public int getDuplicatesFiltered() { return duplicatesFiltered; }
+        public int getFailed() { return failed; }
+        public List<String> getErrors() { return errors; }
+        public String getMode() { return mode; }
+        public String getCustomerId() { return customerId; }
+    }
+}
+```
+
+**响应示例 (成功)**:
+
+```json
+{
+  "totalReceived": 2,
+  "successfullyProcessed": 2,
+  "duplicatesFiltered": 0,
+  "failed": 0,
+  "errors": [],
+  "mode": "migration",
+  "customerId": null
+}
+```
+
+**响应示例 (部分失败)**:
+
+```json
+{
+  "totalReceived": 3,
+  "successfullyProcessed": 2,
+  "duplicatesFiltered": 1,
+  "failed": 0,
+  "errors": [],
+  "mode": "completion",
+  "customerId": "customer-001"
+}
+```
+
+**错误码**:
+
+| HTTP状态码 | 说明 |
+|-----------|------|
+| 200 | 导入完成 (可能部分失败，查看响应详情) |
+| 400 | 请求参数错误 (无效的mode、缺少customerId等) |
+| 500 | 服务器内部错误 |
+
+---
+
+### 6.2 系统迁移导入
+
+**描述**: 专门用于系统迁移的日志导入API。批量导入历史迁移日志，支持大批量数据处理和去重过滤。
+
+**端点**: `POST /api/v1/import/migration`
+
+**请求体**: `Content-Type: application/json`
+
+**请求参数**:
+
+| 字段 | 类型 | 必需 | 说明 |
+|-----|------|------|------|
+| `logs` | String[] | ✅ | syslog日志数组 |
+| `batchSize` | Integer | ❌ | 批处理大小 (默认: 100) |
+
+**请求示例 (curl)**:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/import/migration \
+  -H "Content-Type: application/json" \
+  -d '{
+    "logs": [
+      "syslog_version=1.10.0,dev_serial=GSFB2204200410007425,log_type=1,sub_type=1,attack_mac=04:42:1a:8e:e3:65,attack_ip=192.168.75.188,response_ip=192.168.75.67,response_port=3389,line_id=1,Iface_type=1,Vlan_id=0,log_time=1747274685",
+      "syslog_version=1.10.0,dev_serial=GSFB2204200410007425,log_type=2,sentry_count=5691,real_host_count=677,dev_start_time=1747274655,dev_end_time=1778688000,time=2025-05-15 10:04:45"
+    ],
+    "batchSize": 200
+  }'
+```
+
+**响应示例**:
+
+```json
+{
+  "totalReceived": 2,
+  "successfullyProcessed": 2,
+  "duplicatesFiltered": 0,
+  "failed": 0,
+  "errors": [],
+  "mode": "migration",
+  "customerId": null
+}
+```
+
+---
+
+### 6.3 客户补全导入
+
+**描述**: 为特定客户补全缺失的历史数据。确保数据隔离，只处理指定客户的日志。
+
+**端点**: `POST /api/v1/import/completion/{customerId}`
+
+**路径参数**:
+
+| 参数 | 类型 | 必需 | 说明 |
+|-----|------|------|------|
+| `customerId` | String | ✅ | 客户ID |
+
+**请求体**: `Content-Type: application/json`
+
+**请求参数**:
+
+| 字段 | 类型 | 必需 | 说明 |
+|-----|------|------|------|
+| `logs` | String[] | ✅ | 该客户的syslog日志数组 |
+
+**请求示例 (curl)**:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/import/completion/customer-001 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "logs": [
+      "syslog_version=1.10.0,dev_serial=GSFB2204200410007425,log_type=1,sub_type=1,attack_mac=04:42:1a:8e:e3:65,attack_ip=192.168.75.188,response_ip=192.168.75.67,response_port=3389,line_id=1,Iface_type=1,Vlan_id=0,log_time=1747274685"
+    ]
+  }'
+```
+
+**响应示例**:
+
+```json
+{
+  "totalReceived": 1,
+  "successfullyProcessed": 1,
+  "duplicatesFiltered": 0,
+  "failed": 0,
+  "errors": [],
+  "mode": "completion",
+  "customerId": "customer-001"
+}
+```
+
+---
+
+### 6.4 离线研究导入
+
+**描述**: 导入离线安全研究日志，不进行实时威胁评估，用于数据分析和研究目的。
+
+**端点**: `POST /api/v1/import/offline`
+
+**请求体**: `Content-Type: application/json`
+
+**请求参数**:
+
+| 字段 | 类型 | 必需 | 说明 |
+|-----|------|------|------|
+| `logs` | String[] | ✅ | 研究日志数组 |
+| `researchId` | String | ❌ | 研究项目ID (用于跟踪) |
+
+**请求示例 (curl)**:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/import/offline \
+  -H "Content-Type: application/json" \
+  -d '{
+    "logs": [
+      "syslog_version=1.10.0,dev_serial=GSFB2204200410007425,log_type=1,sub_type=1,attack_mac=04:42:1a:8e:e3:65,attack_ip=192.168.75.188,response_ip=192.168.75.67,response_port=3389,line_id=1,Iface_type=1,Vlan_id=0,log_time=1747274685"
+    ],
+    "researchId": "apt-research-2025-q1"
+  }'
+```
+
+**响应示例**:
+
+```json
+{
+  "totalReceived": 1,
+  "successfullyProcessed": 1,
+  "duplicatesFiltered": 0,
+  "failed": 0,
+  "errors": [],
+  "mode": "offline",
+  "customerId": null,
+  "researchId": "apt-research-2025-q1"
+}
+```
+
+---
+
+### 6.5 获取导入模式
+
+**描述**: 获取系统支持的所有导入模式及其说明。
+
+**端点**: `GET /api/v1/import/modes`
+
+**请求示例 (curl)**:
+
+```bash
+curl -X GET http://localhost:8080/api/v1/import/modes
+```
+
+**请求示例 (Java)**:
+
+```java
+import org.springframework.web.client.RestTemplate;
+import java.util.List;
+
+public class ImportModesExample {
+    
+    private static final String BASE_URL = "http://localhost:8080/api/v1/import";
+    private final RestTemplate restTemplate = new RestTemplate();
+    
+    /**
+     * 获取支持的导入模式
+     */
+    public List<ImportMode> getImportModes() {
+        ImportModesResponse response = restTemplate.getForObject(
+            BASE_URL + "/modes",
+            ImportModesResponse.class
+        );
+        
+        System.out.println("Available modes:");
+        response.getModes().forEach(mode -> {
+            System.out.println("- " + mode.getName() + ": " + mode.getDescription());
+        });
+        
+        return response.getModes();
+    }
+    
+    // DTO类
+    public static class ImportModesResponse {
+        private List<ImportMode> modes;
+        
+        public List<ImportMode> getModes() { return modes; }
+        public void setModes(List<ImportMode> modes) { this.modes = modes; }
+    }
+    
+    public static class ImportMode {
+        private String name;
+        private String description;
+        private boolean requiresCustomerId;
+        
+        public String getName() { return name; }
+        public String getDescription() { return description; }
+        public boolean isRequiresCustomerId() { return requiresCustomerId; }
+    }
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "modes": [
+    {
+      "name": "migration",
+      "description": "系统迁移历史数据导入",
+      "requiresCustomerId": false
+    },
+    {
+      "name": "completion",
+      "description": "客户数据补全导入",
+      "requiresCustomerId": true
+    },
+    {
+      "name": "offline",
+      "description": "离线安全研究数据导入",
+      "requiresCustomerId": false
+    }
+  ]
+}
+```
+
+---
+
 ## 请求/响应模型
+
+### ImportResult
+
+**导入结果模型**:
+
+```java
+public class ImportResult {
+    private int totalReceived;           // 收到的日志总数
+    private int successfullyProcessed;   // 成功处理的日志数量
+    private int duplicatesFiltered;      // 去重过滤的数量
+    private int failed;                  // 处理失败的数量
+    private List<String> errors;         // 错误信息列表
+    private String mode;                 // 导入模式
+    private String customerId;           // 客户ID (completion模式)
+    private String researchId;           // 研究ID (offline模式)
+}
+```
+
+### ScenarioImportRequest
+
+**场景导入请求模型**:
+
+```java
+public class ScenarioImportRequest {
+    @NotNull
+    @Pattern(regexp = "migration|completion|offline")
+    private String mode;
+    
+    @NotNull
+    @Size(min = 1, max = 1000)
+    private List<String> logs;
+    
+    private String customerId;  // completion模式时必需
+    
+    // Getters and Setters
+}
+```
+
+---
+
+## 使用场景
+
+### 场景5: 系统迁移数据导入
+
+**需求**: 将传统系统的数据迁移到云原生系统。
+
+**实现 (Python脚本)**:
+
+```python
+import requests
+import json
+from pathlib import Path
+
+class MigrationImporter:
+    def __init__(self, base_url="http://localhost:8080"):
+        self.base_url = base_url
+        self.import_url = f"{base_url}/api/v1/import/migration"
+    
+    def import_migration_logs(self, log_directory):
+        """导入迁移日志文件"""
+        log_files = Path(log_directory).glob("*.log")
+        
+        for log_file in log_files:
+            print(f"Importing {log_file.name}...")
+            
+            with open(log_file, 'r') as f:
+                logs = [line.strip() for line in f if line.strip()]
+            
+            if not logs:
+                continue
+            
+            # 分批导入 (每批100条)
+            batch_size = 100
+            for i in range(0, len(logs), batch_size):
+                batch = logs[i:i + batch_size]
+                
+                payload = {
+                    "logs": batch,
+                    "batchSize": batch_size
+                }
+                
+                response = requests.post(self.import_url, json=payload)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    print(f"Batch {i//batch_size + 1}: {result['successfullyProcessed']}/{result['totalReceived']}")
+                else:
+                    print(f"Failed to import batch: {response.text}")
+
+# 使用示例
+importer = MigrationImporter()
+importer.import_migration_logs("/path/to/migration/logs")
+```
+
+---
+
+### 场景6: 客户数据补全
+
+**需求**: 为新客户补全历史攻击数据。
+
+**实现 (Shell脚本)**:
+
+```bash
+#!/bin/bash
+
+BASE_URL="http://localhost:8080"
+CUSTOMER_ID="customer-001"
+LOG_FILE="/path/to/customer_data.log"
+
+# 检查客户是否存在
+echo "Checking customer: $CUSTOMER_ID"
+customer_exists=$(curl -s -o /dev/null -w "%{http_code}" \
+  "$BASE_URL/api/v1/customers/$CUSTOMER_ID/exists")
+
+if [ "$customer_exists" != "200" ]; then
+    echo "Customer $CUSTOMER_ID does not exist"
+    exit 1
+fi
+
+# 读取日志文件
+logs=()
+while IFS= read -r line; do
+    if [[ -n "$line" ]]; then
+        logs+=("$line")
+    fi
+done < "$LOG_FILE"
+
+# 批量补全 (每批50条)
+batch_size=50
+total_logs=${#logs[@]}
+
+echo "Importing $total_logs logs for customer $CUSTOMER_ID..."
+
+for ((i=0; i<total_logs; i+=batch_size)); do
+    end=$((i + batch_size))
+    if [ $end -gt $total_logs ]; then
+        end=$total_logs
+    fi
+    
+    # 构建JSON payload
+    json_payload="{\"logs\":["
+    for ((j=i; j<end; j++)); do
+        if [ $j -gt $i ]; then
+            json_payload+=","
+        fi
+        # 转义引号
+        escaped_log=$(echo "${logs[j]}" | sed 's/"/\\"/g')
+        json_payload+="\"$escaped_log\""
+    done
+    json_payload+="]}"
+    
+    # 发送请求
+    response=$(curl -s -X POST \
+      "$BASE_URL/api/v1/import/completion/$CUSTOMER_ID" \
+      -H "Content-Type: application/json" \
+      -d "$json_payload")
+    
+    # 检查结果
+    if echo "$response" | jq -e '.successfullyProcessed' > /dev/null 2>&1; then
+        processed=$(echo "$response" | jq '.successfullyProcessed')
+        total=$(echo "$response" | jq '.totalReceived')
+        echo "Batch $((i/batch_size + 1)): $processed/$total logs processed"
+    else
+        echo "Failed to import batch: $response"
+    fi
+done
+
+echo "Customer data completion finished"
+```
+
+---
+
+### 场景7: 离线安全研究
+
+**需求**: 导入APT研究样本数据进行离线分析。
+
+**实现 (Java)**:
+
+```java
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.stream.Collectors;
+
+public class OfflineResearchImporter {
+    
+    private final RestTemplate restTemplate;
+    private final String importUrl;
+    
+    public OfflineResearchImporter(String baseUrl) {
+        this.restTemplate = new RestTemplate();
+        this.importUrl = baseUrl + "/api/v1/import/offline";
+    }
+    
+    /**
+     * 导入离线研究日志
+     */
+    public void importResearchLogs(String researchDirectory, String researchId) throws Exception {
+        List<String> logFiles = Files.list(Paths.get(researchDirectory))
+            .filter(Files::isRegularFile)
+            .filter(path -> path.toString().endsWith(".log"))
+            .map(path -> path.toString())
+            .collect(Collectors.toList());
+        
+        System.out.println("Found " + logFiles.size() + " log files for research: " + researchId);
+        
+        for (String logFile : logFiles) {
+            List<String> logs = Files.readAllLines(Paths.get(logFile))
+                .stream()
+                .filter(line -> !line.trim().isEmpty())
+                .collect(Collectors.toList());
+            
+            if (logs.isEmpty()) {
+                continue;
+            }
+            
+            // 构建请求
+            OfflineImportRequest request = new OfflineImportRequest();
+            request.setLogs(logs);
+            request.setResearchId(researchId);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            
+            HttpEntity<OfflineImportRequest> httpRequest = new HttpEntity<>(request, headers);
+            
+            // 发送请求
+            ResponseEntity<ImportResult> response = restTemplate.postForEntity(
+                importUrl,
+                httpRequest,
+                ImportResult.class
+            );
+            
+            ImportResult result = response.getBody();
+            System.out.println("Imported " + logFile + ": " + 
+                             result.getSuccessfullyProcessed() + "/" + 
+                             result.getTotalReceived());
+        }
+    }
+    
+    public static class OfflineImportRequest {
+        private List<String> logs;
+        private String researchId;
+        
+        public List<String> getLogs() { return logs; }
+        public void setLogs(List<String> logs) { this.logs = logs; }
+        public String getResearchId() { return researchId; }
+        public void setResearchId(String researchId) { this.researchId = researchId; }
+    }
+}
+```
+
+---
+
+## 最佳实践
+
+### 导入策略选择
+
+| 场景 | 推荐API | 理由 |
+|------|---------|------|
+| **系统迁移** | `/migration` | 专门优化，批量处理效率高 |
+| **客户补全** | `/completion/{customerId}` | 确保数据隔离和客户关联 |
+| **离线研究** | `/offline` | 不触发实时告警，适合分析 |
+| **通用场景** | `/scenario` | 灵活配置，支持多种模式 |
+
+### 批量大小优化
+
+**推荐配置**:
+
+```java
+public class ImportBatchOptimizer {
+    
+    /**
+     * 根据场景选择最佳批量大小
+     */
+    public int getOptimalBatchSize(String mode) {
+        switch (mode) {
+            case "migration":
+                return 500;    // 大批量，高效迁移
+            case "completion":
+                return 100;    // 中批量，平衡性能和隔离
+            case "offline":
+                return 200;    // 中批量，适合研究数据
+            default:
+                return 100;    // 默认批量大小
+        }
+    }
+}
+```
+
+### 错误处理和重试
+
+**导入重试策略**:
+
+```java
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
+
+public class ResilientImporter {
+    
+    /**
+     * 带重试的导入操作
+     */
+    @Retryable(
+        value = {RestClientException.class, HttpServerErrorException.class},
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 2000, multiplier = 1.5)
+    )
+    public ImportResult importWithRetry(List<String> logs, String mode) {
+        ScenarioImportRequest request = new ScenarioImportRequest();
+        request.setMode(mode);
+        request.setLogs(logs);
+        
+        // 执行导入
+        return executeImport(request);
+    }
+}
+```
+
+### 性能监控
+
+**关键指标**:
+
+| 指标 | 监控方法 | 告警阈值 |
+|------|---------|---------|
+| **导入成功率** | ImportResult.successfullyProcessed/totalReceived | < 95% |
+| **去重率** | ImportResult.duplicatesFiltered/totalReceived | > 50% (警告) |
+| **处理延迟** | 请求响应时间 | > 30秒 |
+| **失败率** | ImportResult.failed/totalReceived | > 5% |
+
+---
+
+## 故障排查
+
+### 问题6: 导入模式不支持
+
+**症状**:
+- API返回400错误: "Unsupported import mode"
+
+**解决方案**:
+
+1. **检查支持的模式**:
+```bash
+curl -X GET http://localhost:8080/api/v1/import/modes
+```
+
+2. **使用正确的模式名称**:
+- `migration` (不是 `migrate`)
+- `completion` (不是 `complete`)
+- `offline` (不是 `research`)
+
+---
+
+### 问题7: 客户补全失败
+
+**症状**:
+- completion模式返回403错误: "Customer not found"
+
+**解决方案**:
+
+1. **验证客户存在**:
+```bash
+curl -X GET http://localhost:8080/api/v1/customers/customer-001/exists
+```
+
+2. **检查客户ID格式**:
+- 确保customerId格式正确
+- 检查是否有特殊字符
+
+---
+
+### 问题8: 去重过滤过多
+
+**症状**:
+- `duplicatesFiltered` 占比 > 80%
+
+**排查步骤**:
+
+1. **检查Redis缓存**:
+```bash
+# 查看去重键数量
+docker exec redis redis-cli KEYS "threat:import:*" | wc -l
+```
+
+2. **调整去重窗口**:
+- 考虑缩短去重时间窗口
+- 或使用不同的研究ID区分批次
+
+3. **验证日志内容**:
+- 确认不是重复导入相同文件
+
+---
+
+### 问题9: 离线导入触发告警
+
+**症状**:
+- offline模式仍产生实时告警
+
+**解决方案**:
+
+1. **确认模式配置**:
+- 确保使用 `/offline` 端点
+- 检查服务端配置是否正确区分offline模式
+
+2. **查看服务日志**:
+```bash
+docker logs data-ingestion-service | grep "offline.*alert"
+```
+
+---
+
+## 相关文档
+
+- **[蜜罐威胁评分方案](./honeypot_based_threat_scoring.md)** - 威胁评分算法详解
+- **[威胁评估API](./threat_assessment_api.md)** - 威胁评估服务API
+- **[告警管理API](./alert_management_api.md)** - 告警和通知API
+- **[邮件通知配置](./email_notification_configuration.md)** - 邮件通知系统配置
+
+---
+
+**文档结束**
+
+*最后更新: 2025-01-16*
 
 ### BatchLogRequest
 
