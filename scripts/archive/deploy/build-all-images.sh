@@ -31,6 +31,8 @@ declare -A SERVICES=(
     ["customer-management"]="services/customer-management"
     ["threat-assessment"]="services/threat-assessment"
     ["alert-management"]="services/alert-management"
+    ["stream-processing"]="services/stream-processing"
+    ["api-gateway"]="services/api-gateway"
 )
 
 # 检查Maven

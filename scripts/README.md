@@ -1,371 +1,148 @@
 # Scripts Directory
 
-This directory contains all scripts for the threat detection system, organized by their primary function. Scripts are categorized into initialization/deployment, testing, and utility tools.
+This directory contains all scripts for the threat detection system, organized by their primary function into subdirectories for better maintainability.
 
 ## 📁 Directory Structure
 
 ```
 scripts/
-├── init-kafka.sh          # Kafka initialization script
-├── Dockerfile             # Docker image for scripts
-├── integration_test_notifications.py  # Email notification integration test
-├── test/                  # Testing scripts and utilities
-│   ├── concurrency_test.py
-│   ├── data_ingestion_test.py
-│   ├── test-stream-processing.sh
-│   ├── test_logs_parsing.py
-│   ├── test_multi_tenancy_isolation.sh
-│   ├── test_real_logs.py
-│   └── test_stream_processing.py
-├── tools/                 # Production-ready utility scripts
-│   ├── bulk_ingest_logs.py
-│   ├── ingest_test_logs.py
-│   ├── performance_monitor.py
-│   └── performance_monitor_simple.py
-└── utils/                 # Helper utilities and development tools
-    ├── TestRegex.java
-    └── TestRegex.class
+├── deploy/               # Deployment and initialization scripts
+│   ├── init-kafka.sh
+│   ├── rebuild_service.sh
+│   ├── Dockerfile
+│   ├── build-all-images.sh
+│   ├── deploy_api_gateway.sh
+│   ├── deploy_ip_segment_weights_v4.sh
+│   ├── k8s-deploy.sh
+│   └── validate-k8s-config.sh
+├── maintenance/          # Maintenance, monitoring, and testing scripts
+│   ├── diagnose_data_flow.sh
+│   ├── fetch_alerts_api.py
+│   ├── bulk_log_import.py
+│   ├── fetch_recent_alerts.py
+│   ├── test/             # Testing scripts
+│   ├── ALERT_MONITORING_GUIDE.md
+│   ├── BULK_LOG_IMPORT_README.md
+│   ├── create_historical_customers.py
+│   ├── fix_field_naming.sh
+│   ├── full_api_gateway_test.sh
+│   ├── insert_test_alerts.py
+│   ├── integration_test_responsibility_separation.sh
+│   ├── migrate_device_mappings.py
+│   ├── phase1_completion_verify.sh
+│   ├── quick_test_phase2.sh
+│   ├── rebuild.sh
+│   └── send_burst_test.sh
+├── archive/              # Deprecated scripts and tools
+│   ├── tools/           # Old utility scripts
+│   └── utils/           # Old development utilities
+├── create_temp_customers.py
+├── bulk_log_import.py
+├── fetch_alerts_api.py
+├── fetch_recent_alerts.py
+├── integration_test_notifications.py
+├── requirements.txt
+└── README.md
 ```
 
-## 🚀 Initialization & Deployment Scripts
+## 🚀 Deployment Scripts (deploy/)
+
+Scripts for deploying and initializing system components.
 
 ### init-kafka.sh
 **Purpose**: Initialize Kafka cluster with required topics and configurations
 **Usage**:
 ```bash
-# Initialize Kafka for development
-./scripts/init-kafka.sh
-
-# Initialize with custom settings
-KAFKA_BOOTSTRAP_SERVERS=localhost:9092 ./scripts/init-kafka.sh
+./scripts/deploy/init-kafka.sh
 ```
-**Topics Created**:
-- `attack-events` - Attack event messages
-- `status-events` - Device status messages
-- `threat-alerts` - High-priority threat alerts
-- `minute-aggregations` - Aggregated metrics
 
-### Dockerfile
-**Purpose**: Docker image for running scripts in containerized environment
+### rebuild_service.sh
+**Purpose**: Rebuild specific service containers
 **Usage**:
 ```bash
-# Build the scripts image
-docker build -t threat-detection-scripts -f scripts/Dockerfile .
-
-# Run scripts in container
-docker run --rm -v $(pwd):/app threat-detection-scripts python3 bulk_ingest_logs.py
+./scripts/deploy/rebuild_service.sh <service-name>
 ```
 
-## 🧪 Testing Scripts
+### Other deployment scripts
+- `Dockerfile` - Docker image for scripts
+- `build-all-images.sh` - Build all Docker images
+- `deploy_api_gateway.sh` - Deploy API gateway
+- `deploy_ip_segment_weights_v4.sh` - Deploy IP segment weights
+- `k8s-deploy.sh` - Kubernetes deployment
+- `validate-k8s-config.sh` - Validate Kubernetes config
 
-### Python Test Scripts
+## 🛠️ Maintenance Scripts (maintenance/)
 
-#### test_logs_parsing.py
-**Purpose**: Test log parsing functionality with various log formats
-**Usage**:
-```bash
-python3 scripts/test/test_logs_parsing.py
-```
-**Tests**:
-- Attack log parsing validation
-- Status log parsing validation
-- Error handling for malformed logs
-- Performance benchmarking
+Scripts for system maintenance, diagnostics, and testing.
 
-#### test_real_logs.py
-**Purpose**: Test with real-world log data from production systems
-**Usage**:
-```bash
-python3 scripts/test/test_real_logs.py --file tmp/real_logs/sample.log
-```
-**Features**:
-- Real log data validation
-- Performance testing with large datasets
-- Error rate analysis
+### Core maintenance scripts
+- `diagnose_data_flow.sh` - Diagnose data flow issues
+- `fetch_alerts_api.py` - Fetch alerts via API
+- `bulk_log_import.py` - Bulk log import utility
+- `fetch_recent_alerts.py` - Fetch recent alerts
 
-#### test_stream_processing.py
-**Purpose**: Test Apache Flink stream processing jobs
-**Usage**:
-```bash
-python3 scripts/test/test_stream_processing.py --job threat-detection
-```
-**Tests**:
-- Job submission and execution
-- Data flow validation
-- Performance metrics collection
-- Checkpointing verification
+### Testing scripts (test/)
+All testing scripts have been moved to the test/ subdirectory within maintenance/
 
-#### concurrency_test.py
-**Purpose**: Test concurrent request handling and performance
-**Usage**:
-```bash
-python3 scripts/test/concurrency_test.py --workers 10 --requests 1000
-```
-**Features**:
-- Load testing with configurable concurrency
-- Throughput measurement
-- Error rate monitoring
-- Response time analysis
+### Additional maintenance scripts
+- `ALERT_MONITORING_GUIDE.md` - Alert monitoring guide
+- `BULK_LOG_IMPORT_README.md` - Bulk import documentation
+- `create_historical_customers.py` - Create historical customers
+- `fix_field_naming.sh` - Fix field naming issues
+- `full_api_gateway_test.sh` - Full API gateway test
+- `insert_test_alerts.py` - Insert test alerts
+- `integration_test_responsibility_separation.sh` - Integration test
+- `migrate_device_mappings.py` - Migrate device mappings
+- `phase1_completion_verify.sh` - Phase 1 verification
+- `quick_test_phase2.sh` - Quick phase 2 test
+- `rebuild.sh` - Rebuild services
+- `send_burst_test.sh` - Send burst test data
 
-#### integration_test_notifications.py
-**Purpose**: Integration test for email notification system with CRITICAL threat events
-**Usage**:
-```bash
-# Run integration test for email notifications
-python3 scripts/integration_test_notifications.py
-```
-**Features**:
-- Generates CRITICAL-level threat events
-- Tests email notification functionality
-- Validates rate limiting (5 emails per 10 minutes)
-- Monitors notification statistics
-- Comprehensive test reporting
+## 🗂️ Core Utility Tools (Root Level)
 
-### Shell Test Scripts
+Essential tools kept at root level for easy access.
 
-#### test-stream-processing.sh
-**Purpose**: Shell script for testing stream processing pipeline
-**Usage**:
-```bash
-# Run full pipeline test
-./scripts/test/test-stream-processing.sh
+- `create_temp_customers.py` - Create temporary customers
+- `bulk_log_import.py` - Bulk log import (duplicate in maintenance/)
+- `fetch_alerts_api.py` - Fetch alerts (duplicate in maintenance/)
+- `fetch_recent_alerts.py` - Fetch recent alerts (duplicate in maintenance/)
+- `integration_test_notifications.py` - Notification integration test
+- `requirements.txt` - Python dependencies
 
-# Test specific components
-./scripts/test/test-stream-processing.sh --component kafka
+## 📦 Archived Scripts (archive/)
 
-# Run with custom configuration
-KAFKA_SERVERS=localhost:9092 ./scripts/test/test-stream-processing.sh
-```
+Deprecated scripts moved to archive/ for reference.
 
-#### test_multi_tenancy_isolation.sh
-**Purpose**: Test multi-tenant data isolation and security
-**Usage**:
-```bash
-# Test tenant isolation
-./scripts/test/test_multi_tenancy_isolation.sh --tenants "tenant1,tenant2,tenant3"
-
-# Test cross-tenant data access
-./scripts/test/test_multi_tenancy_isolation.sh --cross-tenant-check
-```
-**Tests**:
-- Data isolation between tenants
-- Access control validation
-- Resource quota enforcement
-
-## 🛠️ Utility Scripts
-
-### bulk_ingest_logs.py
-**Purpose**: Production-ready bulk log ingestion tool with high reliability
-**Usage**:
-```bash
-# Process specific log files
-python3 scripts/tools/bulk_ingest_logs.py --file tmp/logs/2024-04-25.07.56.log
-
-# Process multiple files with concurrency
-python3 scripts/tools/bulk_ingest_logs.py --count 5 --workers 8 --batch-size 25
-
-# Enable verbose logging
-python3 scripts/tools/bulk_ingest_logs.py --count 10 --verbose
-```
-**Features**:
-- **Connection Pooling**: HTTPAdapter with automatic pool management
-- **Retry Logic**: Exponential backoff for failed requests
-- **Periodic Refresh**: Connection pool refresh every 1000 requests
-- **Concurrent Processing**: Multi-threaded ingestion with configurable workers
-- **Success Rate**: >95% reliability (eliminated connection reset errors)
-
-### Performance Monitoring Scripts
-
-#### performance_monitor.py
-**Purpose**: Comprehensive performance monitoring and metrics collection
-**Usage**:
-```bash
-# Monitor all services
-python3 scripts/tools/performance_monitor.py --services "data-ingestion,stream-processing,threat-assessment"
-
-# Monitor specific metrics
-python3 scripts/tools/performance_monitor.py --metric throughput --interval 30
-
-# Generate performance report
-python3 scripts/tools/performance_monitor.py --report --output performance_report.json
-```
-**Features**:
-- Real-time metrics collection
-- Service health monitoring
-- Performance trend analysis
-- Automated alerting
-
-#### performance_monitor_simple.py
-**Purpose**: Simplified performance monitoring for basic metrics
-**Usage**:
-```bash
-# Basic monitoring
-python3 scripts/tools/performance_monitor_simple.py --service data-ingestion
-
-# Quick health check
-python3 scripts/tools/performance_monitor_simple.py --check
-```
-
-### ingest_test_logs.py
-**Purpose**: Utility for ingesting test log data into the system
-**Usage**:
-```bash
-# Ingest sample logs
-python3 scripts/tools/ingest_test_logs.py --count 100 --type attack
-
-# Ingest from file
-python3 scripts/tools/ingest_test_logs.py --file custom_logs.txt
-
-# Generate and ingest synthetic logs
-python3 scripts/tools/ingest_test_logs.py --generate --count 1000
-```
-
-## 🔧 Development Utilities
-
-### TestRegex.java / TestRegex.class
-**Purpose**: Java utility for testing regular expressions used in log parsing
-**Usage**:
-```bash
-# Compile and run
-javac scripts/utils/TestRegex.java
-java -cp scripts/utils TestRegex
-
-# Test specific patterns
-java -cp scripts/utils TestRegex "pattern" "test_string"
-```
-**Features**:
-- Regular expression validation
-- Pattern matching testing
-- Performance benchmarking
+- `tools/` - Old utility scripts
+- `utils/` - Old development utilities
 
 ## 📋 Usage Guidelines
 
 ### Script Categories
 
-1. **🔴 Initialization Scripts**: Run these first when setting up the environment
-   ```bash
-   ./scripts/init-kafka.sh
-   ```
-
-2. **🟡 Testing Scripts**: Use these to validate system functionality
-   ```bash
-   python3 scripts/test/test_logs_parsing.py
-   python3 scripts/test/concurrency_test.py
-   ```
-
-3. **🟢 Utility Scripts**: Production-ready tools for operations
-   ```bash
-   python3 scripts/tools/bulk_ingest_logs.py --count 10
-   python3 scripts/tools/performance_monitor.py
-   ```
+1. **🔴 Deployment Scripts**: Use deploy/ scripts for system setup and deployment
+2. **🟡 Maintenance Scripts**: Use maintenance/ scripts for diagnostics and testing
+3. **🟢 Core Tools**: Use root-level scripts for common operations
+4. **⚫ Archived Scripts**: Avoid using archive/ scripts in new development
 
 ### Best Practices
 
-1. **Environment Variables**: Most scripts support configuration via environment variables
-   ```bash
-   KAFKA_BOOTSTRAP_SERVERS=localhost:9092 python3 scripts/tools/bulk_ingest_logs.py
-   ```
-
-2. **Logging**: Use `--verbose` flag for detailed output when debugging
-   ```bash
-   python3 scripts/tools/bulk_ingest_logs.py --count 5 --verbose
-   ```
-
-3. **Dry Run**: Test scripts support dry-run mode for safe testing
-   ```bash
-   python3 scripts/test/data_ingestion_test.py --dry-run --max-records 10
-   ```
-
-4. **Resource Management**: Monitor system resources when running performance tests
-   ```bash
-   python3 scripts/tools/performance_monitor.py --services all --interval 10
-   ```
-
-### Error Handling
-
-- **Connection Issues**: Scripts include automatic retry logic
-- **Rate Limiting**: Respect API rate limits in production
-- **Resource Limits**: Monitor memory and CPU usage during bulk operations
-- **Logging**: Check logs for detailed error information
-
-### Maintenance
-
-- **Version Control**: Keep scripts under version control
-- **Documentation**: Update this README when adding new scripts
-- **Testing**: Test scripts in development before production use
-- **Security**: Avoid hardcoding sensitive information in scripts
-
-## 🔍 Troubleshooting
-
-### Common Issues
-
-1. **Permission Denied**
-   ```bash
-   chmod +x scripts/*.sh
-   ```
-
-2. **Python Dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Kafka Connection Failed**
-   ```bash
-   # Check Kafka status
-   docker-compose ps kafka
-
-   # Verify connection
-   telnet localhost 9092
-   ```
-
-4. **Java Not Found**
-   ```bash
-   # Install Java
-   sudo apt-get install openjdk-21-jdk
-
-   # Verify installation
-   java -version
-   ```
-
-### Getting Help
-
-- Check script help: `python3 script.py --help`
-- Review logs in `logs/` directory
-- Check service health: `curl http://localhost:8080/actuator/health`
-- Monitor with: `python3 scripts/tools/performance_monitor.py`
-
-## 📊 Performance Benchmarks
-
-### Bulk Ingestion Performance
-- **Throughput**: 1000+ logs/second (with 8 workers)
-- **Success Rate**: >95% (with connection pooling)
-- **Memory Usage**: < 256MB per worker
-- **CPU Usage**: < 70% under load
-
-### Test Script Performance
-- **Log Parsing**: < 10ms per log (p95)
-- **API Response**: < 100ms for batch requests
-- **Concurrent Tests**: 720 req/s throughput
+- Always run from project root directory
+- Check script permissions before execution
+- Use absolute paths when calling from other scripts
+- Test in development before production use
 
 ## 🔄 Recent Updates
 
-- **v1.3**: Added integration test for email notification system
-- **v1.2**: Reorganized directory structure with dedicated test/, tools/, and utils/ subdirectories
-- **v1.1**: Enhanced bulk ingestion with connection pooling and retry logic
-- **v1.0**: Initial script organization and categorization
-- **Directory Restructuring**: Separated initialization scripts from testing and utility scripts
-- **Connection Management**: Eliminated connection reset errors in bulk operations
-- **Performance Monitoring**: Added comprehensive monitoring capabilities
-- **Email Notification Testing**: Added integration test for CRITICAL threat email alerts
+- **Directory Restructuring**: Reorganized scripts into deploy/, maintenance/, and archive/ subdirectories for better organization
+- **Core Tools**: Kept essential utilities at root level for easy access
+- **Path Updates**: Updated all documentation to reflect new directory structure
 
 ## Current Implementation Status
 
-- ✅ **Bulk Ingestion Tools**: Production-ready bulk log ingestion with high reliability
-- ✅ **Performance Monitoring**: Comprehensive monitoring and metrics collection
-- ✅ **Integration Testing**: Email notification integration tests
-- ✅ **Kafka Management**: Initialization and topic management scripts
-- ✅ **Data Processing**: Test data generation and processing utilities
-- ✅ **Concurrent Testing**: Load testing with configurable concurrency
-- ✅ **Stream Processing Tests**: Flink job testing and validation
-- ✅ **Real Log Processing**: Production log data validation and testing</content>
+- ✅ **Directory Structure**: New organization implemented
+- ✅ **Deployment Scripts**: All deployment tools organized in deploy/
+- ✅ **Maintenance Scripts**: All maintenance tools in maintenance/
+- ✅ **Core Utilities**: Essential tools at root level
+- ✅ **Documentation**: README updated with new structure</content>
 <parameter name="filePath">/home/kylecui/threat-detection-system/scripts/README.md

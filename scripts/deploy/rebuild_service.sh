@@ -4,7 +4,7 @@
 # 用法: ./rebuild_service.sh <service-name>
 # 示例: ./rebuild_service.sh threat-assessment
 
-set +e  # 遇到错误立即退出
+set -e  # 遇到错误立即退出
 
 SERVICE_NAME=$1
 
@@ -68,7 +68,7 @@ docker compose up -d --force-recreate $SERVICE_NAME
 
 if [ $? -ne 0 ]; then
     echo "❌ 容器启动失败，检查日志"
-    docker logs ${SERVICE_NAME}-service --tail 50
+    docker compose logs ${SERVICE_NAME} --tail 50
     exit 1
 fi
 echo "✅ 容器重构成功"
