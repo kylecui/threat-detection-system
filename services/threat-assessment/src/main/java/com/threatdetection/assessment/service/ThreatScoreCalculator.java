@@ -40,16 +40,19 @@ public class ThreatScoreCalculator {
     private final IpSegmentWeightService ipSegmentWeightService;  // 保留用于兼容性
     private final IpSegmentWeightServiceV4 ipSegmentWeightServiceV4;  // V4.0双维度服务
     private final CustomerPortWeightService customerPortWeightService;  // V4.0 Phase3端口权重服务
+    private final CustomerTimeWeightService customerTimeWeightService;  // V5.0时间段权重服务
     
     @Autowired
     public ThreatScoreCalculator(PortRiskService portRiskService, 
                                  IpSegmentWeightService ipSegmentWeightService,
                                  IpSegmentWeightServiceV4 ipSegmentWeightServiceV4,
-                                 CustomerPortWeightService customerPortWeightService) {
+                                 CustomerPortWeightService customerPortWeightService,
+                                 CustomerTimeWeightService customerTimeWeightService) {
         this.portRiskService = portRiskService;
         this.ipSegmentWeightService = ipSegmentWeightService;
         this.ipSegmentWeightServiceV4 = ipSegmentWeightServiceV4;
         this.customerPortWeightService = customerPortWeightService;
+        this.customerTimeWeightService = customerTimeWeightService;
     }
     
     /**
@@ -82,11 +85,14 @@ public class ThreatScoreCalculator {
                          * data.getUniquePorts();
         
         // 计算各维度权重
-        double timeWeight = calculateTimeWeight(data.getTimestamp());
+        double timeWeight = calculateEnhancedTimeWeight(data.getCustomerId(), data.getTimestamp());
         double ipWeight = calculateIpWeight(data.getUniqueIps());
         // V4.0 Phase 3: 使用增强端口权重 (集成customer_port_weights)
         double portWeight = calculateEnhancedPortWeight(data.getCustomerId(), data.getPortList(), data.getUniquePorts());
         double deviceWeight = calculateDeviceWeight(data.getUniqueDevices());
+        
+        logger.info("📈 Threat score weights calculated: customerId={}, timeWeight={}, ipWeight={}, portWeight={}, deviceWeight={}",
+                   data.getCustomerId(), timeWeight, ipWeight, portWeight, deviceWeight);
         
         // V4.0双维度权重计算
         double attackSourceWeight = 1.0;  // 默认值 (向后兼容)
@@ -165,6 +171,41 @@ public class ThreatScoreCalculator {
         } else {
             return 0.8;  // 夜间时段 (21:00-24:00)
         }
+    }
+    
+    /**
+     * 计算增强的时间权重 (集成customer_time_weights)
+     * 
+     * <p>V5.0新方法: 支持客户自定义时间段权重
+     * 1. 首先查询客户自定义配置
+     * 2. 如果没有自定义配置，使用默认权重
+     * 
+     * @param customerId 客户ID
+     * @param timestamp 攻击时间戳
+     * @return 时间权重 (0.5-2.0)
+     */
+    public double calculateEnhancedTimeWeight(String customerId, Instant timestamp) {
+        if (customerId == null || customerId.isEmpty()) {
+            logger.debug("No customerId provided, using default time weight");
+            return calculateTimeWeight(timestamp);
+        }
+        
+        LocalTime time = LocalTime.ofInstant(timestamp, ZoneId.systemDefault());
+        int hour = time.getHour();
+        
+        double customWeight = customerTimeWeightService.getTimeWeight(customerId, timestamp);
+        
+        // 如果自定义权重与默认权重不同，说明使用了自定义配置
+        double defaultWeight = calculateTimeWeight(timestamp);
+        if (Math.abs(customWeight - defaultWeight) > 0.001) {
+            logger.info("🎯 Using CUSTOM time weight: customerId={}, hour={}, weight={}, default={}",
+                        customerId, hour, customWeight, defaultWeight);
+        } else {
+            logger.info("📊 Using DEFAULT time weight: customerId={}, hour={}, weight={}",
+                        customerId, hour, customWeight);
+        }
+        
+        return customWeight;
     }
     
     /**

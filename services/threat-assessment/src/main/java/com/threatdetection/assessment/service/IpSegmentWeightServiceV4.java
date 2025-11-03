@@ -81,48 +81,48 @@ public class IpSegmentWeightServiceV4 {
     @Cacheable(value = "attackSourceWeights", key = "#customerId + ':' + #attackIp")
     public double getAttackSourceWeight(String customerId, String attackIp) {
         if (customerId == null || attackIp == null || attackIp.isEmpty()) {
-            log.warn("Invalid parameters: customerId={}, attackIp={}, returning default weight: {}", 
+            log.warn("Invalid parameters: customerId={}, attackIp={}, returning default weight: {}",
                      customerId, attackIp, DEFAULT_ATTACK_SOURCE_WEIGHT);
             return DEFAULT_ATTACK_SOURCE_WEIGHT;
         }
-        
+
         try {
             // 1. 先查询客户专属配置
             Optional<AttackSourceWeight> config = attackSourceWeightRepository
                 .findByCustomerIdAndIpAddress(customerId, attackIp);
-            
+
             if (config.isPresent()) {
                 double weight = config.get().getWeight().doubleValue();
-                log.info("Found customer-specific attack source weight for customerId={}, attackIp={}: {} (segment: {}, type: {})", 
-                         customerId, attackIp, weight, 
+                log.info("Found customer-specific attack source weight for customerId={}, attackIp={}: {} (segment: {}, type: {})",
+                         customerId, attackIp, weight,
                          config.get().getSegmentName(), config.get().getSegmentType());
                 return weight;
             }
-            
+
             // 2. 如果客户专属配置不存在，回退到 default 配置
             if (!"default".equals(customerId)) {
-                log.debug("No customer-specific config for customerId={}, attackIp={}, trying fallback to 'default'", 
+                log.debug("No customer-specific config for customerId={}, attackIp={}, trying fallback to 'default'",
                          customerId, attackIp);
-                
+
                 Optional<AttackSourceWeight> defaultConfig = attackSourceWeightRepository
                     .findByCustomerIdAndIpAddress("default", attackIp);
-                
+
                 if (defaultConfig.isPresent()) {
                     double weight = defaultConfig.get().getWeight().doubleValue();
-                    log.info("Using fallback attack source weight from 'default' for customerId={}, attackIp={}: {} (segment: {}, type: {})", 
-                             customerId, attackIp, weight, 
+                    log.info("Using fallback attack source weight from 'default' for customerId={}, attackIp={}: {} (segment: {}, type: {})",
+                             customerId, attackIp, weight,
                              defaultConfig.get().getSegmentName(), defaultConfig.get().getSegmentType());
                     return weight;
                 }
             }
-            
+
             // 3. 如果 default 也没有匹配，返回默认权重
-            log.debug("No attack source weight match (customer-specific or default) for customerId={}, attackIp={}, returning default: {}", 
+            log.debug("No attack source weight match (customer-specific or default) for customerId={}, attackIp={}, returning default: {}",
                      customerId, attackIp, DEFAULT_ATTACK_SOURCE_WEIGHT);
             return DEFAULT_ATTACK_SOURCE_WEIGHT;
-            
+
         } catch (Exception e) {
-            log.error("Error querying attack source weight for customerId={}, attackIp={}: {}", 
+            log.error("Error querying attack source weight for customerId={}, attackIp={}: {}",
                      customerId, attackIp, e.getMessage(), e);
             return DEFAULT_ATTACK_SOURCE_WEIGHT;
         }

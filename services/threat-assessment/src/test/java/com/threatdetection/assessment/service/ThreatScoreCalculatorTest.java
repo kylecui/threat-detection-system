@@ -9,6 +9,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -34,11 +37,33 @@ class ThreatScoreCalculatorTest {
     @Mock
     private CustomerPortWeightService customerPortWeightService;
 
+    @Mock
+    private CustomerTimeWeightService customerTimeWeightService;
+
     private ThreatScoreCalculator calculator;
     
     @BeforeEach
     void setUp() {
-        calculator = new ThreatScoreCalculator(portRiskService, ipSegmentWeightService, ipSegmentWeightServiceV4, customerPortWeightService);
+        calculator = new ThreatScoreCalculator(portRiskService, ipSegmentWeightService, ipSegmentWeightServiceV4, customerPortWeightService, customerTimeWeightService);
+
+        // Mock customerTimeWeightService to return default weights (same as hardcoded logic)
+        lenient().when(customerTimeWeightService.getTimeWeight(anyString(), any(Instant.class))).thenAnswer(invocation -> {
+            Instant timestamp = invocation.getArgument(1);
+            LocalTime time = LocalTime.ofInstant(timestamp, ZoneId.systemDefault());
+            int hour = time.getHour();
+            if (hour >= 0 && hour < 6) return 1.2;
+            if (hour >= 6 && hour < 9) return 1.1;
+            if (hour >= 9 && hour < 17) return 1.0;
+            if (hour >= 17 && hour < 21) return 0.9;
+            return 0.8;
+        });
+
+        // Mock customerPortWeightService for enhanced port weight calculations
+        lenient().when(customerPortWeightService.getPortWeightsBatch(anyString(), anyList())).thenReturn(Map.of());
+
+        // Mock ipSegmentWeightServiceV4 for V4.0 dual-dimension weights
+        lenient().when(ipSegmentWeightServiceV4.getAttackSourceWeight(anyString(), anyString())).thenReturn(1.0);
+        lenient().when(ipSegmentWeightServiceV4.getHoneypotSensitivityWeight(anyString(), anyString())).thenReturn(1.0);
     }
     
     // ==================== 时间权重测试 ====================
@@ -233,22 +258,22 @@ class ThreatScoreCalculatorTest {
             .timestamp(Instant.parse("2025-01-14T18:30:00Z"))  // 深夜 (UTC+8: 02:30)
             .build();
         
-        // Mock IP段权重 (192.168.x.x 内网IP默认0.7权重)
-        when(ipSegmentWeightService.getIpSegmentWeight("192.168.75.188"))
-            .thenReturn(0.7);
+        // Mock IP段权重 (不再使用，但保留以防将来需要)
+        // lenient().when(ipSegmentWeightService.getIpSegmentWeight("192.168.75.188"))
+        //     .thenReturn(0.7);
         
         double score = calculator.calculateThreatScore(data);
         
-        // 预期计算 (Phase 3增加IP段权重):
+        // 预期计算 (V4.0双维度权重 - 客户专属配置优先):
         // baseScore = 150 × 5 × 3 = 2250
         // timeWeight = 1.2 (深夜)
         // ipWeight = 1.5 (5个IP)
         // portWeight = 1.2 (3个端口)
         // deviceWeight = 1.5 (2个设备)
-        // ipSegmentWeight = 0.7 (内网IP)
-        // finalScore = 2250 × 1.2 × 1.5 × 1.2 × 1.5 × 0.7 = 5103.0
+        // combinedSegmentWeight = 1.0 × 1.0 = 1.0 (V4.0双维度，默认权重)
+        // finalScore = 2250 × 1.2 × 1.5 × 1.2 × 1.5 × 1.0 = 7290.0
         
-        assertEquals(5103.0, score, 0.1);
+        assertEquals(7290.0, score, 0.1);
         assertEquals("CRITICAL", calculator.determineThreatLevel(score));
     }
     
@@ -266,22 +291,22 @@ class ThreatScoreCalculatorTest {
             .timestamp(Instant.parse("2025-01-15T06:30:00Z"))  // 工作时间 (UTC+8: 14:30)
             .build();
         
-        // Mock IP段权重 (10.x.x.x 内网IP默认0.7权重)
-        when(ipSegmentWeightService.getIpSegmentWeight("10.0.1.50"))
-            .thenReturn(0.7);
+        // Mock IP段权重 (不再使用，但保留以防将来需要)
+        // lenient().when(ipSegmentWeightService.getIpSegmentWeight("10.0.1.50"))
+        //     .thenReturn(0.7);
         
         double score = calculator.calculateThreatScore(data);
         
-        // 预期计算 (Phase 3增加IP段权重):
+        // 预期计算 (V4.0双维度权重 - 客户专属配置优先):
         // baseScore = 30 × 2 × 1 = 60
         // timeWeight = 1.0 (工作时间)
         // ipWeight = 1.3 (2个IP)
         // portWeight = 1.0 (1个端口)
         // deviceWeight = 1.0 (1个设备)
-        // ipSegmentWeight = 0.7 (内网IP)
-        // finalScore = 60 × 1.0 × 1.3 × 1.0 × 1.0 × 0.7 = 54.6
+        // combinedSegmentWeight = 1.0 × 1.0 = 1.0 (V4.0双维度，默认权重)
+        // finalScore = 60 × 1.0 × 1.3 × 1.0 × 1.0 × 1.0 = 78.0
         
-        assertEquals(54.6, score, 0.1);
+        assertEquals(78.0, score, 0.1);
         assertEquals("MEDIUM", calculator.determineThreatLevel(score));
     }
     
@@ -299,22 +324,22 @@ class ThreatScoreCalculatorTest {
             .timestamp(Instant.parse("2025-01-15T14:00:00Z"))  // 夜间 (UTC+8: 22:00)
             .build();
         
-        // Mock IP段权重
-        when(ipSegmentWeightService.getIpSegmentWeight("172.16.0.100"))
-            .thenReturn(0.7);
+        // Mock IP段权重 (不再使用，但保留以防将来需要)
+        // lenient().when(ipSegmentWeightService.getIpSegmentWeight("172.16.0.100"))
+        //     .thenReturn(0.7);
         
         double score = calculator.calculateThreatScore(data);
         
-        // 预期计算 (Phase 3增加IP段权重):
+        // 预期计算 (V4.0双维度权重 - 客户专属配置优先):
         // baseScore = 10 × 1 × 1 = 10
         // timeWeight = 0.8 (夜间)
         // ipWeight = 1.0 (1个IP)
         // portWeight = 1.0 (1个端口)
         // deviceWeight = 1.0 (1个设备)
-        // ipSegmentWeight = 0.7 (内网IP)
-        // finalScore = 10 × 0.8 × 1.0 × 1.0 × 1.0 × 0.7 = 5.6
+        // combinedSegmentWeight = 1.0 × 1.0 = 1.0 (V4.0双维度，默认权重)
+        // finalScore = 10 × 0.8 × 1.0 × 1.0 × 1.0 × 1.0 = 8.0
         
-        assertEquals(5.6, score, 0.1);
+        assertEquals(8.0, score, 0.1);
         assertEquals("INFO", calculator.determineThreatLevel(score));  // < 10
     }
     
@@ -332,22 +357,22 @@ class ThreatScoreCalculatorTest {
             .timestamp(Instant.parse("2025-01-15T02:00:00Z"))  // 工作时间 (UTC+8: 10:00)
             .build();
         
-        // Mock IP段权重
-        when(ipSegmentWeightService.getIpSegmentWeight("10.0.2.50"))
-            .thenReturn(0.7);
+        // Mock IP段权重 (不再使用，但保留以防将来需要)
+        // lenient().when(ipSegmentWeightService.getIpSegmentWeight("10.0.2.50"))
+        //     .thenReturn(0.7);
         
         double score = calculator.calculateThreatScore(data);
         
-        // 预期计算 (Phase 3增加IP段权重):
+        // 预期计算 (V4.0双维度权重 - 客户专属配置优先):
         // baseScore = 50 × 4 × 6 = 1200
         // timeWeight = 1.0 (工作时间)
         // ipWeight = 1.5 (4个IP)
         // portWeight = 1.6 (6个端口)
         // deviceWeight = 1.0 (1个设备)
-        // ipSegmentWeight = 0.7 (内网IP)
-        // finalScore = 1200 × 1.0 × 1.5 × 1.6 × 1.0 × 0.7 = 2016.0
+        // combinedSegmentWeight = 1.0 × 1.0 = 1.0 (V4.0双维度，默认权重)
+        // finalScore = 1200 × 1.0 × 1.5 × 1.6 × 1.0 × 1.0 = 2880.0
         
-        assertEquals(2016.0, score, 0.1);
+        assertEquals(2880.0, score, 0.1);
         assertEquals("CRITICAL", calculator.determineThreatLevel(score));
     }
     

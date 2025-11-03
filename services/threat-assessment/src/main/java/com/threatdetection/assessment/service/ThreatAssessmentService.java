@@ -107,7 +107,7 @@ public class ThreatAssessmentService {
         String threatLevel = calculator.determineThreatLevel(threatScore);
         
         // 3. 计算权重因子 (用于记录和审计)
-        double timeWeight = calculator.calculateTimeWeight(data.getTimestamp());
+        double timeWeight = calculator.calculateEnhancedTimeWeight(data.getCustomerId(), data.getTimestamp());
         double ipWeight = calculator.calculateIpWeight(data.getUniqueIps());
         double portWeight = calculator.calculatePortWeight(data.getUniquePorts());
         double deviceWeight = calculator.calculateDeviceWeight(data.getUniqueDevices());
