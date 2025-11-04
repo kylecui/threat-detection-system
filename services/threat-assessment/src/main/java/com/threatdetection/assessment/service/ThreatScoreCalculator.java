@@ -135,17 +135,51 @@ public class ThreatScoreCalculator {
                    attackSourceWeight, honeypotSensitivityWeight, combinedSegmentWeight);
         
         // 最终评分 (V4.0 Phase 2 - 双维度权重)
-        double finalScore = baseScore * timeWeight * ipWeight * portWeight * deviceWeight 
-                          * combinedSegmentWeight;
+        double rawScore = baseScore * timeWeight * ipWeight * portWeight * deviceWeight 
+                         * combinedSegmentWeight;
+        
+        // 标准化到 (0,100) 范围 - 使用对数变换
+        double normalizedScore = normalizeThreatScore(rawScore);
         
         logger.debug("Threat score calculation: customerId={}, attackMac={}, attackIp={}, honeypotIp={}, " +
                     "baseScore={}, timeWeight={}, ipWeight={}, portWeight={}, deviceWeight={}, " +
-                    "attackSourceWeight={}, honeypotSensitivityWeight={}, combinedSegmentWeight={}, finalScore={}",
+                    "attackSourceWeight={}, honeypotSensitivityWeight={}, combinedSegmentWeight={}, " +
+                    "rawScore={}, normalizedScore={}",
                     data.getCustomerId(), data.getAttackMac(), data.getAttackIp(), data.getMostAccessedHoneypotIp(),
                     baseScore, timeWeight, ipWeight, portWeight, deviceWeight, 
-                    attackSourceWeight, honeypotSensitivityWeight, combinedSegmentWeight, finalScore);
+                    attackSourceWeight, honeypotSensitivityWeight, combinedSegmentWeight, rawScore, normalizedScore);
         
-        return finalScore;
+        return normalizedScore;
+    }
+    
+    /**
+     * 将原始威胁评分标准化到 (0,100) 范围
+     * 
+     * <p>使用对数变换将大范围的评分压缩到标准范围:
+     * - 小威胁 (1-10): 映射到 1-25 左右
+     * - 中等威胁 (100-1000): 映射到 25-50 左右  
+     * - 高威胁 (1000+): 映射到 50-75 左右
+     * - 极高威胁 (10000+): 映射到 75-100
+     * 
+     * <p>公式: normalizedScore = min(100, max(1, log10(rawScore + 1) * 25))
+     * 
+     * @param rawScore 原始威胁评分 (可能很大)
+     * @return 标准化后的评分 (1-100)
+     */
+    private double normalizeThreatScore(double rawScore) {
+        if (rawScore <= 0) {
+            return 1.0;  // 最小评分
+        }
+        
+        // 使用对数变换压缩范围: log10(rawScore + 1) * 25
+        // +1 避免 log(0) 或 log(小数)
+        // *25 是经验系数，使结果在合理范围内
+        double normalized = Math.log10(rawScore + 1) * 25;
+        
+        // 确保在 (0,100) 范围内
+        normalized = Math.max(1.0, Math.min(99.0, normalized));
+        
+        return normalized;
     }
     
     /**
@@ -313,22 +347,22 @@ public class ThreatScoreCalculator {
     }
     
     /**
-     * 判定威胁等级
+     * 判定威胁等级 (基于标准化评分 0-100)
      * 
-     * @param threatScore 威胁评分
+     * @param threatScore 标准化后的威胁评分 (1-100)
      * @return 威胁等级 (INFO/LOW/MEDIUM/HIGH/CRITICAL)
      */
     public String determineThreatLevel(double threatScore) {
-        if (threatScore > 200) {
-            return "CRITICAL";  // 严重威胁
-        } else if (threatScore > 100) {
-            return "HIGH";      // 高危威胁
-        } else if (threatScore > 50) {
-            return "MEDIUM";    // 中危威胁
-        } else if (threatScore > 10) {
-            return "LOW";       // 低危威胁
+        if (threatScore >= 80) {
+            return "CRITICAL";  // 严重威胁 (80-100)
+        } else if (threatScore >= 60) {
+            return "HIGH";      // 高危威胁 (60-79)
+        } else if (threatScore >= 40) {
+            return "MEDIUM";    // 中危威胁 (40-59)
+        } else if (threatScore >= 20) {
+            return "LOW";       // 低危威胁 (20-39)
         } else {
-            return "INFO";      // 信息级别
+            return "INFO";      // 信息级别 (1-19)
         }
     }
     
