@@ -17,9 +17,6 @@
 5. [API端点列表](#5-api端点列表)
 6. [API详细文档](#6-api详细文档)
    - 6.1 [执行威胁评估](#61-执行威胁评估)
-   - 6.2 [批量威胁评估](#62-批量威胁评估)
-   - 6.3 [执行缓解措施](#63-执行缓解措施)
-   - 6.4 [重新评估威胁](#64-重新评估威胁)
 7. [使用场景](#7-使用场景)
 8. [Java客户端完整示例](#8-java客户端完整示例)
 9. [最佳实践](#9-最佳实践)
@@ -126,12 +123,34 @@ threatScore = (attackCount × uniqueIps × uniquePorts)
 ### 核心公式
 
 ```java
-threatScore = (attackCount × uniqueIps × uniquePorts) 
-            × timeWeight 
-            × ipWeight 
-            × portWeight 
-            × deviceWeight
+// 原始评分计算
+rawScore = (attackCount × uniqueIps × uniquePorts) 
+         × timeWeight 
+         × ipWeight 
+         × portWeight 
+         × deviceWeight
+
+// 标准化到 (0,100) 范围 - 使用对数变换
+threatScore = min(99, max(1, log10(rawScore + 1) × 25))
 ```
+
+**标准化说明**:
+- 使用对数变换将大范围的原始评分压缩到 1-99 标准范围
+- 小威胁 (原始1-10): 映射到 1-25 左右
+- 中等威胁 (原始100-1000): 映射到 25-50 左右
+- 高威胁 (原始1000-10000): 映射到 50-75 左右
+- 极高威胁 (原始10000+): 映射到 75-99
+
+**评分映射对照表**:
+
+| 原始评分 | 标准化评分 | 威胁等级 | 说明 |
+|---------|-----------|---------|------|
+| 1 | 7.5 | INFO | 极低威胁 |
+| 10 | 26.0 | LOW | 单次探测 |
+| 100 | 50.1 | MEDIUM | 小规模扫描 |
+| 1,000 | 75.0 | HIGH | 中等规模攻击 |
+| 10,000 | 99.0 | CRITICAL | 大规模横向移动 |
+| 100,000+ | 99.0 | CRITICAL | 极高威胁 (上限) |
 
 ### 权重计算详解
 
@@ -175,15 +194,16 @@ threatScore = (attackCount × uniqueIps × uniquePorts)
 
 ### 评分示例
 
-**场景**: 深夜大规模横向移动攻击
+**场景**: 深夜大规模横向移动攻击 (5分钟时间窗口)
 
 ```
 输入数据:
-- attackCount = 150
-- uniqueIps = 5
-- uniquePorts = 3
-- uniqueDevices = 2
+- attackCount = 150 (5分钟内探测次数)
+- uniqueIps = 5 (5分钟内访问的诱饵IP数量)
+- uniquePorts = 3 (5分钟内尝试的端口种类)
+- uniqueDevices = 2 (5分钟内检测到的蜜罐设备数)
 - timestamp = 2025-01-15T02:30:00Z (深夜)
+- timeWindowSeconds = 300 (5分钟窗口)
 
 计算过程:
 - baseScore = 150 × 5 × 3 = 2250
@@ -192,9 +212,19 @@ threatScore = (attackCount × uniqueIps × uniquePorts)
 - portWeight = 1.2 (3个端口)
 - deviceWeight = 1.5 (2个设备)
 
-威胁评分 = 2250 × 1.2 × 1.5 × 1.2 × 1.5 = 7290.0
-威胁等级 = CRITICAL (> 200)
+原始评分 = 2250 × 1.2 × 1.5 × 1.2 × 1.5 = 7290.0
+标准化评分 = log10(7290 + 1) × 25 = 97.1
+威胁等级 = CRITICAL (80-99)
 ```
+
+**时间窗口对评分的影响**:
+
+| 时间窗口 | 典型场景 | 评分影响 |
+|---------|---------|---------|
+| 30秒 | 实时检测 | 更敏感,易检测瞬时爆发 |
+| 5分钟 | 标准评估 | 平衡灵敏度和准确性 |
+| 15分钟 | 趋势分析 | 更稳定,减少误报 |
+| 1小时 | 长期监控 | 适合检测慢速扫描 |
 
 ---
 
@@ -263,7 +293,7 @@ public class AssessmentResponse {
     private String attackIp;
     
     // 评分结果
-    private Double threatScore;
+    private Double threatScore;  // 标准化评分 (1-99)
     private ThreatLevel threatLevel;
     
     // 风险因子
@@ -299,11 +329,11 @@ public class RiskFactors {
  * 威胁等级枚举
  */
 public enum ThreatLevel {
-    INFO,        // < 10
-    LOW,         // 10-50
-    MEDIUM,      // 50-100
-    HIGH,        // 100-200
-    CRITICAL     // > 200
+    INFO,        // 1-19
+    LOW,         // 20-39
+    MEDIUM,      // 40-59
+    HIGH,        // 60-79
+    CRITICAL     // 80-99
 }
 ```
 
@@ -314,10 +344,12 @@ public enum ThreatLevel {
 | 方法 | 端点 | 功能 | 参数 |
 |------|------|------|------|
 | `POST` | `/api/v1/assessment/evaluate` | 执行威胁评估 | AssessmentRequest (body) |
-| `POST` | `/api/v1/assessment/batch-evaluate` | 批量威胁评估 | List<AssessmentRequest> (body) |
-| `POST` | `/api/v1/assessment/mitigation/{assessmentId}` | 执行缓解措施 | MitigationRequest (body) |
-| `POST` | `/api/v1/assessment/re-evaluate/{assessmentId}` | 重新评估威胁 | - |
 | `GET` | `/api/v1/assessment/{assessmentId}` | 获取评估详情 | assessmentId (path) |
+| `GET` | `/api/v1/assessment/assessments` | 查询评估列表 (分页) | customerId, page, size (query) |
+| `GET` | `/api/v1/assessment/statistics` | 获取威胁统计 | customerId (query) |
+| `GET` | `/api/v1/assessment/trend` | 获取威胁趋势 | customerId (query) |
+| `GET` | `/api/v1/assessment/port-distribution` | 获取端口分布 | customerId (query) |
+| `GET` | `/api/v1/assessment/health` | 健康检查 | - |
 
 ---
 
@@ -363,7 +395,9 @@ public enum ThreatLevel {
   "unique_ips": 5,
   "unique_ports": 3,
   "unique_devices": 2,
-  "timestamp": "2025-01-15T02:30:00Z"
+  "timestamp": "2025-01-15T02:30:00Z",
+  "port_list": [3306, 3389, 445],
+  "time_window_seconds": 300
 }
 ```
 
@@ -371,14 +405,16 @@ public enum ThreatLevel {
 
 | 字段 | 类型 | 必需 | 验证规则 | 说明 |
 |-----|------|------|---------|------|
-| `customer_id` | String | ✅ | @NotBlank | 客户ID (租户隔离) |
-| `attack_mac` | String | ✅ | @NotBlank | 被诱捕者MAC地址 |
-| `attack_ip` | String | ✅ | @NotBlank | 被诱捕者IP地址 |
-| `attack_count` | Integer | ✅ | @Min(1) | 探测次数 (≥1) |
-| `unique_ips` | Integer | ✅ | @Min(1) | 访问的诱饵IP数量 |
-| `unique_ports` | Integer | ✅ | @Min(1) | 尝试的端口种类 |
-| `unique_devices` | Integer | ✅ | @Min(1) | 检测到的蜜罐设备数 |
-| `timestamp` | String | ✅ | ISO8601 | 评估时间 |
+| `customer_id` | String | ✅ | @NotBlank, max=100 | 客户ID (租户隔离) |
+| `attack_mac` | String | ✅ | @NotBlank, max=17 | 被诱捕者MAC地址 |
+| `attack_ip` | String | ❌ | max=45 | 被诱捕者IP地址 (可选) |
+| `attack_count` | Integer | ✅ | @NotNull, @Min(1) | 探测次数 (≥1) |
+| `unique_ips` | Integer | ✅ | @NotNull, @Min(1) | 访问的诱饵IP数量 |
+| `unique_ports` | Integer | ✅ | @NotNull, @Min(1) | 尝试的端口种类 |
+| `unique_devices` | Integer | ✅ | @NotNull, @Min(1) | 检测到的蜜罐设备数 |
+| `timestamp` | String | ❌ | ISO8601 | 聚合窗口时间戳 (默认当前时间) |
+| `port_list` | Array<Integer> | ❌ | - | 具体端口列表 (用于精确权重计算, V4.0新增) |
+| `time_window_seconds` | Integer | ❌ | 30/300/900/3600 | 评估时间窗口(秒) (默认300秒=5分钟) |
 
 ### 请求示例 (curl)
 
@@ -395,7 +431,8 @@ curl -X POST http://localhost:8083/api/v1/assessment/evaluate \
     "unique_ips": 5,
     "unique_ports": 3,
     "unique_devices": 2,
-    "timestamp": "2025-01-15T02:30:00Z"
+    "timestamp": "2025-01-15T02:30:00Z",
+    "time_window_seconds": 300
   }'
 ```
 
@@ -455,6 +492,7 @@ public class ThreatAssessmentExample {
         request.setUniquePorts(uniquePorts);
         request.setUniqueDevices(uniqueDevices);
         request.setTimestamp(Instant.now().toString());
+        request.setTimeWindowSeconds(300);  // 5分钟时间窗口
         
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -504,6 +542,7 @@ public class ThreatAssessmentExample {
         private int uniquePorts;
         private int uniqueDevices;
         private String timestamp;
+        private Integer timeWindowSeconds;
         
         // Getters and Setters
         public String getCustomerId() { return customerId; }
@@ -529,6 +568,9 @@ public class ThreatAssessmentExample {
         
         public String getTimestamp() { return timestamp; }
         public void setTimestamp(String timestamp) { this.timestamp = timestamp; }
+        
+        public Integer getTimeWindowSeconds() { return timeWindowSeconds; }
+        public void setTimeWindowSeconds(Integer timeWindowSeconds) { this.timeWindowSeconds = timeWindowSeconds; }
     }
     
     public static class AssessmentResponse {
@@ -536,7 +578,7 @@ public class ThreatAssessmentExample {
         private String customerId;
         private String attackMac;
         private String attackIp;
-        private double threatScore;
+        private double threatScore;  // 标准化评分 (1-99)
         private String threatLevel;
         private RiskFactors riskFactors;
         private List<String> mitigationRecommendations;
@@ -589,7 +631,7 @@ public class ThreatAssessmentExample {
   "customer_id": "customer_a",
   "attack_mac": "04:42:1a:8e:e3:65",
   "attack_ip": "192.168.75.188",
-  "threat_score": 7290.0,
+  "threat_score": 97.1,
   "threat_level": "CRITICAL",
   "riskFactors": {
     "attack_count": 150,
@@ -1072,202 +1114,6 @@ public class MitigationExample {
 
 ---
 
-### 6.2 批量威胁评估
-
-**描述**: 批量评估多个攻击事件,最多100个/次。
-
-**端点**: `POST /api/v1/assessment/batch-evaluate`
-
-#### 请求体
-
-```json
-{
-  "assessments": [
-    {
-      "customer_id": "customer_a",
-      "attack_mac": "04:42:1a:8e:e3:65",
-      "attack_ip": "192.168.75.188",
-      "attack_count": 150,
-      "unique_ips": 5,
-      "unique_ports": 3,
-      "unique_devices": 2,
-      "timestamp": "2025-01-15T02:30:00Z"
-    },
-    {
-      "customer_id": "customer_a",
-      "attack_mac": "aa:bb:cc:dd:ee:ff",
-      "attack_ip": "10.0.1.50",
-      "attack_count": 30,
-      "unique_ips": 2,
-      "unique_ports": 1,
-      "unique_devices": 1,
-      "timestamp": "2025-01-15T14:30:00Z"
-    }
-  ]
-}
-```
-
-#### 请求示例 (curl)
-
-```bash
-curl -X POST http://localhost:8083/api/v1/assessment/batch-evaluate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "assessments": [
-      {
-        "customer_id": "customer_a",
-        "attack_mac": "04:42:1a:8e:e3:65",
-        "attack_ip": "192.168.75.188",
-        "attack_count": 150,
-        "unique_ips": 5,
-        "unique_ports": 3,
-        "unique_devices": 2,
-        "timestamp": "2025-01-15T02:30:00Z"
-      },
-      {
-        "customer_id": "customer_a",
-        "attack_mac": "aa:bb:cc:dd:ee:ff",
-        "attack_ip": "10.0.1.50",
-        "attack_count": 30,
-        "unique_ips": 2,
-        "unique_ports": 1,
-        "unique_devices": 1,
-        "timestamp": "2025-01-15T14:30:00Z"
-      }
-    ]
-  }'
-```
-
-#### 请求示例 (Java)
-
-```java
-/**
- * 批量评估威胁
- */
-public BatchAssessmentResponse batchEvaluate(List<AssessmentRequest> requests) {
-    String url = BASE_URL + "/batch-evaluate";
-    
-    Map<String, List<AssessmentRequest>> payload = new HashMap<>();
-    payload.put("assessments", requests);
-    
-    HttpEntity<Map<String, List<AssessmentRequest>>> httpRequest = new HttpEntity<>(payload);
-    
-    ResponseEntity<BatchAssessmentResponse> response = restTemplate.postForEntity(
-        url,
-        httpRequest,
-        BatchAssessmentResponse.class
-    );
-    
-    return response.getBody();
-}
-
-@Data
-public static class BatchAssessmentResponse {
-    private int totalCount;
-    private int successCount;
-    private int failedCount;
-    private List<AssessmentResponse> results;
-    private List<String> errors;
-}
-```
-
-#### 响应示例
-
-**HTTP 200 OK**
-
-```json
-{
-  "totalCount": 2,
-  "successCount": 2,
-  "failedCount": 0,
-  "results": [
-    {
-      "assessmentId": "12345",
-      "threat_score": 7290.0,
-      "threat_level": "CRITICAL"
-    },
-    {
-      "assessmentId": "12346",
-      "threat_score": 72.0,
-      "threat_level": "MEDIUM"
-    }
-  ],
-  "errors": []
-}
-```
-
----
-
-### 6.3 执行缓解措施
-
-(保留原有内容)
-
----
-
-### 6.4 重新评估威胁
-
-**描述**: 对已评估的威胁重新计算评分,用于算法调整后的重新评估。
-
-**端点**: `POST /api/v1/assessment/re-evaluate/{assessmentId}`
-
-#### 请求示例 (curl)
-
-```bash
-curl -X POST http://localhost:8083/api/v1/assessment/re-evaluate/12345
-```
-
-#### 请求示例 (Java)
-
-```java
-/**
- * 重新评估威胁
- */
-public AssessmentResponse reEvaluate(String assessmentId) {
-    String url = BASE_URL + "/re-evaluate/" + assessmentId;
-    
-    ResponseEntity<AssessmentResponse> response = restTemplate.postForEntity(
-        url,
-        null,
-        AssessmentResponse.class
-    );
-    
-    return response.getBody();
-}
-```
-
-#### 响应示例
-
-**HTTP 200 OK**
-
-```json
-{
-  "assessmentId": "12345",
-  "customer_id": "customer_a",
-  "attack_mac": "04:42:1a:8e:e3:65",
-  "attack_ip": "192.168.75.188",
-  "threat_score": 7500.0,
-  "threat_level": "CRITICAL",
-  "riskFactors": {
-    "attack_count": 150,
-    "unique_ips": 5,
-    "unique_ports": 3,
-    "unique_devices": 2,
-    "timeWeight": 1.2,
-    "ipWeight": 1.5,
-    "portWeight": 1.2,
-    "deviceWeight": 1.5
-  },
-  "mitigationRecommendations": [
-    "立即隔离攻击源 192.168.75.188",
-    "检查同网段其他主机是否被攻陷"
-  ],
-  "assessmentTime": "2025-01-15T02:30:00Z",
-  "created_at": "2025-01-15T02:35:00Z"
-}
-```
-
----
-
 ## 7. 使用场景
 
 ### 场景1: 自动威胁评估和缓解
@@ -1279,8 +1125,7 @@ public AssessmentResponse reEvaluate(String assessmentId) {
 ```java
 public class AutoMitigationService {
     
-    private final ThreatAssessmentExample assessmentClient;
-    private final MitigationExample mitigationClient;
+    private final ThreatAssessmentClient assessmentClient;
     
     /**
      * 自动评估和缓解流程
@@ -1292,52 +1137,101 @@ public class AutoMitigationService {
             int attackCount,
             int uniqueIps,
             int uniquePorts,
-            int uniqueDevices) {
+            int uniqueDevices,
+            int timeWindowSeconds) {
         
-        // 1. 执行威胁评估
+        // 1. 执行威胁评估 (指定时间窗口)
         AssessmentResponse assessment = assessmentClient.evaluateThreat(
             customerId, attackMac, attackIp,
-            attackCount, uniqueIps, uniquePorts, uniqueDevices
+            attackCount, uniqueIps, uniquePorts, uniqueDevices,
+            timeWindowSeconds  // 指定时间窗口
         );
         
         System.out.println("Threat assessed: " + assessment.getThreatLevel() 
-                          + " (Score: " + assessment.getThreatScore() + ")");
+                          + " (Score: " + assessment.getThreatScore() 
+                          + ", Window: " + timeWindowSeconds + "s)");
         
-        // 2. 根据威胁等级自动缓解
+        // 2. 根据威胁等级和时间窗口调整响应策略
         if ("CRITICAL".equals(assessment.getThreatLevel())) {
-            // CRITICAL: 立即隔离
-            mitigationClient.executeMitigation(
-                assessment.getAssessmentId(),
-                "ISOLATE",
-                true,
-                "CRITICAL级别威胁,自动隔离",
-                "system-auto"
-            );
-            System.out.println("✅ Attack source isolated automatically");
-            
-        } else if ("HIGH".equals(assessment.getThreatLevel())) {
-            // HIGH: 阻断危险端口
-            mitigationClient.executeMitigation(
-                assessment.getAssessmentId(),
-                "BLOCK",
-                true,
-                "HIGH级别威胁,阻断高危端口",
-                "system-auto"
-            );
-            System.out.println("✅ Dangerous ports blocked");
-            
-        } else if ("MEDIUM".equals(assessment.getThreatLevel())) {
-            // MEDIUM: 发送告警
-            mitigationClient.executeMitigation(
-                assessment.getAssessmentId(),
-                "ALERT",
-                true,
-                "MEDIUM级别威胁,发送告警",
-                "system-auto"
-            );
-            System.out.println("✅ Alert sent to security team");
+            if (timeWindowSeconds <= 60) {
+                // 短时间窗口内的CRITICAL威胁 - 立即隔离
+                System.out.println("⚠️ IMMEDIATE: Short-window CRITICAL threat detected");
+                executeImmediateIsolation(assessment);
+            } else {
+                // 长时间窗口内的CRITICAL威胁 - 评估持续性
+                System.out.println("⚠️ SUSTAINED: Long-window CRITICAL threat detected");
+                executeSustainedResponse(assessment);
+            }
         }
     }
+    
+    private void executeImmediateIsolation(AssessmentResponse assessment) {
+        // 立即隔离逻辑
+        System.out.println("Executing immediate isolation for: " + assessment.getAttackIp());
+    }
+    
+    private void executeSustainedResponse(AssessmentResponse assessment) {
+        // 持续性响应逻辑
+        System.out.println("Executing sustained response for: " + assessment.getAttackIp());
+    }
+}
+```
+
+### 场景2: 基于时间窗口的动态评估
+
+**需求**: 根据不同的监控场景使用不同的时间窗口进行评估。
+
+**实现**:
+
+```java
+public class DynamicAssessmentService {
+    
+    /**
+     * 根据场景选择合适的时间窗口
+     */
+    public AssessmentResponse assessByScenario(
+            String customerId,
+            String attackMac,
+            String attackIp,
+            int attackCount,
+            int uniqueIps,
+            int uniquePorts,
+            int uniqueDevices,
+            AssessmentScenario scenario) {
+        
+        int timeWindowSeconds = getTimeWindowForScenario(scenario);
+        
+        return assessmentClient.evaluateThreat(
+            customerId, attackMac, attackIp,
+            attackCount, uniqueIps, uniquePorts, uniqueDevices,
+            timeWindowSeconds
+        );
+    }
+    
+    /**
+     * 根据场景确定时间窗口
+     */
+    private int getTimeWindowForScenario(AssessmentScenario scenario) {
+        switch (scenario) {
+            case REAL_TIME_MONITORING:
+                return 30;    // 30秒 - 实时检测
+            case STANDARD_ASSESSMENT:
+                return 300;   // 5分钟 - 标准评估
+            case TREND_ANALYSIS:
+                return 900;   // 15分钟 - 趋势分析
+            case LONG_TERM_MONITORING:
+                return 3600;  // 1小时 - 长期监控
+            default:
+                return 300;   // 默认5分钟
+        }
+    }
+}
+
+enum AssessmentScenario {
+    REAL_TIME_MONITORING,    // 实时监控
+    STANDARD_ASSESSMENT,     // 标准评估
+    TREND_ANALYSIS,         // 趋势分析
+    LONG_TERM_MONITORING     // 长期监控
 }
 ```
 
@@ -1393,198 +1287,6 @@ public class BatchAssessmentService {
         System.out.println("- CRITICAL: " + criticalCount);
         
         return results;
-    }
-}
-```
-
----
-
-## 7. 使用场景
-
-### 场景1: 自动威胁评估和缓解
-
-**需求**: 检测到CRITICAL威胁时,自动评估并隔离攻击源。
-
-**实现**:
-
-```java
-public class AutoMitigationService {
-    
-    private final ThreatAssessmentExample assessmentClient;
-    private final MitigationExample mitigationClient;
-    
-    /**
-     * 自动评估和缓解流程
-     */
-    public void handleThreatAlert(
-            String customerId,
-            String attackMac,
-            String attackIp,
-            int attackCount,
-            int uniqueIps,
-            int uniquePorts,
-            int uniqueDevices) {
-        
-        // 1. 执行威胁评估
-        AssessmentResponse assessment = assessmentClient.evaluateThreat(
-            customerId, attackMac, attackIp,
-            attackCount, uniqueIps, uniquePorts, uniqueDevices
-        );
-        
-        System.out.println("Threat assessed: " + assessment.getThreatLevel() 
-                          + " (Score: " + assessment.getThreatScore() + ")");
-        
-        // 2. 根据威胁等级自动缓解
-        if ("CRITICAL".equals(assessment.getThreatLevel())) {
-            // CRITICAL: 立即隔离
-            mitigationClient.executeMitigation(
-                assessment.getAssessmentId(),
-                "ISOLATE",
-                true,
-                "CRITICAL级别威胁,自动隔离",
-                "system-auto"
-            );
-            System.out.println("✅ Attack source isolated automatically");
-            
-        } else if ("HIGH".equals(assessment.getThreatLevel())) {
-            // HIGH: 阻断危险端口
-            mitigationClient.executeMitigation(
-                assessment.getAssessmentId(),
-                "BLOCK",
-                true,
-                "HIGH级别威胁,阻断高危端口",
-                "system-auto"
-            );
-            System.out.println("✅ Dangerous ports blocked");
-            
-        } else if ("MEDIUM".equals(assessment.getThreatLevel())) {
-            // MEDIUM: 发送告警
-            mitigationClient.executeMitigation(
-                assessment.getAssessmentId(),
-                "ALERT",
-                true,
-                "MEDIUM级别威胁,发送告警",
-                "system-auto"
-            );
-            System.out.println("✅ Alert sent to security team");
-        }
-    }
-}
-```
-
-### 场景2: 批量威胁评估
-
-**需求**: 对过去1小时的所有攻击事件进行批量评估。
-
-**实现**:
-
-```java
-public class BatchAssessmentService {
-    
-    /**
-     * 批量评估威胁
-     */
-    public List<AssessmentResponse> batchEvaluate(List<AttackEvent> events) {
-        List<AssessmentResponse> results = new ArrayList<>();
-        
-        for (AttackEvent event : events) {
-            try {
-                AssessmentResponse assessment = assessmentClient.evaluateThreat(
-                    event.getCustomerId(),
-                    event.getAttackMac(),
-                    event.getAttackIp(),
-                    event.getAttackCount(),
-                    event.getUniqueIps(),
-                    event.getUniquePorts(),
-                    event.getUniqueDevices()
-                );
-                
-                results.add(assessment);
-                
-                // 记录高危威胁
-                if ("HIGH".equals(assessment.getThreatLevel()) || 
-                    "CRITICAL".equals(assessment.getThreatLevel())) {
-                    System.err.println("⚠️ High-risk threat detected: " 
-                                      + assessment.getAttackIp());
-                }
-                
-            } catch (Exception e) {
-                System.err.println("Failed to assess: " + event.getAttackIp() 
-                                  + " - " + e.getMessage());
-            }
-        }
-        
-        // 统计
-        long criticalCount = results.stream()
-            .filter(r -> "CRITICAL".equals(r.getThreatLevel()))
-            .count();
-        
-        System.out.println("Batch assessment completed:");
-        System.out.println("- Total: " + results.size());
-        System.out.println("- CRITICAL: " + criticalCount);
-        
-        return results;
-    }
-}
-```
-
----
-
-### 场景3: Flink流处理集成
-
-**需求**: Flink流处理引擎完成聚合后,自动调用评估API。
-
-**实现**:
-
-```java
-/**
- * Flink Sink: 将聚合结果发送到威胁评估服务
- */
-public class ThreatAssessmentSink extends RichSinkFunction<AggregatedAttackData> {
-    
-    private transient RestTemplate restTemplate;
-    private static final String ASSESSMENT_URL = "http://threat-assessment:8081/api/v1/assessment/evaluate";
-    
-    @Override
-    public void open(Configuration parameters) {
-        restTemplate = new RestTemplate();
-    }
-    
-    @Override
-    public void invoke(AggregatedAttackData data, Context context) throws Exception {
-        // 构建评估请求
-        AssessmentRequest request = new AssessmentRequest();
-        request.setCustomerId(data.getCustomerId());
-        request.setAttackMac(data.getAttackMac());
-        request.setAttackIp(data.getAttackIp());
-        request.setAttackCount(data.getAttackCount());
-        request.setUniqueIps(data.getUniqueIps());
-        request.setUniquePorts(data.getUniquePorts());
-        request.setUniqueDevices(data.getUniqueDevices());
-        request.setTimestamp(Instant.now().toString());
-        
-        try {
-            // 调用评估API
-            ResponseEntity<AssessmentResponse> response = restTemplate.postForEntity(
-                ASSESSMENT_URL,
-                request,
-                AssessmentResponse.class
-            );
-            
-            AssessmentResponse assessment = response.getBody();
-            
-            logger.info("Threat assessed: customerId={}, attackMac={}, score={}, level={}",
-                       data.getCustomerId(),
-                       data.getAttackMac(),
-                       assessment.getThreatScore(),
-                       assessment.getThreatLevel());
-            
-        } catch (Exception e) {
-            logger.error("Failed to assess threat: customerId={}, error={}",
-                        data.getCustomerId(),
-                        e.getMessage(),
-                        e);
-        }
     }
 }
 ```
@@ -1607,10 +1309,8 @@ import java.util.*;
 /**
  * 威胁评估客户端 - 完整实现
  * 
- * <p>提供威胁评估的所有操作,包括:
- * - 单个/批量威胁评估
- * - 缓解措施执行
- * - 重新评估
+ * <p>提供威胁评估的核心操作:
+ * - 单个威胁评估
  * - 评估结果查询
  * 
  * @author Security Team
@@ -1661,6 +1361,23 @@ public class ThreatAssessmentClient {
             int uniquePorts,
             int uniqueDevices) {
         
+        return evaluateCriticalThreat(customerId, attackMac, attackIp, 
+                                    attackCount, uniqueIps, uniquePorts, uniqueDevices, 300);
+    }
+    
+    /**
+     * 评估CRITICAL级别威胁 (指定时间窗口)
+     */
+    public AssessmentResponse evaluateCriticalThreat(
+            String customerId,
+            String attackMac,
+            String attackIp,
+            int attackCount,
+            int uniqueIps,
+            int uniquePorts,
+            int uniqueDevices,
+            int timeWindowSeconds) {
+        
         AssessmentRequest request = AssessmentRequest.builder()
             .customerId(customerId)
             .attackMac(attackMac)
@@ -1670,88 +1387,10 @@ public class ThreatAssessmentClient {
             .uniquePorts(uniquePorts)
             .uniqueDevices(uniqueDevices)
             .timestamp(Instant.now().toString())
+            .timeWindowSeconds(timeWindowSeconds)
             .build();
         
         return evaluate(request);
-    }
-    
-    /**
-     * 批量评估威胁
-     */
-    public BatchAssessmentResponse batchEvaluate(List<AssessmentRequest> requests) {
-        String url = BASE_URL + "/batch-evaluate";
-        
-        Map<String, List<AssessmentRequest>> payload = new HashMap<>();
-        payload.put("assessments", requests);
-        
-        HttpEntity<Map<String, List<AssessmentRequest>>> httpRequest = new HttpEntity<>(payload);
-        
-        ResponseEntity<BatchAssessmentResponse> response = restTemplate.postForEntity(
-            url,
-            httpRequest,
-            BatchAssessmentResponse.class
-        );
-        
-        return response.getBody();
-    }
-    
-    /**
-     * 重新评估威胁
-     */
-    public AssessmentResponse reEvaluate(String assessmentId) {
-        String url = BASE_URL + "/re-evaluate/" + assessmentId;
-        
-        ResponseEntity<AssessmentResponse> response = restTemplate.postForEntity(
-            url,
-            null,
-            AssessmentResponse.class
-        );
-        
-        return response.getBody();
-    }
-    
-    // ==================== 缓解操作 ====================
-    
-    /**
-     * 执行缓解措施
-     */
-    public MitigationResponse executeMitigation(
-            String assessmentId,
-            String mitigationType,
-            boolean autoExecute,
-            String reason,
-            String executedBy) {
-        
-        String url = BASE_URL + "/mitigation/" + assessmentId;
-        
-        MitigationRequest request = new MitigationRequest();
-        request.setMitigationType(mitigationType);
-        request.setAutoExecute(autoExecute);
-        request.setReason(reason);
-        request.setExecutedBy(executedBy);
-        
-        HttpEntity<MitigationRequest> httpRequest = new HttpEntity<>(request);
-        
-        ResponseEntity<MitigationResponse> response = restTemplate.postForEntity(
-            url,
-            httpRequest,
-            MitigationResponse.class
-        );
-        
-        return response.getBody();
-    }
-    
-    /**
-     * 自动隔离CRITICAL威胁
-     */
-    public MitigationResponse isolateCriticalThreat(String assessmentId) {
-        return executeMitigation(
-            assessmentId,
-            "ISOLATE",
-            true,
-            "CRITICAL级别威胁,自动隔离",
-            "system-auto"
-        );
     }
     
     // ==================== 查询操作 ====================
@@ -1779,6 +1418,7 @@ public class ThreatAssessmentClient {
         private Integer uniquePorts;
         private Integer uniqueDevices;
         private String timestamp;
+        private Integer timeWindowSeconds;
     }
     
     @Data
@@ -1787,7 +1427,7 @@ public class ThreatAssessmentClient {
         private String customerId;
         private String attackMac;
         private String attackIp;
-        private Double threatScore;
+        private Double threatScore;  // 标准化评分 (1-99)
         private String threatLevel;
         private RiskFactors riskFactors;
         private List<String> mitigationRecommendations;
@@ -1806,32 +1446,6 @@ public class ThreatAssessmentClient {
         private Double portWeight;
         private Double deviceWeight;
     }
-    
-    @Data
-    public static class MitigationRequest {
-        private String mitigationType;
-        private Boolean autoExecute;
-        private String reason;
-        private String executedBy;
-    }
-    
-    @Data
-    public static class MitigationResponse {
-        private String mitigationId;
-        private String assessmentId;
-        private String status;
-        private List<String> actionsTaken;
-        private String executionTime;
-    }
-    
-    @Data
-    public static class BatchAssessmentResponse {
-        private Integer totalCount;
-        private Integer successCount;
-        private Integer failedCount;
-        private List<AssessmentResponse> results;
-        private List<String> errors;
-    }
 }
 ```
 
@@ -1843,33 +1457,33 @@ public class ThreatAssessmentExample {
     public static void main(String[] args) {
         ThreatAssessmentClient client = new ThreatAssessmentClient();
         
-        // 1. 评估威胁
-        AssessmentResponse assessment = client.evaluateCriticalThreat(
+        // 1. 使用默认5分钟时间窗口评估威胁
+        AssessmentResponse assessment1 = client.evaluateCriticalThreat(
             "customer_a",
             "04:42:1a:8e:e3:65",
             "192.168.75.188",
-            150,
-            5,
-            3,
-            2
+            150, 5, 3, 2
         );
         
-        System.out.println("Assessment ID: " + assessment.getAssessmentId());
-        System.out.println("Threat Score: " + assessment.getThreatScore());
-        System.out.println("Threat Level: " + assessment.getThreatLevel());
+        // 2. 使用30秒时间窗口进行实时检测
+        AssessmentResponse assessment2 = client.evaluateCriticalThreat(
+            "customer_a",
+            "04:42:1a:8e:e3:65",
+            "192.168.75.188",
+            50, 3, 2, 1, 30  // 30秒窗口
+        );
         
-        // 2. 如果是CRITICAL,自动隔离
-        if ("CRITICAL".equals(assessment.getThreatLevel())) {
-            MitigationResponse mitigation = client.isolateCriticalThreat(
-                assessment.getAssessmentId()
-            );
-            
-            System.out.println("Mitigation Status: " + mitigation.getStatus());
-            System.out.println("Actions Taken:");
-            mitigation.getActionsTaken().forEach(action -> 
-                System.out.println("- " + action)
-            );
-        }
+        // 3. 使用15分钟时间窗口进行趋势分析
+        AssessmentResponse assessment3 = client.evaluateCriticalThreat(
+            "customer_a",
+            "04:42:1a:8e:e3:65",
+            "192.168.75.188",
+            300, 8, 5, 3, 900  // 15分钟窗口
+        );
+        
+        System.out.println("Default window (5min): " + assessment1.getThreatScore());
+        System.out.println("Real-time window (30s): " + assessment2.getThreatScore());
+        System.out.println("Trend window (15min): " + assessment3.getThreatScore());
     }
 }
 ```
@@ -1899,18 +1513,33 @@ for (AssessmentRequest request : requests) {
 }
 ```
 
-#### 2. 使用批量API提高效率
+#### 2. 循环处理多个评估请求
 
 ```java
-// ✅ 推荐: 批量评估
-List<AssessmentRequest> batch = prepareRequests(100);
-BatchAssessmentResponse result = client.batchEvaluate(batch);
+// ✅ 推荐: 循环评估多个请求
+List<AssessmentRequest> requests = prepareRequests(100);
+List<AssessmentResponse> results = new ArrayList<>();
+
+for (AssessmentRequest request : requests) {
+    try {
+        AssessmentResponse response = client.evaluate(request);
+        results.add(response);
+        
+        // 记录高危威胁
+        if ("HIGH".equals(response.getThreatLevel()) || 
+            "CRITICAL".equals(response.getThreatLevel())) {
+            System.err.println("⚠️ High-risk threat detected: " + response.getAttackIp());
+        }
+    } catch (Exception e) {
+        System.err.println("Failed to assess: " + request.getAttackIp() + " - " + e.getMessage());
+    }
+}
 ```
 
 ```java
-// ❌ 不推荐: 循环单个评估
+// ❌ 不推荐: 同步阻塞处理大量评估
 for (AssessmentRequest request : requests) {
-    client.evaluate(request);  // 100次HTTP请求
+    client.evaluate(request);  // 阻塞，效率低
 }
 ```
 
@@ -2075,6 +1704,6 @@ kubectl logs -f deployment/threat-assessment -n threat-detection
 
 **文档结束**
 
-*最后更新: 2025-10-16*  
-*版本: 2.0*  
+*最后更新: 2025-11-04*  
+*版本: 2.1*  
 *维护团队: Security Platform Team*

@@ -1,8 +1,8 @@
 # 威胁评估系统概述
 
 **服务名称**: Threat Assessment Service  
-**服务端口**: 8081  
-**基础路径**: `http://localhost:8081/api/v1/assessment`  
+**服务端口**: 8083  
+**基础路径**: `http://localhost:8083/api/v1/assessment`  
 **版本**: 1.0  
 **更新日期**: 2025-01-16
 
@@ -35,10 +35,12 @@ Kafka (threat-alerts) → Threat Assessment Service → PostgreSQL (threat_asses
 ### 核心能力
 
 1. **实时威胁评分**: 基于蜜罐机制的多维度威胁评分算法
-2. **历史评估查询**: 按时间、客户、威胁等级查询历史评估
-3. **趋势分析**: 时间序列威胁趋势分析和可视化
-4. **自动缓解**: 根据威胁等级自动执行缓解措施
-5. **多租户隔离**: 完整的客户数据隔离和安全保障
+2. **时间窗口评估**: 支持30秒/5分钟/15分钟/1小时等不同时间窗口的威胁评估
+3. **时间段分布分析**: 统计不同时间段的威胁发生频率和模式识别
+4. **历史评估查询**: 按时间、客户、威胁等级查询历史评估
+5. **趋势分析**: 时间序列威胁趋势分析和可视化
+6. **自动缓解**: 根据威胁等级自动执行缓解措施
+7. **多租户隔离**: 完整的客户数据隔离和安全保障
 
 ---
 
@@ -54,7 +56,7 @@ Kafka (threat-alerts) → Threat Assessment Service → PostgreSQL (threat_asses
          │ Kafka: threat-alerts
          ↓
 ┌─────────────────────────────────────────────────┐
-│    Threat Assessment Service (Port 8081)        │
+│    Threat Assessment Service (Port 8083)        │
 │  ┌─────────────────────────────────────────┐   │
 │  │  AssessmentController (REST API)        │   │
 │  └──────────────┬──────────────────────────┘   │
@@ -98,6 +100,7 @@ Kafka (threat-alerts) → Threat Assessment Service → PostgreSQL (threat_asses
 - 聚合攻击数据 (来自Flink流处理)
 - 包含: attackCount, uniqueIps, uniquePorts, uniqueDevices
 - 蜜罐机制数据: response_ip (诱饵IP), response_port (攻击意图)
+- 时间窗口参数: 30秒/5分钟/15分钟/1小时 (可选)
 
 **处理**:
 1. 应用多维度评分算法
@@ -105,13 +108,28 @@ Kafka (threat-alerts) → Threat Assessment Service → PostgreSQL (threat_asses
 3. 计算IP权重 (横向移动范围)
 4. 计算端口权重 (攻击意图多样性)
 5. 计算设备权重 (多设备协同)
+6. 根据时间窗口调整评估灵敏度
 
 **输出**:
 - 威胁评分 (0.0 - 无限大)
 - 威胁等级 (INFO/LOW/MEDIUM/HIGH/CRITICAL)
 - 评估详情和建议
 
-### 2. 历史查询能力
+### 2. 时间段分布分析
+
+**分析维度**:
+- **小时分布**: 24小时威胁发生频率
+- **工作时间**: 工作日vs周末对比
+- **星期分布**: 周一到周日威胁统计
+- **异常检测**: 识别异常高峰时段
+
+**应用场景**:
+- 识别攻击高峰期
+- 优化安全监控策略
+- 预测威胁趋势
+- 异常行为检测
+
+### 3. 历史查询能力
 
 **支持查询维度**:
 - 按客户ID查询 (租户隔离)
@@ -253,7 +271,8 @@ IP权重 (5个) = 1.5
   "unique_ips": 5,
   "unique_ports": 3,
   "unique_devices": 2,
-  "timestamp": "2025-01-15T02:30:00Z"
+  "timestamp": "2025-01-15T02:30:00Z",
+  "time_window_seconds": 300
 }
 ```
 
@@ -269,6 +288,7 @@ IP权重 (5个) = 1.5
 | `unique_ports` | Integer | ✅ | 尝试的端口种类 |
 | `unique_devices` | Integer | ✅ | 检测到的蜜罐设备数 |
 | `timestamp` | String (ISO8601) | ✅ | 评估时间 |
+| `time_window_seconds` | Integer | ❌ | 评估时间窗口(秒) (30/300/900/3600, 默认300) |
 
 ### AssessmentResponse (评估响应)
 
@@ -372,20 +392,20 @@ IP权重 (5个) = 1.5
 | `POST` | `/api/v1/assessment/evaluate` | 执行威胁评估 | [详细文档](./threat_assessment_evaluation_api.md) |
 | `GET` | `/api/v1/assessment/{assessmentId}` | 获取评估详情 | [详细文档](./threat_assessment_query_api.md#获取评估详情) |
 | `GET` | `/api/v1/assessment/trends` | 威胁趋势分析 | [详细文档](./threat_assessment_query_api.md#威胁趋势分析) |
-| `POST` | `/api/v1/assessment/mitigation/{assessmentId}` | 执行缓解措施 | [详细文档](./threat_assessment_evaluation_api.md#执行缓解措施) |
+| `GET` | `/api/v1/assessment/time-distribution` | 时间段分布统计 | [详细文档](./threat_assessment_query_api.md#时间段分布统计) |
 | `GET` | `/api/v1/assessment/health` | 健康检查 | [详细文档](./threat_assessment_query_api.md#健康检查) |
 
 ### 按功能分类
 
-#### 核心评估 (2个端点)
+#### 核心评估 (1个端点)
 - **POST /evaluate** - 执行威胁评估
-- **POST /mitigation/{assessmentId}** - 执行缓解措施
 
 → 详见 [威胁评估API文档](./threat_assessment_evaluation_api.md)
 
-#### 查询分析 (3个端点)
+#### 查询分析 (4个端点)
 - **GET /{assessmentId}** - 获取评估详情
 - **GET /trends** - 威胁趋势分析
+- **GET /time-distribution** - 时间段分布统计
 - **GET /health** - 健康检查
 
 → 详见 [查询和趋势API文档](./threat_assessment_query_api.md)
@@ -404,11 +424,11 @@ IP权重 (5个) = 1.5
 
 1. **[威胁评估API - 评估操作](./threat_assessment_evaluation_api.md)**
    - POST /evaluate - 执行威胁评估
-   - POST /mitigation/{assessmentId} - 执行缓解措施
 
 2. **[威胁评估API - 查询分析](./threat_assessment_query_api.md)**
    - GET /{assessmentId} - 获取评估详情
    - GET /trends - 威胁趋势分析
+   - GET /time-distribution - 时间段分布统计
    - GET /health - 健康检查
 
 3. **[威胁评估客户端指南](./threat_assessment_client_guide.md)**

@@ -1,10 +1,10 @@
 # 威胁评估API - 查询和趋势分析
 
 **服务名称**: Threat Assessment Service  
-**服务端口**: 8081  
+**服务端口**: 8083  
 **基础路径**: `/api/v1/assessment`  
 **文档版本**: 2.0  
-**更新日期**: 2025-10-16
+**更新日期**: 2025-11-04
 
 ---
 
@@ -20,7 +20,8 @@
    - 5.3 [威胁趋势分析](#53-威胁趋势分析)
    - 5.4 [威胁统计](#54-威胁统计)
    - 5.5 [TOP攻击者](#55-top攻击者)
-   - 5.6 [健康检查](#56-健康检查)
+   - 5.6 [时间段分布统计](#56-时间段分布统计)
+   - 5.7 [健康检查](#57-健康检查)
 6. [使用场景](#6-使用场景)
 7. [Java客户端完整示例](#7-java客户端完整示例)
 8. [最佳实践](#8-最佳实践)
@@ -196,6 +197,7 @@ public class TrendSummary {
 | `GET` | `/api/v1/assessment/trends` | 威胁趋势分析 | 时间范围、粒度 (query) |
 | `GET` | `/api/v1/assessment/statistics` | 威胁统计 | customerId, 时间范围 (query) |
 | `GET` | `/api/v1/assessment/top-attackers` | TOP攻击者 | customerId, topN (query) |
+| `GET` | `/api/v1/assessment/time-distribution` | 时间段分布统计 | customerId, 时间范围 (query) |
 | `GET` | `/api/v1/assessment/health` | 健康检查 | - |
 
 ---
@@ -214,6 +216,7 @@ public class TrendSummary {
 |------|------|------|
 | `GET` | `/api/v1/assessment/{assessmentId}` | 获取评估详情 |
 | `GET` | `/api/v1/assessment/trends` | 威胁趋势分析 |
+| `GET` | `/api/v1/assessment/time-distribution` | 时间段分布统计 |
 | `GET` | `/api/v1/assessment/health` | 健康检查 |
 
 **相关文档**: [威胁评估概述](./threat_assessment_overview.md) | [评估操作API](./threat_assessment_evaluation_api.md)
@@ -494,7 +497,336 @@ public class TrendAnalysisExample {
 ### 请求示例 (curl)
 
 ```bash
-curl -X GET http://localhost:8081/api/v1/assessment/health
+curl -X GET http://localhost:8083/api/v1/assessment/health
+```
+
+### 请求示例 (Java)
+
+```java
+public boolean checkHealth() {
+    try {
+        HealthStatus status = restTemplate.getForObject(
+            BASE_URL + "/health",
+            HealthStatus.class
+        );
+        return "UP".equals(status.getStatus());
+    } catch (Exception e) {
+        return false;
+    }
+}
+```
+
+### 响应示例
+
+**HTTP 200 OK**
+
+```json
+{
+  "status": "UP",
+  "components": {
+    "database": "UP",
+    "kafka": "UP"
+  }
+}
+```
+
+---
+
+### 5.6 时间段分布统计
+
+**描述**: 统计不同时间段的威胁发生频率和分布情况，帮助识别攻击高峰期和异常模式。
+
+**端点**: `GET /api/v1/assessment/time-distribution`
+
+#### 查询参数
+
+| 参数 | 类型 | 必需 | 默认值 | 说明 |
+|-----|------|------|--------|------|
+| `customer_id` | String | ✅ | - | 客户ID |
+| `startTime` | String | ❌ | 7天前 | 开始时间 (ISO8601) |
+| `endTime` | String | ❌ | 现在 | 结束时间 (ISO8601) |
+| `groupBy` | String | ❌ | HOUR_OF_DAY | 分组方式 (HOUR_OF_DAY/DAY_OF_WEEK/WORKING_HOURS) |
+
+**分组方式说明**:
+
+| 分组方式 | 说明 | 示例输出 |
+|---------|------|---------|
+| `HOUR_OF_DAY` | 按24小时分组 | 0-23点各小时威胁数 |
+| `DAY_OF_WEEK` | 按星期分组 | 周一到周日威胁数 |
+| `WORKING_HOURS` | 按工作时间分组 | 工作时间/非工作时间 |
+
+#### 请求示例 (curl)
+
+```bash
+# 按小时统计过去7天的威胁分布
+curl -X GET "http://localhost:8083/api/v1/assessment/time-distribution?customerId=customer_a&groupBy=HOUR_OF_DAY"
+
+# 按工作时间统计威胁分布
+curl -X GET "http://localhost:8083/api/v1/assessment/time-distribution?customerId=customer_a&groupBy=WORKING_HOURS"
+
+# 按星期统计威胁分布
+curl -X GET "http://localhost:8083/api/v1/assessment/time-distribution?customerId=customer_a&groupBy=DAY_OF_WEEK&startTime=2025-01-01T00:00:00Z&endTime=2025-01-31T23:59:59Z"
+```
+
+#### 请求示例 (Java)
+
+```java
+public TimeDistributionResponse getTimeDistribution(
+        String customerId,
+        String startTime,
+        String endTime,
+        String groupBy) {
+    
+    UriComponentsBuilder builder = UriComponentsBuilder
+        .fromHttpUrl(BASE_URL + "/time-distribution")
+        .queryParam("customer_id", customerId);
+    
+    if (startTime != null) {
+        builder.queryParam("startTime", startTime);
+    }
+    if (endTime != null) {
+        builder.queryParam("endTime", endTime);
+    }
+    if (groupBy != null) {
+        builder.queryParam("groupBy", groupBy);
+    }
+    
+    return restTemplate.getForObject(
+        builder.toUriString(),
+        TimeDistributionResponse.class
+    );
+}
+```
+
+#### 响应示例
+
+**HTTP 200 OK**
+
+按小时分组 (HOUR_OF_DAY):
+```json
+{
+  "customer_id": "customer_a",
+  "timeRange": {
+    "start": "2025-01-08T00:00:00Z",
+    "end": "2025-01-15T23:59:59Z"
+  },
+  "groupBy": "HOUR_OF_DAY",
+  "totalThreats": 1250,
+  "distribution": [
+    {
+      "timeSlot": "00:00-01:00",
+      "threatCount": 85,
+      "percentage": 6.8,
+      "averageScore": 125.5,
+      "maxScore": 7290.0,
+      "levelBreakdown": {
+        "CRITICAL": 12,
+        "HIGH": 25,
+        "MEDIUM": 30,
+        "LOW": 15,
+        "INFO": 3
+      }
+    },
+    {
+      "timeSlot": "01:00-02:00",
+      "threatCount": 95,
+      "percentage": 7.6,
+      "averageScore": 145.2,
+      "maxScore": 8500.0,
+      "levelBreakdown": {
+        "CRITICAL": 18,
+        "HIGH": 32,
+        "MEDIUM": 28,
+        "LOW": 12,
+        "INFO": 5
+      }
+    },
+    {
+      "timeSlot": "02:00-03:00",
+      "threatCount": 120,
+      "percentage": 9.6,
+      "averageScore": 180.8,
+      "maxScore": 9200.0,
+      "levelBreakdown": {
+        "CRITICAL": 25,
+        "HIGH": 45,
+        "MEDIUM": 35,
+        "LOW": 10,
+        "INFO": 5
+      }
+    },
+    {
+      "timeSlot": "09:00-10:00",
+      "threatCount": 45,
+      "percentage": 3.6,
+      "averageScore": 85.3,
+      "maxScore": 1200.0,
+      "levelBreakdown": {
+        "CRITICAL": 2,
+        "HIGH": 8,
+        "MEDIUM": 15,
+        "LOW": 15,
+        "INFO": 5
+      }
+    }
+  ],
+  "insights": {
+    "peakHour": "02:00-03:00",
+    "peakThreatCount": 120,
+    "offPeakHour": "09:00-10:00",
+    "offPeakThreatCount": 45,
+    "nightTimeRatio": 0.68,
+    "workingHoursRatio": 0.32
+  }
+}
+```
+
+按工作时间分组 (WORKING_HOURS):
+```json
+{
+  "customer_id": "customer_a",
+  "timeRange": {
+    "start": "2025-01-08T00:00:00Z",
+    "end": "2025-01-15T23:59:59Z"
+  },
+  "groupBy": "WORKING_HOURS",
+  "totalThreats": 1250,
+  "distribution": [
+    {
+      "timeSlot": "工作时间 (09:00-17:00)",
+      "threatCount": 400,
+      "percentage": 32.0,
+      "averageScore": 85.5,
+      "maxScore": 2500.0,
+      "levelBreakdown": {
+        "CRITICAL": 15,
+        "HIGH": 80,
+        "MEDIUM": 150,
+        "LOW": 120,
+        "INFO": 35
+      }
+    },
+    {
+      "timeSlot": "非工作时间 (17:00-09:00)",
+      "threatCount": 850,
+      "percentage": 68.0,
+      "averageScore": 145.8,
+      "maxScore": 9200.0,
+      "levelBreakdown": {
+        "CRITICAL": 92,
+        "HIGH": 185,
+        "MEDIUM": 280,
+        "LOW": 220,
+        "INFO": 73
+      }
+    }
+  ],
+  "insights": {
+    "workingHoursThreats": 400,
+    "offHoursThreats": 850,
+    "workingHoursRatio": 0.32,
+    "offHoursRatio": 0.68,
+    "workingHoursAvgScore": 85.5,
+    "offHoursAvgScore": 145.8,
+    "anomalyDetected": true,
+    "anomalyDescription": "非工作时间威胁数量显著高于工作时间,可能存在APT攻击"
+  }
+}
+```
+
+按星期分组 (DAY_OF_WEEK):
+```json
+{
+  "customer_id": "customer_a",
+  "timeRange": {
+    "start": "2025-01-01T00:00:00Z",
+    "end": "2025-01-31T23:59:59Z"
+  },
+  "groupBy": "DAY_OF_WEEK",
+  "totalThreats": 3200,
+  "distribution": [
+    {
+      "timeSlot": "周一",
+      "threatCount": 480,
+      "percentage": 15.0,
+      "averageScore": 125.5,
+      "maxScore": 8500.0,
+      "levelBreakdown": {
+        "CRITICAL": 25,
+        "HIGH": 95,
+        "MEDIUM": 180,
+        "LOW": 140,
+        "INFO": 40
+      }
+    },
+    {
+      "timeSlot": "周二",
+      "threatCount": 520,
+      "percentage": 16.3,
+      "averageScore": 118.8,
+      "maxScore": 7800.0,
+      "levelBreakdown": {
+        "CRITICAL": 28,
+        "HIGH": 105,
+        "MEDIUM": 195,
+        "LOW": 150,
+        "INFO": 42
+      }
+    },
+    {
+      "timeSlot": "周六",
+      "threatCount": 280,
+      "percentage": 8.8,
+      "averageScore": 95.2,
+      "maxScore": 3200.0,
+      "levelBreakdown": {
+        "CRITICAL": 8,
+        "HIGH": 45,
+        "MEDIUM": 95,
+        "LOW": 105,
+        "INFO": 27
+      }
+    },
+    {
+      "timeSlot": "周日",
+      "threatCount": 240,
+      "percentage": 7.5,
+      "averageScore": 88.9,
+      "maxScore": 2800.0,
+      "levelBreakdown": {
+        "CRITICAL": 5,
+        "HIGH": 35,
+        "MEDIUM": 85,
+        "LOW": 95,
+        "INFO": 20
+      }
+    }
+  ],
+  "insights": {
+    "busiestDay": "周二",
+    "quietestDay": "周日",
+    "weekdayAvgThreats": 492.5,
+    "weekendAvgThreats": 260,
+    "weekdayToWeekendRatio": 1.89,
+    "anomalyDetected": false
+  }
+}
+```
+
+---
+
+## 健康检查
+
+### 端点信息
+
+**描述**: 检查威胁评估服务的健康状态。
+
+**端点**: `GET /api/v1/assessment/health`
+
+### 请求示例 (curl)
+
+```bash
+curl -X GET http://localhost:8083/api/v1/assessment/health
 ```
 
 ### 请求示例 (Java)

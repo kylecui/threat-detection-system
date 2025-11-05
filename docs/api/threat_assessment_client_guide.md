@@ -78,29 +78,6 @@ public class ThreatAssessmentClient {
     }
     
     /**
-     * 执行缓解措施
-     */
-    public MitigationResponse executeMitigation(
-            String assessmentId,
-            MitigationRequest request) {
-        
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        
-        HttpEntity<MitigationRequest> httpRequest = new HttpEntity<>(request, headers);
-        
-        String url = baseUrl + "/mitigation/" + assessmentId;
-        
-        ResponseEntity<MitigationResponse> response = restTemplate.postForEntity(
-            url,
-            httpRequest,
-            MitigationResponse.class
-        );
-        
-        return response.getBody();
-    }
-    
-    /**
      * 健康检查
      */
     public boolean isHealthy() {
@@ -124,7 +101,7 @@ public class ClientUsageExample {
     
     public static void main(String[] args) {
         ThreatAssessmentClient client = new ThreatAssessmentClient(
-            "http://localhost:8081/api/v1/assessment"
+            "http://localhost:8083/api/v1/assessment"
         );
         
         // 1. 执行威胁评估
@@ -141,15 +118,20 @@ public class ClientUsageExample {
         AssessmentResponse assessment = client.evaluate(request);
         System.out.println("Threat Level: " + assessment.getThreatLevel());
         
-        // 2. 如果是CRITICAL,执行隔离
-        if ("CRITICAL".equals(assessment.getThreatLevel())) {
-            MitigationRequest mitigation = new MitigationRequest();
-            mitigation.setMitigationType("ISOLATE");
-            mitigation.setAutoExecute(true);
-            mitigation.setReason("CRITICAL威胁自动隔离");
-            mitigation.setExecutedBy("system");
-            
-            client.executeMitigation(assessment.getAssessmentId(), mitigation);
+        // 2. 根据威胁等级执行相应操作
+        switch (assessment.getThreatLevel()) {
+            case "CRITICAL":
+                System.out.println("CRITICAL威胁检测到，建议立即响应");
+                break;
+            case "HIGH":
+                System.out.println("HIGH威胁检测到，建议1小时内响应");
+                break;
+            case "MEDIUM":
+                System.out.println("MEDIUM威胁检测到，建议4小时内响应");
+                break;
+            default:
+                System.out.println("低危威胁，正常监控即可");
+                break;
         }
     }
 }
