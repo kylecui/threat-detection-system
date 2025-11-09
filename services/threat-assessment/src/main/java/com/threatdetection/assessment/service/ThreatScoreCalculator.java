@@ -15,10 +15,17 @@ import java.util.Map;
 /**
  * 威胁评分计算器 - 基于蜜罐机制的多维度评分算法
  * 
- * <p>核心公式 (V4.0双维度 - Phase 2已实施):
+ * <p>核心公式 (V5.1攻击速率增强 - 爆发性检测):
  * threatScore = (attackCount × uniqueIps × uniquePorts) 
  *             × timeWeight × ipWeight × portWeight × deviceWeight 
  *             × (attackSourceWeight × honeypotSensitivityWeight)
+ *             × attackRateWeight  // V5.1新增: 攻击速率权重
+ * 
+ * <p>V5.1 攻击速率权重说明:
+ * - attackRate = attackCount / timeWindowSeconds (次/秒)
+ * - 高速率爆发 (>1次/秒): 权重 1.5-2.5x → 快速提升评分
+ * - 中等速率 (0.1-1次/秒): 权重 1.0-1.5x → 标准评分
+ * - 低速率持续 (<0.1次/秒): 权重 0.5-1.0x → 降低评分
  * 
  * <p>V4.0 双维度权重说明:
  * - attackSourceWeight (0.5-3.0): 评估"被诱捕设备的严重性" (IoT=0.9, DB服务器=3.0)
@@ -58,9 +65,15 @@ public class ThreatScoreCalculator {
     /**
      * 计算威胁评分
      * 
-     * <p>V4.0 Phase 2 - 双维度权重完整实施:
+     * <p>V5.1 - 攻击速率权重实施 (爆发性检测):
      * 
-     * <p>双维度权重说明:
+     * <p>V5.1 攻击速率权重:
+     * - attackRateWeight: 基于攻击速率 (attackCount / timeWindowSeconds)
+     * - 高速率 (>1次/秒): 权重 1.5-2.5x → 爆发性攻击
+     * - 中等速率 (0.1-1次/秒): 权重 1.0-1.5x → 标准扫描
+     * - 低速率 (<0.1次/秒): 权重 0.5-1.0x → 慢速扫描
+     * 
+     * <p>V4.0 双维度权重说明:
      * - attackSourceWeight: 被诱捕设备的严重性 (IoT=0.9, 数据库服务器=3.0)
      * - honeypotSensitivityWeight: 攻击者意图的严重性 (管理蜜罐=3.5, 办公蜜罐=1.3)
      * - combinedSegmentWeight = attackSourceWeight × honeypotSensitivityWeight
@@ -69,8 +82,10 @@ public class ThreatScoreCalculator {
      * - IoT设备访问管理蜜罐 → 0.9 × 3.5 = 3.15 → CRITICAL级别 ✅
      * - 数据库服务器访问办公蜜罐 → 3.0 × 1.3 = 3.9 → CRITICAL级别
      * - 办公设备访问办公蜜罐 → 1.0 × 1.3 = 1.3 → MEDIUM级别
+     * - 爆发性攻击 (30次/30秒=1次/秒) → attackRateWeight=1.8 → 评分提升80%
+     * - 慢速扫描 (30次/3600秒=0.008次/秒) → attackRateWeight=0.6 → 评分降低40%
      * 
-     * @param data 聚合攻击数据 (包含 attackIp 和 mostAccessedHoneypotIp)
+     * @param data 聚合攻击数据 (包含 attackIp, mostAccessedHoneypotIp, timeWindowSeconds)
      * @return 威胁评分 (0.0 - 无限大)
      */
     public double calculateThreatScore(AggregatedAttackData data) {
@@ -90,9 +105,11 @@ public class ThreatScoreCalculator {
         // V4.0 Phase 3: 使用增强端口权重 (集成customer_port_weights)
         double portWeight = calculateEnhancedPortWeight(data.getCustomerId(), data.getPortList(), data.getUniquePorts());
         double deviceWeight = calculateDeviceWeight(data.getUniqueDevices());
+        // V5.1: 计算攻击速率权重 (爆发性检测)
+        double attackRateWeight = calculateAttackRateWeight(data.getAttackCount(), data.getTimeWindowSeconds());
         
-        logger.info("📈 Threat score weights calculated: customerId={}, timeWeight={}, ipWeight={}, portWeight={}, deviceWeight={}",
-                   data.getCustomerId(), timeWeight, ipWeight, portWeight, deviceWeight);
+        logger.info("📈 Threat score weights calculated: customerId={}, timeWeight={}, ipWeight={}, portWeight={}, deviceWeight={}, attackRateWeight={}",
+                   data.getCustomerId(), timeWeight, ipWeight, portWeight, deviceWeight, attackRateWeight);
         
         // V4.0双维度权重计算
         double attackSourceWeight = 1.0;  // 默认值 (向后兼容)
@@ -134,9 +151,9 @@ public class ThreatScoreCalculator {
                    data.getCustomerId(), data.getAttackIp(), data.getMostAccessedHoneypotIp(),
                    attackSourceWeight, honeypotSensitivityWeight, combinedSegmentWeight);
         
-        // 最终评分 (V4.0 Phase 2 - 双维度权重)
+        // 最终评分 (V5.1 - 攻击速率权重)
         double rawScore = baseScore * timeWeight * ipWeight * portWeight * deviceWeight 
-                         * combinedSegmentWeight;
+                         * combinedSegmentWeight * attackRateWeight;
         
         // 标准化到 (0,100) 范围 - 使用对数变换
         double normalizedScore = normalizeThreatScore(rawScore);
@@ -144,10 +161,11 @@ public class ThreatScoreCalculator {
         logger.debug("Threat score calculation: customerId={}, attackMac={}, attackIp={}, honeypotIp={}, " +
                     "baseScore={}, timeWeight={}, ipWeight={}, portWeight={}, deviceWeight={}, " +
                     "attackSourceWeight={}, honeypotSensitivityWeight={}, combinedSegmentWeight={}, " +
-                    "rawScore={}, normalizedScore={}",
+                    "attackRateWeight={}, timeWindowSeconds={}, rawScore={}, normalizedScore={}",
                     data.getCustomerId(), data.getAttackMac(), data.getAttackIp(), data.getMostAccessedHoneypotIp(),
                     baseScore, timeWeight, ipWeight, portWeight, deviceWeight, 
-                    attackSourceWeight, honeypotSensitivityWeight, combinedSegmentWeight, rawScore, normalizedScore);
+                    attackSourceWeight, honeypotSensitivityWeight, combinedSegmentWeight, 
+                    attackRateWeight, data.getTimeWindowSeconds(), rawScore, normalizedScore);
         
         return normalizedScore;
     }
@@ -384,5 +402,71 @@ public class ThreatScoreCalculator {
             return 1.0;  // 默认权重
         }
         return ipSegmentWeightService.getIpSegmentWeight(ipAddress);
+    }
+    
+    /**
+     * 计算攻击速率权重 (V5.1新增 - 爆发性检测)
+     * 
+     * <p>基于攻击速率 (次/秒) 调整权重:
+     * - 极高速率 (>10次/秒): 权重 2.5x → DDoS级别爆发
+     * - 高速率 (1-10次/秒): 权重 1.5-2.0x → 爆发性攻击
+     * - 中等速率 (0.1-1次/秒): 权重 1.0-1.5x → 标准扫描
+     * - 低速率 (0.01-0.1次/秒): 权重 0.7-1.0x → 慢速扫描
+     * - 极低速率 (<0.01次/秒): 权重 0.5-0.7x → 超慢速扫描
+     * 
+     * <p>公式: attackRate = attackCount / timeWindowSeconds
+     * 
+     * <p>案例:
+     * - 30次/30秒 = 1次/秒 → 权重 1.8x (爆发性)
+     * - 30次/300秒 = 0.1次/秒 → 权重 1.0x (标准)
+     * - 30次/900秒 = 0.033次/秒 → 权重 0.8x (慢速)
+     * - 30次/3600秒 = 0.008次/秒 → 权重 0.6x (超慢速)
+     * 
+     * @param attackCount 攻击次数
+     * @param timeWindowSeconds 时间窗口 (秒), null或<=0时使用默认值300秒
+     * @return 攻击速率权重 (0.5-2.5)
+     */
+    public double calculateAttackRateWeight(int attackCount, Integer timeWindowSeconds) {
+        // 默认时间窗口: 300秒 (5分钟)
+        int windowSeconds = (timeWindowSeconds != null && timeWindowSeconds > 0) 
+                           ? timeWindowSeconds : 300;
+        
+        // 计算攻击速率 (次/秒)
+        double attackRate = (double) attackCount / windowSeconds;
+        
+        double weight;
+        
+        if (attackRate >= 10.0) {
+            // 极高速率: >10次/秒 → DDoS级别
+            weight = 2.5;
+            logger.info("⚡ BURST ATTACK detected: rate={}/s, window={}s, count={}, weight={}",
+                       String.format("%.2f", attackRate), windowSeconds, attackCount, weight);
+        } else if (attackRate >= 1.0) {
+            // 高速率: 1-10次/秒 → 爆发性攻击
+            // 线性映射: 1次/秒=1.5, 10次/秒=2.0
+            weight = 1.5 + (attackRate - 1.0) / 9.0 * 0.5;
+            logger.info("🔥 High-rate attack: rate={}/s, window={}s, count={}, weight={}",
+                       String.format("%.2f", attackRate), windowSeconds, attackCount, weight);
+        } else if (attackRate >= 0.1) {
+            // 中等速率: 0.1-1次/秒 → 标准扫描
+            // 线性映射: 0.1次/秒=1.0, 1次/秒=1.5
+            weight = 1.0 + (attackRate - 0.1) / 0.9 * 0.5;
+            logger.debug("📊 Medium-rate attack: rate={}/s, window={}s, count={}, weight={}",
+                        String.format("%.3f", attackRate), windowSeconds, attackCount, weight);
+        } else if (attackRate >= 0.01) {
+            // 低速率: 0.01-0.1次/秒 → 慢速扫描
+            // 线性映射: 0.01次/秒=0.7, 0.1次/秒=1.0
+            weight = 0.7 + (attackRate - 0.01) / 0.09 * 0.3;
+            logger.debug("🐌 Low-rate attack: rate={}/s, window={}s, count={}, weight={}",
+                        String.format("%.4f", attackRate), windowSeconds, attackCount, weight);
+        } else {
+            // 极低速率: <0.01次/秒 → 超慢速扫描
+            // 线性映射: 0次/秒=0.5, 0.01次/秒=0.7
+            weight = Math.max(0.5, 0.5 + attackRate / 0.01 * 0.2);
+            logger.debug("🦥 Very-low-rate attack: rate={}/s, window={}s, count={}, weight={}",
+                        String.format("%.5f", attackRate), windowSeconds, attackCount, weight);
+        }
+        
+        return weight;
     }
 }

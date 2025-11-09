@@ -78,6 +78,13 @@ public class AggregatedAttackData {
     private java.util.List<Integer> portList;
     
     /**
+     * 评估时间窗口 (秒)
+     * 用于计算攻击速率: attackRate = attackCount / timeWindowSeconds
+     * V5.1新增字段 - 支持爆发性检测
+     */
+    private Integer timeWindowSeconds;
+    
+    /**
      * 验证数据完整性
      */
     public boolean isValid() {

@@ -96,6 +96,16 @@ public class AssessmentRequest {
     private java.util.List<Integer> portList;
 
     /**
+     * 评估时间窗口 (秒) (可选, 默认300秒=5分钟)
+     * 用于计算政击速率权重: attackRate = attackCount / timeWindowSeconds
+     * V5.1新增字段 - 支持爆发性检测
+     * 
+     * <p>允许值: 30 (实时检测), 300 (标准评估), 900 (趋势分析), 3600 (长期监控)
+     */
+    @JsonProperty("time_window_seconds")
+    private Integer timeWindowSeconds;
+
+    /**
      * 转换为聚合攻击数据
      */
     public AggregatedAttackData toAggregatedData() {
@@ -109,6 +119,7 @@ public class AssessmentRequest {
             .uniqueDevices(uniqueDevices)
             .timestamp(timestamp != null ? timestamp : Instant.now())
             .portList(portList)
+            .timeWindowSeconds(timeWindowSeconds)  // V5.1: 传递时间窗口参数
             .build();
     }
 }
