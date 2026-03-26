@@ -13,6 +13,8 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -125,7 +127,63 @@ public class V2EventParserService {
         }
 
         HeartbeatEvent heartbeatEvent = new HeartbeatEvent(deviceId, timestamp, totalGuards, onlineDevices, uptimeSec);
+        heartbeatEvent.setCustomerId(mappingService.resolveCustomerId(deviceId));
+        heartbeatEvent.setFirmwareVersion(getOptionalText(data, "firmware_version"));
+        heartbeatEvent.setNetworkInterfacesJson(extractNetworkInterfacesJson(data));
+        heartbeatEvent.setRawTopologyJson(extractRawTopologyJson(data));
+        heartbeatEvent.setDevices(parseDiscoveredHosts(data));
         return Optional.of(heartbeatEvent);
+    }
+
+    private String getOptionalText(JsonNode node, String fieldName) {
+        JsonNode field = node.get(fieldName);
+        if (field == null || field.isNull()) {
+            return null;
+        }
+        return field.asText();
+    }
+
+    private String extractNetworkInterfacesJson(JsonNode data) {
+        JsonNode interfacesNode = data.get("network_interfaces");
+        if (interfacesNode == null || interfacesNode.isNull()) {
+            return "[]";
+        }
+        try {
+            return objectMapper.writeValueAsString(interfacesNode);
+        } catch (JsonProcessingException e) {
+            logger.warn("Failed to serialize network_interfaces, defaulting to []");
+            return "[]";
+        }
+    }
+
+    private String extractRawTopologyJson(JsonNode data) {
+        try {
+            return objectMapper.writeValueAsString(data);
+        } catch (JsonProcessingException e) {
+            logger.warn("Failed to serialize heartbeat data node, defaulting to {}", e);
+            return "{}";
+        }
+    }
+
+    private List<HeartbeatEvent.DiscoveredHostData> parseDiscoveredHosts(JsonNode data) {
+        JsonNode devicesNode = data.get("devices");
+        List<HeartbeatEvent.DiscoveredHostData> devices = new ArrayList<>();
+        if (devicesNode == null || !devicesNode.isArray()) {
+            return devices;
+        }
+
+        for (JsonNode deviceNode : devicesNode) {
+            HeartbeatEvent.DiscoveredHostData hostData = new HeartbeatEvent.DiscoveredHostData();
+            hostData.setMacAddress(getOptionalText(deviceNode, "mac"));
+            hostData.setIpAddress(getOptionalText(deviceNode, "ip"));
+            Integer vlanId = getRequiredInt(deviceNode, "vlan_id");
+            hostData.setVlanId(vlanId == null ? 0 : vlanId);
+            JsonNode isDecoyNode = deviceNode.get("is_decoy");
+            hostData.setDecoy(isDecoyNode != null && !isDecoyNode.isNull() && isDecoyNode.asBoolean(false));
+            devices.add(hostData);
+        }
+
+        return devices;
     }
 
     private String getRequiredText(JsonNode node, String fieldName) {

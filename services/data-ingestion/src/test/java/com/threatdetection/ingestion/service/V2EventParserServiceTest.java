@@ -78,7 +78,15 @@ class V2EventParserServiceTest {
                   "data": {
                     "uptime_sec": 86400,
                     "total_guards": 55,
-                    "online_devices": 120
+                    "online_devices": 120,
+                    "firmware_version": "2.1.0",
+                    "network_interfaces": [
+                      {"name": "eth0", "ip": "192.168.1.1", "mac": "00:11:22:33:44:55"}
+                    ],
+                    "devices": [
+                      {"mac": "AA:BB:CC:DD:EE:01", "ip": "192.168.1.100", "vlan_id": 10, "is_decoy": false},
+                      {"mac": "AA:BB:CC:DD:EE:02", "ip": "192.168.1.200", "vlan_id": 20, "is_decoy": true}
+                    ]
                   }
                 }
                 """;
@@ -93,6 +101,18 @@ class V2EventParserServiceTest {
         assertEquals(120, heartbeatEvent.getOnlineDevices());
         assertEquals(86400L, heartbeatEvent.getUptimeSec());
         assertNotNull(heartbeatEvent.getTimestamp());
+        assertEquals("customer-001", heartbeatEvent.getCustomerId());
+        assertEquals("2.1.0", heartbeatEvent.getFirmwareVersion());
+        assertEquals("[{\"name\":\"eth0\",\"ip\":\"192.168.1.1\",\"mac\":\"00:11:22:33:44:55\"}]", heartbeatEvent.getNetworkInterfacesJson());
+        assertNotNull(heartbeatEvent.getRawTopologyJson());
+        assertTrue(heartbeatEvent.getRawTopologyJson().contains("\"firmware_version\":\"2.1.0\""));
+        assertNotNull(heartbeatEvent.getDevices());
+        assertEquals(2, heartbeatEvent.getDevices().size());
+        assertEquals("AA:BB:CC:DD:EE:01", heartbeatEvent.getDevices().get(0).getMacAddress());
+        assertEquals("192.168.1.100", heartbeatEvent.getDevices().get(0).getIpAddress());
+        assertEquals(10, heartbeatEvent.getDevices().get(0).getVlanId());
+        assertFalse(heartbeatEvent.getDevices().get(0).isDecoy());
+        assertTrue(heartbeatEvent.getDevices().get(1).isDecoy());
     }
 
     @Test

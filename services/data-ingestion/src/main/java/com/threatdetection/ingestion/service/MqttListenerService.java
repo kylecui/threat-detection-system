@@ -26,6 +26,7 @@ public class MqttListenerService {
     private final MqttProperties mqttProperties;
     private final V2EventParserService v2EventParserService;
     private final KafkaProducerService kafkaProducerService;
+    private final HeartbeatPersistenceService heartbeatPersistenceService;
 
     private volatile Mqtt3AsyncClient mqttClient;
     private final AtomicBoolean connected = new AtomicBoolean(false);
@@ -33,11 +34,13 @@ public class MqttListenerService {
     public MqttListenerService(
             MqttProperties mqttProperties,
             V2EventParserService v2EventParserService,
-            KafkaProducerService kafkaProducerService
+            KafkaProducerService kafkaProducerService,
+            HeartbeatPersistenceService heartbeatPersistenceService
     ) {
         this.mqttProperties = mqttProperties;
         this.v2EventParserService = v2EventParserService;
         this.kafkaProducerService = kafkaProducerService;
+        this.heartbeatPersistenceService = heartbeatPersistenceService;
     }
 
     @PostConstruct
@@ -108,12 +111,15 @@ public class MqttListenerService {
                         if (event instanceof AttackEvent attackEvent) {
                             kafkaProducerService.sendAttackEvent(attackEvent);
                         } else if (event instanceof HeartbeatEvent heartbeatEvent) {
-                            logger.info(
-                                    "Parsed heartbeat event, currently not forwarded to status-events: deviceId={}, totalGuards={}, onlineDevices={}",
-                                    heartbeatEvent.getDeviceId(),
-                                    heartbeatEvent.getTotalGuards(),
-                                    heartbeatEvent.getOnlineDevices()
-                            );
+                            try {
+                                heartbeatPersistenceService.persistHeartbeat(heartbeatEvent);
+                                logger.info("Persisted heartbeat: deviceId={}, totalGuards={}, onlineDevices={}",
+                                        heartbeatEvent.getDeviceId(),
+                                        heartbeatEvent.getTotalGuards(),
+                                        heartbeatEvent.getOnlineDevices());
+                            } catch (Exception e) {
+                                logger.error("Failed to persist heartbeat: deviceId={}", heartbeatEvent.getDeviceId(), e);
+                            }
                         } else {
                             logger.debug("Unsupported parsed event type: {}", event.getClass().getName());
                         }

@@ -278,6 +278,7 @@ cd docker && docker compose build --no-cache && docker compose up -d
 - [x] Config Server实现 (native backend, Docker, K8s)
 - [x] V2哨兵数据支持 (MQTT + JSON，EMQX Broker)
 - [x] 网段权重配置系统 (CRUD API + 评分集成)
+- [x] 网络拓扑与心跳持久化 (设备清单、拓扑快照、主机发现)
 - [ ] 高级威胁情报集成
 - [ ] 机器学习威胁检测
 - [ ] Web管理仪表板
@@ -290,5 +291,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ---
 
 *最后更新: 2026-03-27*
-*系统版本: v2.2*
-*部署状态: 全部核心服务 (7/7) 完成并可部署，V2哨兵MQTT支持已集成*
+*系统版本: v2.3*
+*部署状态: 全部核心服务 (7/7) 完成并可部署，V2哨兵MQTT支持已集成，心跳拓扑持久化已完成*
