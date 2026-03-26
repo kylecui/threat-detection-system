@@ -5,13 +5,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.scheduling.annotation.EnableAsync;
+import com.threatdetection.ingestion.config.MqttProperties;
 
 @SpringBootApplication
 @EnableAsync // Phase 1A: 启用异步处理支持
 @EnableKafka // 启用Kafka消费者监听器
+@EnableConfigurationProperties(MqttProperties.class)
 public class DataIngestionApplication implements CommandLineRunner {
 
     private static final Logger logger = LoggerFactory.getLogger(DataIngestionApplication.class);

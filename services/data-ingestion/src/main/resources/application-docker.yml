@@ -53,3 +53,8 @@ logging:
     org.springframework.kafka: DEBUG
     org.apache.kafka: WARN
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+mqtt:
+  enabled: true
+  broker-url: tcp://emqx:1883
+  client-id: data-ingestion-mqtt

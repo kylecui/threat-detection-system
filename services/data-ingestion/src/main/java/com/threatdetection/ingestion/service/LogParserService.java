@@ -72,6 +72,11 @@ public class LogParserService {
     private final Map<String, Integer> parseStats = new HashMap<>();
 
     public Optional<Object> parseLog(String rawLog) {
+        if (rawLog == null || rawLog.isEmpty()) {
+            logger.warn("Invalid log input: log is null or empty");
+            incrementStat("invalid_input");
+            return Optional.empty();
+        }
         logger.info("Starting to parse log: {}", rawLog.substring(0, Math.min(100, rawLog.length())));
         try {
             // Phase 1A: 增强数据验证和错误处理
