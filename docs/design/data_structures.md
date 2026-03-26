@@ -198,10 +198,19 @@
 
 ### 2.4 minute-aggregations 主题
 **消息类型**: String (JSON格式)  
-**用途**: 分钟级聚合数据  
+**用途**: 分钟级聚合数据（中间主题）  
 **格式**: `{"customerId:attackMac": count, ...}`  
 **键格式**: customerId:attackMac  
 **值**: 该时间窗口内该客户-攻击源的攻击事件数量
+
+> **⚠️ 状态说明 (2026-03-26)**:
+> 此主题由 stream-processing (Flink) 的 `StreamProcessingJob` 生产（参见 `StreamProcessingJob.java` line 90），
+> 但**当前没有消费者**。架构文档中描述 threat-assessment 为预期消费者，但该消费者尚未实现。
+>
+> **当前行为**: 数据持续写入 Kafka 但不被读取。Kafka 默认保留策略（7天/1GB）会自动清理过期数据，不会无限增长。
+>
+> **路线图**: 当 threat-assessment 需要按分钟回溯攻击趋势时，将实现消费者。
+> 此主题也可作为未来 ClickHouse 时序分析的数据源（参见 `docs/design/adr/001-postgresql-over-clickhouse.md`）。
 
 ## 3. Java枚举和嵌入类
 

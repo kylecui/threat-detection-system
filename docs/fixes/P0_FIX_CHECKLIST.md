@@ -436,27 +436,43 @@ grep 'kafkaTemplate.send("threat-' \
 
 ### P0-A: SQL初始化顺序问题
 
-**严重程度**: 🔴 HIGH
+**严重程度**: 🔴 HIGH → ✅ 已验证 (无需修复)
 **问题描述**: docker/ 目录下有21个SQL文件，但docker-compose.yml中postgres服务的volume挂载可能未包含所有文件。全新部署时如果docker-entrypoint-initdb.d仅执行部分脚本，会导致表缺失。
 **影响**: 全新部署时数据库表可能不完整
 **涉及文件**: `docker/docker-compose.yml` (postgres volumes), `docker/*.sql`
-**修复方向**: 验证并确保所有SQL文件按编号顺序挂载到docker-entrypoint-initdb.d
+
+**验证结果 (2026-03-26)**:
+- docker-compose.yml 挂载了17个SQL文件到 `/docker-entrypoint-initdb.d/` (lines 28-44)
+- PostgreSQL 按**字母序**执行该目录下的文件 (NOT mount order in YAML)
+- 执行顺序: `01-init-db-production-safe.sql` → `02-attack-events-storage.sql` → `03-port-weights.sql` → `04-alert-management-tables.sql` → `04-threat-assessment-tables.sql` → ... → `17-customer-time-weights.sql` → `17-customers-init.sql`
+- 两组同编号文件 (`04-alert*`/`04-threat*` 和 `17-customer-time*`/`17-customers-init*`) 按字母序无外键冲突
+- 磁盘上未挂载的文件 (`init-db.sql`, `port_weights_migration.sql`, `06-ip-segment-weights-extended.sql`) 是历史/扩展文件，正确排除
+- **结论**: 初始化顺序正确，全新部署可正常创建所有表
 
 ### P0-B: H2数据库方言默认值
 
-**严重程度**: 🟡 MEDIUM
+**严重程度**: 🟡 MEDIUM → ✅ 已修复
 **问题描述**: `services/alert-management/src/main/resources/application.properties` 第14行默认Hibernate方言为H2Dialect而非PostgreSQLDialect。非Docker部署环境（如直接运行jar）会使用错误的SQL方言。
 **影响**: 非Docker部署环境下SQL语法错误
 **涉及文件**: `services/alert-management/src/main/resources/application.properties:14`
-**修复方向**: 将默认值从 `org.hibernate.dialect.H2Dialect` 改为 `org.hibernate.dialect.PostgreSQLDialect`
+
+**修复内容 (2026-03-26)**:
+- 将 `application.properties` 的 Hibernate dialect 默认值从 `H2Dialect` 改为 `PostgreSQLDialect`
+- 同时将 datasource 默认值从 H2 内存数据库改为 PostgreSQL (`jdbc:postgresql://localhost:5432/threat_detection`, driver `org.postgresql.Driver`)
+- 保留了 `${ENV_VAR:default}` 环境变量覆盖机制不变
 
 ### P0-C: 死信Kafka主题
 
-**严重程度**: 🟢 LOW  
+**严重程度**: 🟢 LOW → ✅ 已文档化
 **问题描述**: stream-processing服务向 `minute-aggregations` 主题写入数据，但没有任何消费者读取该主题。数据持续积累但从未被使用。
 **影响**: Kafka存储浪费，架构混乱
 **涉及文件**: stream-processing Flink job (producer), 无消费者
-**修复方向**: 文档化该主题用途，或添加消费者，或移除生产者
+
+**决策 (2026-03-26)**:
+- 保留生产者 — 该主题是 threat-assessment 消费者的预留数据源
+- 在 `docs/design/data_structures.md` 的 `minute-aggregations` 主题文档中添加了状态说明
+- Kafka 默认保留策略 (7天/1GB) 会自动清理过期数据，无存储风险
+- 路线图: 当 threat-assessment 需要分钟级趋势回溯或迁移至 ClickHouse 时将实现消费者
 
 ## 🔧 修复执行命令汇总
 
