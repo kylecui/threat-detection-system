@@ -82,6 +82,7 @@ kubectl get pods -n threat-detection-prod
 - **alert-management.yaml**: 告警管理服务部署，支持多通道通知
 - **api-gateway.yaml**: API网关服务部署，提供统一API访问
 - **config-server.yaml**: 配置服务器部署，支持Git-based配置管理
+- **emqx.yaml**: EMQX MQTT broker部署，V2哨兵MQTT数据接入
 - **configmap.yaml**: 共享配置，包括环境变量和应用设置
 
 ### 环境覆盖 (overlays/)
@@ -112,6 +113,8 @@ kubectl get pods -n threat-detection-prod
 | customer-management | 8084 | 客户管理API |
 | api-gateway | 8888 | 统一API网关 |
 | config-server | 8899 | 配置服务器API |
+| emqx | 1883 | MQTT TCP (V2哨兵数据接入) |
+| emqx | 18083 | EMQX Dashboard |
 | kafka | 9092 | Kafka客户端连接 |
 | zookeeper | 2181 | Zookeeper客户端连接 |
 

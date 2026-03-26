@@ -1,0 +1,9 @@
+server:
+  port: 8080
+
+sample:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/threat_detection
+  feature:
+    enabled: true
+  timeout-seconds: 30

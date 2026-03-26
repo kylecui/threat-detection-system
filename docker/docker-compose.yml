@@ -42,6 +42,10 @@ services:
       - ./15-attack-phase-port-configs.sql:/docker-entrypoint-initdb.d/15-attack-phase-port-configs.sql
       - ./16-temporal-device-mapping.sql:/docker-entrypoint-initdb.d/16-temporal-device-mapping.sql
       - ./17-customer-time-weights.sql:/docker-entrypoint-initdb.d/17-customer-time-weights.sql
+      - ./18-net-segment-weights.sql:/docker-entrypoint-initdb.d/18-net-segment-weights.sql
+      - ./19-device-inventory.sql:/docker-entrypoint-initdb.d/19-device-inventory.sql
+      - ./20-topology-snapshots.sql:/docker-entrypoint-initdb.d/20-topology-snapshots.sql
+      - ./21-discovered-hosts.sql:/docker-entrypoint-initdb.d/21-discovered-hosts.sql
     networks:
       - threat-detection-network
     healthcheck:
@@ -99,6 +103,44 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  emqx:
+    image: emqx/emqx:5.5.1
+    hostname: emqx
+    container_name: emqx
+    ports:
+      - "1883:1883"      # MQTT TCP
+      - "8883:8883"      # MQTT TLS (预留)
+      - "8083:8083"      # MQTT WebSocket
+      - "18083:18083"    # EMQX Dashboard
+    environment:
+      EMQX_NAME: threat-detection-emqx
+      EMQX_HOST: emqx
+      # Allow anonymous for dev; production should disable
+      EMQX_ALLOW_ANONYMOUS: "true"
+      EMQX_LOADED_PLUGINS: "emqx_dashboard"
+      EMQX_LISTENER__TCP__EXTERNAL: "1883"
+      EMQX_LISTENER__WS__EXTERNAL: "8083"
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    networks:
+      - threat-detection-network
+    healthcheck:
+      test: ["CMD", "emqx", "ctl", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    restart: unless-stopped
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
@@ -490,6 +532,8 @@ volumes:
   postgres_data:
   logstash_data:
   logstash_logs:
+  emqx_data:
+  emqx_log:
 
 networks:
   threat-detection-network:
