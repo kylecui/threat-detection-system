@@ -14,23 +14,26 @@
 
 ⚠️ **重要**: 所有服务使用 **snake_case** 字段命名（如 `customer_id`, `subscription_tier`）。详见 [字段命名问题分析](./api/FIELD_NAMING_INCONSISTENCY.md)。
 
-#### API Gateway (统一入口)
+#### API Gateway / api-gateway (统一入口)
 - **[API Gateway实现文档](./api/api_gateway_current.md)** - 路由管理、安全控制、熔断降级、监控告警
 - **[API Gateway测试报告](./api/API_GATEWAY_TEST_REPORT.md)** - 部署测试结果、问题解决、性能指标 ⭐ 最新
 
-#### 客户管理服务 (Customer Management)
+#### 客户管理服务 / customer-management (Customer Management)
 - **[客户管理API](./api/customer_management_api.md)** - 客户CRUD、设备绑定、通知配置（26个端点）
 
-#### 数据摄取服务 (Data Ingestion)
+#### 流处理服务 / stream-processing (Stream Processing)
+- **[流处理服务README](../services/stream-processing/README.md)** - 实时流处理、窗口聚合、威胁评分
+
+#### 数据摄取服务 / data-ingestion (Data Ingestion)
 - **[数据摄取API](./api/data_ingestion_api.md)** - 日志摄取、批量处理、统计监控
 
-#### 威胁评估服务 (Threat Assessment)
+#### 威胁评估服务 / threat-assessment (Threat Assessment)
 - **[威胁评估概述](./api/threat_assessment_overview.md)** - 系统架构、评分算法、数据模型
 - **[评估操作API](./api/threat_assessment_evaluation_api.md)** - 执行评估、缓解措施
 - **[查询分析API](./api/threat_assessment_query_api.md)** - 评估详情、趋势分析
 - **[客户端指南](./api/threat_assessment_client_guide.md)** - Java客户端、最佳实践
 
-#### 告警管理服务 (Alert Management)
+#### 告警管理服务 / alert-management (Alert Management)
 - **[告警管理概述](./api/alert_management_overview.md)** - 系统架构、数据模型
 - **[告警CRUD API](./api/alert_crud_api.md)** - 创建、查询、列表
 - **[生命周期API](./api/alert_lifecycle_api.md)** - 状态更新、解决、分配、归档
@@ -44,6 +47,9 @@
 
 #### 配置管理
 - **[邮件通知配置](./api/email_notification_configuration.md)** - SMTP配置、客户通知设置、动态配置
+
+#### 配置服务器 / config-server (Config Server)
+- **[配置服务器README](../services/config-server/README.md)** - 配置中心、服务配置管理
 
 ---
 
@@ -63,6 +69,13 @@
 - **[聚合指标理解](./design/understanding_aggregation_metrics.md)** - uniqueIps、uniquePorts含义
 - **[理解修正总结](./design/understanding_corrections_summary.md)** - 概念纠正和机制说明
 - **[蜜罐快速参考](./design/HONEYPOT_QUICK_REFERENCE.md)** - 快速查阅手册
+
+#### V2 哨兵与云原生演进 (2026-03 新增)
+- **[V2 事件模式定义](./design/v2_event_schemas.md)** ⭐ - V2哨兵7种JSON事件格式、字段表、V1映射
+- **[MQTT 摄取架构](./design/mqtt_ingestion_architecture.md)** ⭐ - EMQX broker、QoS策略、双协议共存（Syslog+MQTT）
+- **[网络拓扑数据模型](./design/network_topology_data_model.md)** - 设备清单、拓扑快照、已发现主机 PostgreSQL 表
+- **[网段权重策略](./design/net_weighting_strategy.md)** - 从186条静态规则到按客户配置的混合策略
+- **[ADR-001: PostgreSQL over ClickHouse](./design/adr/001-postgresql-over-clickhouse.md)** - 架构决策记录：选择PostgreSQL的理由与迁移触发条件
 
 #### 开发规范与指南
 - **[项目标准](./design/PROJECT_STANDARDS.md)** - 编码规范、命名约定
@@ -139,7 +152,8 @@
 1. 阅读 **[新系统架构规范](./design/new_system_architecture_spec.md)** 了解系统架构
 2. 阅读 **[蜜罐威胁评分方案](./design/honeypot_based_threat_scoring.md)** 理解核心机制
 3. 阅读 **[数据摄取API](./api/data_ingestion_api.md)** 了解API使用方法
-4. 参考 **[调试测试指南](./design/debugging_and_testing_guide.md)** 开始开发
+4. 阅读 **[客户管理API](./api/customer_management_api.md)** 了解客户管理服务和多租户配置
+5. 参考 **[调试测试指南](./design/debugging_and_testing_guide.md)** 开始开发
 
 ### API集成开发
 1. 查看 **[API文档目录](./api/)** 选择需要的服务
