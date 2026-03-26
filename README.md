@@ -32,7 +32,7 @@
 | **威胁评估服务** (Threat Assessment) | ✅ 完成 | 8083 | 威胁评分和风险评估，历史趋势分析 |
 | **客户管理服务** (Customer Management) | ✅ 完成 | 8084 | 客户CRUD、设备绑定、通知配置 |
 | **API网关** (API Gateway) | ✅ 完成 | 8888 | 统一入口，路由管理、熔断降级，含单元测试和K8s清单 |
-| **配置服务器** (Config Server) | 🟡 部分实现 | 8899 | Spring Cloud Config Server (native backend)，含Dockerfile和K8s清单，缺少单元测试 |
+| **配置服务器** (Config Server) | ✅ 完成 | 8899 | Spring Cloud Config Server (native backend)，含Dockerfile、K8s清单和单元测试 |
 
 ## 🛠️ 技术栈
 
@@ -46,6 +46,7 @@
 | 构建工具 | Maven | 3.8.7 |
 | 数据库 | PostgreSQL | 15 |
 | 缓存 | Redis | 可选 |
+| MQTT Broker | EMQX | 5.5.1 |
 
 ## 🚀 快速启动
 
@@ -85,27 +86,28 @@ kubectl get pods -n threat-detection-dev    # 检查部署状态
 ## 📊 数据流
 
 ```
-设备syslog → rsyslog:9080 → Data Ingestion → Kafka (attack-events)
-                                                  ↓
-                                           Flink Stream Processing
-                                                  ↓
-                                           Kafka (threat-alerts)
-                                                  ↓
-                               Threat Assessment ← → PostgreSQL
-                                                  ↓
-                                           Alert Management → Email/SMS/Slack/Webhook/Teams
+V1哨兵 (syslog KV) → rsyslog:9080 → Data Ingestion → Kafka (attack-events)
+V2哨兵 (MQTT JSON) → EMQX:1883  ↗                        ↓
+                                                    Flink Stream Processing
+                                                          ↓
+                                                    Kafka (threat-alerts)
+                                                          ↓
+                                       Threat Assessment ← → PostgreSQL
+                                                          ↓
+                                                    Alert Management → Email/SMS/Slack/Webhook/Teams
 ```
 
-1. **日志摄取**: rsyslog:9080 → 数据摄取服务，支持单条和批量处理
-2. **事件发布**: 结构化事件发布到Kafka主题 (`attack-events`, `status-events`)
-3. **实时处理**: Apache Flink多维度威胁评分 (30s/5min/15min 三级时间窗口)
-4. **威胁评估**: 风险等级评估 + 历史趋势分析 → PostgreSQL持久化
-5. **告警通知**: 多通道通知 + 智能去重 + 升级策略
+1. **日志摄取 (V1)**: rsyslog:9080 → 数据摄取服务，支持单条和批量处理 (syslog KV格式)
+2. **日志摄取 (V2)**: EMQX MQTT Broker → 数据摄取服务，支持JSON事件 (attack/sniffer/threat/heartbeat等7类)
+3. **事件发布**: 结构化事件发布到Kafka主题 (`attack-events`, `status-events`)
+4. **实时处理**: Apache Flink多维度威胁评分 (30s/5min/15min 三级时间窗口)
+5. **威胁评估**: 风险等级评估 + 历史趋势分析 → PostgreSQL持久化
+6. **告警通知**: 多通道通知 + 智能去重 + 升级策略
 
 ## 🧮 威胁评分算法
 
 ```
-threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeight × portWeight × deviceWeight
+threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeight × portWeight × deviceWeight × netWeight
 ```
 
 | 因子 | 说明 | 范围 |
@@ -117,6 +119,7 @@ threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeigh
 | `ipWeight` | IP多样性放大 | 1.0–2.0 |
 | `portWeight` | 端口多样性权重 | 1.0–2.0 |
 | `deviceWeight` | 多设备覆盖奖励 | 1.0–1.5 |
+| `netWeight` | 网段权重 (按客户+CIDR配置) | 0.01–10.0 |
 
 **威胁等级**: INFO (<10) · LOW (10–50) · MEDIUM (50–100) · HIGH (100–200) · CRITICAL (>200)
 
@@ -125,20 +128,20 @@ threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeigh
 ```
 threat-detection-system/
 ├── docker/                 # Docker开发环境
-│   ├── docker-compose.yml  # 服务编排配置
-│   ├── *.sql              # 数据库初始化脚本 (01-17)
+│   ├── docker-compose.yml  # 服务编排配置 (含EMQX MQTT Broker)
+│   ├── *.sql              # 数据库初始化脚本 (01-21)
 │   └── README.md
 ├── k8s/                   # Kubernetes部署配置
 │   ├── base/              # 基础配置
 │   └── overlays/          # 环境覆盖 (development, production)
 ├── services/              # 微服务源码
-│   ├── data-ingestion/    # ✅ 数据摄取服务 (批量处理、高可靠性)
-│   ├── stream-processing/ # ✅ Flink流处理服务 (增强威胁评分)
+│   ├── data-ingestion/    # ✅ 数据摄取服务 (V1 syslog + V2 MQTT/JSON)
+│   ├── stream-processing/ # ✅ Flink流处理服务 (增强威胁评分、网段权重)
 │   ├── threat-assessment/ # ✅ 威胁评估服务 (风险评估、趋势分析)
 │   ├── alert-management/  # ✅ 告警管理服务 (多通道通知、智能去重)
-│   ├── customer-management/ # ✅ 客户管理服务 (CRUD、设备绑定)
+│   ├── customer-management/ # ✅ 客户管理服务 (CRUD、设备绑定、网段权重)
 │   ├── api-gateway/       # ✅ API网关 (路由、熔断、测试、K8s)
-│   └── config-server/     # 🟡 配置服务器 (native backend, 缺少测试)
+│   └── config-server/     # ✅ 配置服务器 (native backend, 含单元测试)
 ├── scripts/               # 工具脚本
 │   ├── test/              # 测试脚本
 │   ├── tools/             # 生产工具 (full_restart.sh, bulk_ingest_logs.py)
@@ -165,6 +168,9 @@ threat-detection-system/
 | `TEAMS_WEBHOOK_URL` | Microsoft Teams webhook URL | — |
 | `ENCRYPT_KEY` | 配置服务器加密密钥 | — |
 | `GIT_CONFIG_URI` | 配置Git仓库URI | — |
+| `MQTT_ENABLED` | 启用V2哨兵MQTT摄取 | `false` |
+| `MQTT_BROKER_URL` | EMQX MQTT Broker地址 | `tcp://emqx:1883` |
+| `NET_WEIGHT_SERVICE_URL` | 网段权重服务地址 | `http://customer-management:8084` |
 | **⭐ `TIER1_WINDOW_SECONDS`** | Tier 1 时间窗口 — 勒索软件检测 | `30` (推荐 10–300) |
 | **⭐ `TIER2_WINDOW_SECONDS`** | Tier 2 时间窗口 — 主要威胁检测 | `300` (推荐 60–1800) |
 | **⭐ `TIER3_WINDOW_SECONDS`** | Tier 3 时间窗口 — APT检测 | `900` (推荐 300–7200) |
@@ -270,8 +276,8 @@ cd docker && docker compose build --no-cache && docker compose up -d
 - [x] 客户管理与多租户隔离
 - [x] API Gateway完善 (测试 + K8s清单)
 - [x] Config Server实现 (native backend, Docker, K8s)
-- [ ] V2哨兵数据支持 (MQTT + JSON)
-- [ ] 网段权重配置系统
+- [x] V2哨兵数据支持 (MQTT + JSON，EMQX Broker)
+- [x] 网段权重配置系统 (CRUD API + 评分集成)
 - [ ] 高级威胁情报集成
 - [ ] 机器学习威胁检测
 - [ ] Web管理仪表板
@@ -283,6 +289,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-*最后更新: 2026-03-26*
-*系统版本: v2.1*
-*部署状态: 核心服务 (6/7) 完成并可部署，配置服务器部分实现 (缺少测试)*
+*最后更新: 2026-03-27*
+*系统版本: v2.2*
+*部署状态: 全部核心服务 (7/7) 完成并可部署，V2哨兵MQTT支持已集成*

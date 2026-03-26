@@ -2,6 +2,7 @@ package com.threatdetection.stream.functions;
 
 import com.threatdetection.stream.model.AggregatedAttackData;
 import com.threatdetection.stream.model.AttackEvent;
+import com.threatdetection.stream.service.NetWeightServiceClient;
 import com.threatdetection.stream.service.PortWeightService;
 import org.apache.flink.streaming.api.functions.windowing.ProcessWindowFunction;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
@@ -33,6 +34,7 @@ public class TierWindowProcessor
     private final int tier;
     private final String windowType;
     private transient PortWeightService portWeightService;
+    private transient NetWeightServiceClient netWeightServiceClient;
     
     public TierWindowProcessor(int tier, String windowType) {
         this.tier = tier;
@@ -42,8 +44,9 @@ public class TierWindowProcessor
     @Override
     public void open(org.apache.flink.configuration.Configuration parameters) throws Exception {
         super.open(parameters);
-        // 初始化服务（在分布式环境中每个TaskManager实例化一次）
         this.portWeightService = new PortWeightService();
+        String serviceUrl = System.getenv().getOrDefault("NET_WEIGHT_SERVICE_URL", "http://customer-management:8084");
+        this.netWeightServiceClient = new NetWeightServiceClient(serviceUrl);
     }
     
     @Override
@@ -103,6 +106,8 @@ public class TierWindowProcessor
             .max(java.util.Map.Entry.comparingByValue())
             .map(java.util.Map.Entry::getKey)
             .orElse(null);
+
+        double netWeight = netWeightServiceClient.getNetWeight(customerId, mostAccessedHoneypotIp);
         
         // 计算混合端口权重 (修正：只传入ports Set)
         double mixedPortWeight = portWeightService.calculateMixedPortWeight(uniquePorts);
@@ -126,7 +131,8 @@ public class TierWindowProcessor
             uniqueDevices.size(),
             mixedPortWeight,
             timeDistWeight,  // 新增参数
-            latestEventTime  // 使用事件时间而不是窗口时间
+            latestEventTime,  // 使用事件时间而不是窗口时间
+            netWeight
         );
         
         // 确定威胁等级
@@ -143,6 +149,7 @@ public class TierWindowProcessor
                 .uniquePorts(uniquePorts.size())
                 .uniqueDevices(uniqueDevices.size())
                 .mixedPortWeight(mixedPortWeight)
+                .netWeight(netWeight)
                 .threatScore(threatScore)
                 .threatLevel(threatLevel)
                 .eventTimeSpan(eventTimeSpan)              // V4.0 Phase 3
@@ -156,10 +163,11 @@ public class TierWindowProcessor
                 .build();
         
         log.info("Tier {} window: customerId={}, attackMac={}, attackIp={}, mostAccessedHoneypot={}, " +
-                "threatScore={}, threatLevel={}, timeDistWeight={}, burstIntensity={}, " +
+                "threatScore={}, threatLevel={}, timeDistWeight={}, netWeight={}, burstIntensity={}, " +
                 "count={}, ips={}, ports={}, devices={}, timeSpan={}ms of {}ms window",
                 tier, customerId, attackMac, attackIp, mostAccessedHoneypotIp,
-                threatScore, threatLevel, String.format("%.2f", timeDistWeight), String.format("%.3f", burstIntensity),
+                threatScore, threatLevel, String.format("%.2f", timeDistWeight), String.format("%.2f", netWeight),
+                String.format("%.3f", burstIntensity),
                 attackCount, uniqueIps.size(), uniquePorts.size(), uniqueDevices.size(),
                 eventTimeSpan, windowSize);
         
@@ -170,7 +178,7 @@ public class TierWindowProcessor
      * 计算威胁评分
      * 
      * <p>公式: threatScore = (attackCount × uniqueIps × uniquePorts × portWeight) 
-     *                     × timeWeight × ipWeight × deviceWeight × timeDistWeight
+     *                     × timeWeight × ipWeight × deviceWeight × timeDistWeight × netWeight
      * 
      * @param attackCount 攻击次数
      * @param uniqueIps 唯一诱饵IP数
@@ -179,11 +187,13 @@ public class TierWindowProcessor
      * @param portWeight 端口权重
      * @param timeDistWeight 时间分布权重
      * @param windowEndMillis 窗口结束时间戳(毫秒)
+     * @param netWeight 网段权重
      * @return 威胁评分
      */
     private double calculateThreatScore(int attackCount, int uniqueIps, int uniquePorts,
-                                       int uniqueDevices, double portWeight, 
-                                       double timeDistWeight, long windowEndMillis) {
+                                        int uniqueDevices, double portWeight, 
+                                        double timeDistWeight, long windowEndMillis,
+                                        double netWeight) {
         // 1. 基础分数
         double baseScore = attackCount * uniqueIps * uniquePorts * portWeight;
         
@@ -197,7 +207,7 @@ public class TierWindowProcessor
         double deviceWeight = uniqueDevices > 1 ? 1.5 : 1.0;
         
         // 5. V4.0 Phase 3: 时间分布权重
-        return baseScore * timeWeight * ipWeight * deviceWeight * timeDistWeight;
+        return baseScore * timeWeight * ipWeight * deviceWeight * timeDistWeight * netWeight;
     }
     
     /**
