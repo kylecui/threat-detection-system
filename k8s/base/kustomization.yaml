@@ -14,12 +14,14 @@ resources:
   - kafka.yaml
   - kafka-topic-init.yaml
   - logstash.yaml
+  - config-server.yaml
   - data-ingestion.yaml
   - stream-processing.yaml
   - taskmanager.yaml
   - customer-management.yaml
   - threat-assessment.yaml
   - alert-management.yaml
+  - api-gateway.yaml
 
 commonLabels:
   app.kubernetes.io/name: threat-detection-system
@@ -30,6 +32,10 @@ images:
     newTag: latest
   - name: threat-detection/stream-processing
     newTag: "1.0"
+  - name: threat-detection/api-gateway
+    newTag: latest
+  - name: threat-detection/config-server
+    newTag: latest
 
 configMapGenerator:
   - name: threat-detection-config

@@ -429,6 +429,43 @@ services:
           memory: 1G
     restart: unless-stopped
 
+  config-server:
+    build:
+      context: ../services/config-server
+      dockerfile: Dockerfile
+      # ✅ Prevent layer caching issues
+      cache_from: []
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+    image: config-server:latest
+    hostname: config-server
+    container_name: config-server
+    ports: ["8899:8899"]
+    environment:
+      <<: *common-env
+      SPRING_PROFILES_ACTIVE: native
+      SERVER_PORT: 8899
+      CONFIG_REPO_PATH: file:/config-repo
+    volumes:
+      - ../config-repo:/config-repo:ro
+    networks:
+      - threat-detection-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8899/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    restart: unless-stopped
+
   topic-init:
     image: confluentinc/cp-kafka:7.4.0
     hostname: topic-init

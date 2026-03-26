@@ -127,6 +127,7 @@
   <modules>
     <module>services/alert-management</module>
     <module>services/api-gateway</module>
+    <module>services/config-server</module>
     <module>services/customer-management</module>
     <module>services/data-ingestion</module>
     <module>services/stream-processing</module>
