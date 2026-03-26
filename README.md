@@ -1,30 +1,22 @@
 # 🚀 威胁检测系统 (Threat Detection System)
 
-一个现代化的、可扩展的威胁检测系统，基于云原生技术构建，已完全实现并部署就绪。
+一个现代化的、可扩展的云原生蜜罐威胁检测平台，基于微服务架构构建。
 
 ---
 
-## 🎯 📚 文档导航指南 (重要提醒)
+## 📚 文档导航指南
 
-**请始终按照标准三步流程使用文档系统：**
+**请按照标准三步流程使用文档系统：**
 
-### 📋 第一步：阅读本 README.md 了解项目概况
-- ✅ 您正在阅读的项目概况文档
-- 包含系统架构、技术栈、快速启动等核心信息
+1. **📋 第一步**: 阅读本 README.md 了解项目概况
+2. **🔍 第二步**: 查看 [📚 文档索引](docs/DOCUMENTATION_INDEX.md) 快速定位所需文档
+3. **📂 第三步**: 进入相应子目录获取详细信息
+   - API文档 → `docs/api/`
+   - 设计规范 → `docs/design/`
+   - 测试指南 → `docs/testing/`
+   - 构建部署 → `docs/build/`
 
-### 🔍 第二步：查看 [📚 文档索引](docs/DOCUMENTATION_INDEX.md) 快速定位
-- 完整的文档目录和导航指南
-- 根据需求类型快速找到相关文档
-
-### 📂 第三步：进入相应子目录获取详细信息
-- API文档 → `docs/api/`
-- 设计规范 → `docs/design/`
-- 测试指南 → `docs/testing/`
-- 构建部署 → `docs/build/`
-
-**💡 提示**: 这三步流程确保您能够高效地找到所需信息，避免在文档海洋中迷失方向。
-
-📄 **快速导航**: [DOCS_NAVIGATION.md](./DOCS_NAVIGATION.md) - 独立的导航指南文件
+📄 **快速导航**: [DOCS_NAVIGATION.md](./DOCS_NAVIGATION.md)
 
 ---
 
@@ -32,377 +24,28 @@
 
 本系统由以下微服务组成：
 
-- **✅ 数据摄取服务 (Data Ingestion Service)**: 接收rsyslog/logstash日志并发布到Kafka，支持批量处理和高可靠性
-- **✅ 流处理服务 (Stream Processing Service)**: 使用Apache Flink进行实时威胁检测，包含增强的威胁评分算法
-- **✅ 威胁评估服务 (Threat Assessment Service)**: 处理威胁评分和风险评估，包含历史趋势分析
-- **✅ 告警管理服务 (Alert Management Service)**: 多通道通知系统 (Email、SMS、Webhook、Slack、Teams)，包含智能去重和升级策略
-- **✅ API网关 (API Gateway)**: 集中式API管理和路由，支持认证、负载均衡和监控
-- **✅ 配置服务器 (Config Server)**: 集中式配置管理，支持Git版本控制和加密属性
+| 服务 | 状态 | 端口 | 说明 |
+|------|------|------|------|
+| **数据摄取服务** (Data Ingestion) | ✅ 完成 | 8080 | 接收rsyslog/logstash日志并发布到Kafka，支持批量处理 |
+| **流处理服务** (Stream Processing) | ✅ 完成 | 8081 (Flink UI) | Apache Flink实时威胁检测，多维度评分算法 |
+| **告警管理服务** (Alert Management) | ✅ 完成 | 8082 | 多通道通知 (Email/SMS/Webhook/Slack/Teams)，智能去重和升级 |
+| **威胁评估服务** (Threat Assessment) | ✅ 完成 | 8083 | 威胁评分和风险评估，历史趋势分析 |
+| **客户管理服务** (Customer Management) | ✅ 完成 | 8084 | 客户CRUD、设备绑定、通知配置 |
+| **API网关** (API Gateway) | 🟡 部分实现 | 8888 | 代码存在，缺少测试和K8s清单 |
+| **配置服务器** (Config Server) | 🔴 未实现 | — | 目录仅有README，无Java代码 |
 
 ## 🛠️ 技术栈
 
-- **后端**: Spring Boot 3.1.5 (OpenJDK 21 LTS)
-- **事件流**: Apache Kafka 3.4+
-- **流处理**: Apache Flink 1.17+
-- **容器化**: Docker + Docker Compose
-- **编排**: Kubernetes + Kustomize
-- **构建工具**: Maven 3.8.7
-- **数据库**: PostgreSQL 15
-- **缓存**: Redis (可选)
-- **开发环境**: Ubuntu 24.04.3 LTS (WSL2)
-
-## � 快速启动
-
-### 开发环境 (Docker)
-
-```bash
-# 克隆仓库
-git clone <repository-url>
-cd threat-detection-system
-
-# 启动所有服务
-cd docker && docker-compose up -d
-
-# 等待服务启动 (约60秒)
-sleep 60
-
-# 验证服务状态
-curl http://localhost:8080/actuator/health  # 数据摄取服务
-curl http://localhost:8081/overview         # Flink Web UI
-curl http://localhost:8082/actuator/health  # API网关
-curl http://localhost:8083/api/v1/assessment/health  # 威胁评估服务
-curl http://localhost:8084/actuator/health  # 告警管理服务
-curl http://localhost:8888/actuator/health  # 配置服务器
-
-# 查看日志
-docker-compose logs -f
-```
-
-### 生产环境 (Kubernetes)
-
-```bash
-# 部署到开发环境
-kubectl apply -k k8s/overlays/development
-
-# 部署到生产环境
-kubectl apply -k k8s/overlays/production
-
-# 检查部署状态
-kubectl get pods -n threat-detection-dev
-```
-
-## 📊 数据流
-
-1. **日志摄取**: 日志通过rsyslog:9080 → 数据摄取服务，支持单条和批量处理
-2. **事件发布**: 结构化事件发布到Kafka主题 (attack-events, status-events)
-3. **实时处理**: Apache Flink实时处理威胁评分，使用增强的多维度算法
-4. **威胁评估**: 威胁评估服务评估风险等级，包含历史趋势分析
-5. **告警生成**: 告警管理服务根据威胁等级触发通知，支持智能去重
-6. **多通道通知**: 支持Email、SMS、Webhook、Slack和Teams通知
-7. **API访问**: API网关提供统一访问所有服务，支持认证和负载均衡
-
-## ✨ 核心特性
-
-- **✅ 实时威胁检测**: 持续监控，亚秒级延迟
-- **✅ 可扩展架构**: 微服务支持水平扩展
-- **✅ 事件驱动处理**: 基于Kafka的事件流
-- **✅ 多环境支持**: 开发和生产环境配置
-- **✅ 健康监控**: 全面的健康检查和指标
-- **✅ 离线数据导入**: 历史数据处理和重放功能
-- **✅ 高可靠性批量摄取**: 连接池、重试逻辑和自动恢复
-- **✅ 增强威胁评分**: 多维度算法，包含端口多样性和设备覆盖奖励
-- **✅ 数据库持久化**: PostgreSQL存储威胁评估结果
-- **✅ 端到端集成**: 完整的数据管道验证
-- **✅ 多通道通知系统**: 支持Email、SMS、Webhook、Slack、Teams通知
-- **✅ 智能告警去重**: 防止告警疲劳，支持时间和内容-based去重
-- **✅ 告警升级策略**: 基于严重程度和响应时间的自动升级
-- **✅ 集中式配置管理**: Git-based配置版本控制和加密属性
-- **✅ API网关**: 统一API管理、认证和负载均衡
-
-## 🧮 威胁评分算法
-
-系统使用复杂的威胁评分算法，具有增强的多维度分析：
-
-```
-threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeight × portWeight × deviceWeight
-```
-
-其中：
-- `portWeight`: 基于端口多样性的风险权重 (1.0-2.0)
-- `deviceWeight`: 多设备覆盖奖励 (1.0-1.5)
-- `timeWeight`: 时间衰减因子
-- `ipWeight`: IP多样性放大
-- `attackCount`: 攻击尝试频率
-- `uniqueIps`: 不同源IP数量
-- `uniquePorts`: 不同目标端口数量
-
-**最新增强功能：**
-- 端口多样性分析，检测复杂攻击模式
-- 多设备覆盖奖励，分布式攻击检测
-- 可配置时间窗口 (默认: 30秒聚合，2分钟评分)
-- 复杂威胁模式的准确性提升
-
-## 📁 项目结构
-
-```
-threat-detection-system/
-├── docker/                 # Docker开发环境
-│   ├── docker-compose.yml  # 服务编排配置
-│   ├── init-db.sql        # 数据库初始化脚本
-│   └── README.md          # Docker设置指南
-├── k8s/                   # Kubernetes部署配置
-│   ├── base/              # 基础配置
-│   ├── overlays/          # 环境特定覆盖
-│   │   ├── development/   # 开发环境
-│   │   └── production/    # 生产环境
-│   └── README.md          # K8s部署指南
-├── services/              # 微服务源码
-│   ├── data-ingestion/    # ✅ 数据摄取服务 (批量处理、高可靠性)
-│   ├── stream-processing/ # ✅ Flink流处理服务 (增强威胁评分)
-│   ├── threat-assessment/ # ✅ 威胁评估服务 (风险评估、趋势分析)
-│   ├── alert-management/  # ✅ 告警管理服务 (多通道通知、智能去重)
-│   ├── api-gateway/       # ✅ API网关服务 (统一API、认证、负载均衡)
-│   └── config-server/     # ✅ 配置服务器 (集中配置、Git版本控制)
-├── infrastructure/        # 基础设施配置
-├── scripts/               # 有组织的工具脚本
-│   ├── test/              # 测试脚本和工具
-│   ├── tools/             # 生产就绪工具脚本
-│   ├── utils/             # 辅助工具和开发工具
-│   ├── init-kafka.sh      # Kafka初始化脚本
-│   ├── Dockerfile         # 脚本的Docker镜像
-│   └── README.md          # 脚本使用指南
-├── tmp/                   # 临时文件目录
-│   ├── error_logs/        # 错误日志
-│   ├── real_test_logs/    # 真实测试日志
-│   └── test_logs/         # 测试日志文件
-└── docs/                  # 文档
-    ├── cloud_native_architecture.md
-    ├── complete_development_plan_2025.md
-    ├── log_format_analysis.md
-    ├── next_action_plan_2025.md
-    └── optimization_summary.md
-```
-
-## 🛠️ 开发环境
-
-### 环境要求
-
-- **操作系统**: Ubuntu 24.04.3 LTS (或Windows上的WSL2)
-- **Java**: OpenJDK 21 LTS
-- **构建工具**: Maven 3.8.7
-- **容器运行时**: Docker Desktop 4.0+ 或 Docker Engine 20.10+
-- **Kubernetes**: kubectl 1.25+ (用于k8s部署)
-
-### 构建服务
-
-```bash
-# 构建所有服务
-mvn clean install
-
-# 构建特定服务
-cd services/data-ingestion
-mvn clean package
-
-# 构建威胁评估服务
-cd services/threat-assessment
-mvn clean compile
-```
-
-### 运行测试
-
-```bash
-# 运行所有测试
-mvn test
-
-# 运行集成测试
-mvn verify
-
-# 带覆盖率的测试
-mvn test jacoco:report
-```
-
-## 🚀 部署选项
-
-### 选项1: Docker开发环境
-
-适合本地开发和测试。详见 `docker/README.md`。
-
-**优点**: 启动快速，易于调试，支持热重载
-**缺点**: 单节点，资源限制
-
-### 选项2: Kubernetes生产环境
-
-适合生产部署，具有高可用性。详见 `k8s/README.md`。
-
-**优点**: 可扩展，多节点，生产就绪
-**缺点**: 资源需求高，设置复杂
-
-## 📚 API文档
-
-服务运行后可访问：
-
-- **数据摄取API**: `http://localhost:8080/swagger-ui.html`
-- **威胁评估API**: `http://localhost:8083/swagger-ui.html`
-- **告警管理API**: `http://localhost:8082/swagger-ui.html`
-- **API网关**: `http://localhost:8082/swagger-ui.html`
-- **Flink Web UI**: `http://localhost:8081`
-- **配置服务器**: `http://localhost:8888`
-
-## 📊 监控
-
-### 健康检查
-
-```bash
-# 服务健康状态
-curl http://localhost:8080/actuator/health  # 数据摄取服务
-curl http://localhost:8081/overview         # Flink作业状态
-curl http://localhost:8082/actuator/health  # API网关
-curl http://localhost:8083/actuator/health  # 威胁评估服务
-curl http://localhost:8084/actuator/health  # 告警管理服务
-curl http://localhost:8888/actuator/health  # 配置服务器
-
-# 指标数据
-curl http://localhost:8080/actuator/metrics
-curl http://localhost:8082/actuator/metrics
-curl http://localhost:8083/actuator/metrics
-curl http://localhost:8084/actuator/metrics
-
-# Flink作业状态
-curl http://localhost:8081/jobs/overview
-```
-
-### 日志查看
-
-```bash
-# Docker日志
-docker-compose logs -f data-ingestion
-docker-compose logs -f threat-assessment
-docker-compose logs -f alert-management
-docker-compose logs -f api-gateway
-docker-compose logs -f config-server
-
-# Kubernetes日志
-kubectl logs -f deployment/data-ingestion -n threat-detection-dev
-kubectl logs -f deployment/threat-assessment -n threat-detection-dev
-kubectl logs -f deployment/alert-management -n threat-detection-dev
-```
-
-### 数据库查询
-
-```bash
-# 连接到PostgreSQL
-docker-compose exec postgres psql -U threat_user -d threat_detection
-
-# 查看威胁评估结果
-SELECT * FROM threat_assessments ORDER BY risk_score DESC LIMIT 10;
-
-# 查看威胁告警统计
-SELECT COUNT(*) as total_alerts FROM threat_alerts;
-
-# 查看通知统计
-SELECT COUNT(*) as total_notifications FROM notifications;
-SELECT channel, COUNT(*) as count FROM notifications GROUP BY channel;
-```
-
-## 配置
-
-### 环境变量
-
-| 变量 | 描述 | 默认值 |
-|------|------|--------|
-| `KAFKA_BOOTSTRAP_SERVERS` | Kafka代理地址 | `localhost:9092` |
-| `SPRING_PROFILES_ACTIVE` | Spring激活配置文件 | `development` |
-| `FLINK_JOBMANAGER_RPC_ADDRESS` | Flink JobManager地址 | `stream-processing` |
-| `SMS_PROVIDER` | SMS服务提供商 | `twilio` |
-| `SLACK_WEBHOOK_URL` | Slack webhook URL | - |
-| `TEAMS_WEBHOOK_URL` | Microsoft Teams webhook URL | - |
-| `ENCRYPT_KEY` | 配置服务器加密密钥 | - |
-| `GIT_CONFIG_URI` | 配置Git仓库URI | - |
-| **⭐ `TIER1_WINDOW_SECONDS`** | **Tier 1 时间窗口(秒) - 勒索软件检测** | **`30`** (推荐: 10-300) |
-| **⭐ `TIER2_WINDOW_SECONDS`** | **Tier 2 时间窗口(秒) - 主要威胁检测** | **`300`** (推荐: 60-1800) |
-| **⭐ `TIER3_WINDOW_SECONDS`** | **Tier 3 时间窗口(秒) - APT检测** | **`900`** (推荐: 300-7200) |
-| `TIER1_WINDOW_NAME` | Tier 1 窗口名称 (告警描述) | `勒索软件快速检测` |
-| `TIER2_WINDOW_NAME` | Tier 2 窗口名称 (告警描述) | `主要威胁检测` |
-| `TIER3_WINDOW_NAME` | Tier 3 窗口名称 (告警描述) | `APT慢速扫描检测` |
-
-> **🆕 时间窗口配置**: 现在支持自定义3层时间窗口的时长和名称，详见 [时间窗口配置指南](docs/guides/TIME_WINDOW_CONFIGURATION.md)
-
-### 配置文件
-
-- `docker-compose.yml`: Docker服务定义
-- `k8s/base/`: Kubernetes基础配置
-- `k8s/overlays/`: 环境特定覆盖配置
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-### Development Workflow
-
-1. **Local Development**: Use Docker Compose for fast iteration
-2. **Testing**: Run unit and integration tests
-3. **Code Review**: Submit PR with detailed description
-4. **CI/CD**: Automated testing and deployment
-5. **Production**: Deploy via Kubernetes manifests
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Port Conflicts**: Check if ports 8080-8084, 8888 are available
-2. **Memory Issues**: Ensure Docker has at least 4GB RAM allocated
-3. **Kafka Connection**: Verify Zookeeper is running before Kafka
-4. **Flink Jobs**: Check JobManager logs for submission errors
-5. **Connection Reset Errors**: Use the enhanced bulk ingestion script with built-in connection pooling:
-   ```bash
-   python3 scripts/tools/bulk_ingest_logs.py --count 5 --workers 4 --batch-size 25
-   ```
-6. **Bulk Ingestion Failures**: Monitor connection pool refresh logs and ensure batch sizes are optimized
-
-### Getting Help
-
-- Check service logs: `docker-compose logs <service-name>`
-- Review documentation in `docs/` directory
-- Check GitHub Issues for known problems
-
-## Roadmap
-
-- [x] Implement API Gateway with authentication
-- [x] Add comprehensive monitoring and alerting
-- [x] Implement data persistence layer
-- [x] Add machine learning-based threat detection
-- [x] Create web-based management dashboard
-- [ ] Advanced threat intelligence integration
-- [ ] Multi-region deployment support
-- [ ] AI-powered anomaly detection
-- [ ] Real-time dashboard with WebSocket updates
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-*最后更新时间：2025年10月10日*
-*系统版本：v2.1*
-*包含完整功能：数据摄取、流处理、威胁评估、多通道告警通知系统、API网关、配置服务器*
-*部署状态：完全部署并测试就绪*
-
-## 🛠️ 技术栈
-
-- **后端**: Spring Boot 3.1.5 (OpenJDK 21 LTS)
-- **事件流**: Apache Kafka 3.4+
-- **流处理**: Apache Flink 1.17+
-- **容器化**: Docker + Docker Compose
-- **编排**: Kubernetes + Kustomize
-- **构建工具**: Maven 3.8.7
-- **数据库**: PostgreSQL 15
-- **缓存**: Redis (可选)
-- **开发环境**: Ubuntu 24.04.3 LTS (WSL2)
+| 组件 | 技术 | 版本 |
+|------|------|------|
+| 后端 | Spring Boot | 3.1.5 (OpenJDK 21 LTS) |
+| 事件流 | Apache Kafka | 3.4+ |
+| 流处理 | Apache Flink | 1.17+ |
+| 容器化 | Docker + Docker Compose | — |
+| 编排 | Kubernetes + Kustomize | — |
+| 构建工具 | Maven | 3.8.7 |
+| 数据库 | PostgreSQL | 15 |
+| 缓存 | Redis | 可选 |
 
 ## 🚀 快速启动
 
@@ -420,10 +63,12 @@ cd docker && docker-compose up -d
 sleep 60
 
 # 验证服务状态
-curl http://localhost:8080/actuator/health  # 数据摄取服务
-curl http://localhost:8081/overview         # Flink Web UI
-curl http://localhost:8082/actuator/health  # 告警管理服务
+curl http://localhost:8080/actuator/health          # 数据摄取服务
+curl http://localhost:8081/overview                  # Flink Web UI
+curl http://localhost:8082/actuator/health          # 告警管理服务
 curl http://localhost:8083/api/v1/assessment/health  # 威胁评估服务
+curl http://localhost:8084/actuator/health          # 客户管理服务
+curl http://localhost:8888/actuator/health          # API网关
 
 # 查看日志
 docker-compose logs -f
@@ -432,62 +77,48 @@ docker-compose logs -f
 ### 生产环境 (Kubernetes)
 
 ```bash
-# 部署到开发环境
-kubectl apply -k k8s/overlays/development
-
-# 部署到生产环境
-kubectl apply -k k8s/overlays/production
-
-# 检查部署状态
-kubectl get pods -n threat-detection-dev
+kubectl apply -k k8s/overlays/development   # 开发环境
+kubectl apply -k k8s/overlays/production    # 生产环境
+kubectl get pods -n threat-detection-dev    # 检查部署状态
 ```
 
 ## 📊 数据流
 
-1. **日志摄取**: 日志通过rsyslog:9080 → 数据摄取服务
-2. **事件发布**: 结构化事件发布到Kafka主题
-3. **实时处理**: Apache Flink实时处理威胁评分
-4. **威胁评估**: 威胁评估服务评估风险等级
-5. **告警生成**: 告警管理服务根据威胁等级触发通知
-6. **多通道通知**: 支持Email、SMS、Webhook、Slack和Teams通知
-7. **API访问**: API网关提供统一访问所有服务 (计划中)
+```
+设备syslog → rsyslog:9080 → Data Ingestion → Kafka (attack-events)
+                                                  ↓
+                                           Flink Stream Processing
+                                                  ↓
+                                           Kafka (threat-alerts)
+                                                  ↓
+                               Threat Assessment ← → PostgreSQL
+                                                  ↓
+                                           Alert Management → Email/SMS/Slack/Webhook/Teams
+```
 
-## ✨ 核心特性
-
-- **✅ 实时威胁检测**: 持续监控，亚秒级延迟
-- **✅ 可扩展架构**: 微服务支持水平扩展
-- **✅ 事件驱动处理**: 基于Kafka的事件流
-- **✅ 多环境支持**: 开发和生产环境配置
-- **✅ 健康监控**: 全面的健康检查和指标
-- **✅ 离线数据导入**: 历史数据处理和重放功能
-- **✅ 高可靠性批量摄取**: 连接池、重试逻辑和自动恢复
-- **✅ 增强威胁评分**: 多维度算法，包含端口多样性和设备覆盖奖励
-- **✅ 数据库持久化**: PostgreSQL存储威胁评估结果
-- **✅ 端到端集成**: 完整的数据管道验证
-- **✅ 多通道通知系统**: 支持Email、SMS、Webhook、Slack和Teams通知
+1. **日志摄取**: rsyslog:9080 → 数据摄取服务，支持单条和批量处理
+2. **事件发布**: 结构化事件发布到Kafka主题 (`attack-events`, `status-events`)
+3. **实时处理**: Apache Flink多维度威胁评分 (30s/5min/15min 三级时间窗口)
+4. **威胁评估**: 风险等级评估 + 历史趋势分析 → PostgreSQL持久化
+5. **告警通知**: 多通道通知 + 智能去重 + 升级策略
 
 ## 🧮 威胁评分算法
-
-系统使用复杂的威胁评分算法，具有增强的多维度分析：
 
 ```
 threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeight × portWeight × deviceWeight
 ```
 
-其中：
-- `portWeight`: 基于端口多样性的风险权重 (1.0-2.0)
-- `deviceWeight`: 多设备覆盖奖励 (1.0-1.5)
-- `timeWeight`: 时间衰减因子
-- `ipWeight`: IP多样性放大
-- `attackCount`: 攻击尝试频率
-- `uniqueIps`: 不同源IP数量
-- `uniquePorts`: 不同目标端口数量
+| 因子 | 说明 | 范围 |
+|------|------|------|
+| `attackCount` | 攻击尝试频率 | — |
+| `uniqueIps` | 访问的诱饵IP数量 (横向移动范围) | — |
+| `uniquePorts` | 尝试的端口种类 (攻击意图多样性) | — |
+| `timeWeight` | 时间衰减因子 (深夜1.2, 工作时间1.0) | 0.8–1.2 |
+| `ipWeight` | IP多样性放大 | 1.0–2.0 |
+| `portWeight` | 端口多样性权重 | 1.0–2.0 |
+| `deviceWeight` | 多设备覆盖奖励 | 1.0–1.5 |
 
-**最新增强功能：**
-- 端口多样性分析，检测复杂攻击模式
-- 多设备覆盖奖励，分布式攻击检测
-- 可配置时间窗口 (默认: 30秒聚合，2分钟评分)
-- 复杂威胁模式的准确性提升
+**威胁等级**: INFO (<10) · LOW (10–50) · MEDIUM (50–100) · HIGH (100–200) · CRITICAL (>200)
 
 ## 📁 项目结构
 
@@ -495,153 +126,29 @@ threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeigh
 threat-detection-system/
 ├── docker/                 # Docker开发环境
 │   ├── docker-compose.yml  # 服务编排配置
-│   ├── init-db.sql        # 数据库初始化脚本
-│   └── README.md          # Docker设置指南
+│   ├── *.sql              # 数据库初始化脚本 (01-17)
+│   └── README.md
 ├── k8s/                   # Kubernetes部署配置
 │   ├── base/              # 基础配置
-│   ├── overlays/          # 环境特定覆盖
-│   │   ├── development/   # 开发环境
-│   │   └── production/    # 生产环境
-│   └── README.md          # K8s部署指南
+│   └── overlays/          # 环境覆盖 (development, production)
 ├── services/              # 微服务源码
-│   ├── data-ingestion/    # ✅ 数据摄取服务
-│   ├── stream-processing/ # ✅ Flink流处理服务
-│   ├── threat-assessment/ # ✅ 威胁评估服务
-│   ├── alert-management/  # ✅ 告警管理服务 (多通道通知)
-│   ├── api-gateway/       # 🟡 API网关服务 (计划中)
-│   └── config-server/     # 🟡 配置服务器 (计划中)
-├── infrastructure/        # 基础设施配置
-├── scripts/               # 有组织的工具脚本
-│   ├── test/              # 测试脚本和工具
-│   ├── tools/             # 生产就绪工具脚本
-│   ├── utils/             # 辅助工具和开发工具
-│   ├── init-kafka.sh      # Kafka初始化脚本
-│   ├── Dockerfile         # 脚本的Docker镜像
-│   └── README.md          # 脚本使用指南
-├── tmp/                   # 临时文件目录
-│   ├── error_logs/        # 错误日志
-│   ├── real_test_logs/    # 真实测试日志
-│   └── test_logs/         # 测试日志文件
-└── docs/                  # 文档
-    ├── cloud_native_architecture.md
-    ├── complete_development_plan_2025.md
-    ├── log_format_analysis.md
-    ├── next_action_plan_2025.md
-    └── optimization_summary.md
-```
-
-## 🛠️ 开发环境
-
-### 环境要求
-
-- **操作系统**: Ubuntu 24.04.3 LTS (或Windows上的WSL2)
-- **Java**: OpenJDK 21 LTS
-- **构建工具**: Maven 3.8.7
-- **容器运行时**: Docker Desktop 4.0+ 或 Docker Engine 20.10+
-- **Kubernetes**: kubectl 1.25+ (用于k8s部署)
-
-### 构建服务
-
-```bash
-# 构建所有服务
-mvn clean install
-
-# 构建特定服务
-cd services/data-ingestion
-mvn clean package
-
-# 构建威胁评估服务
-cd services/threat-assessment
-mvn clean compile
-```
-
-### 运行测试
-
-```bash
-# 运行所有测试
-mvn test
-
-# 运行集成测试
-mvn verify
-
-# 带覆盖率的测试
-mvn test jacoco:report
-```
-
-## 🚀 部署选项
-
-### 选项1: Docker开发环境
-
-适合本地开发和测试。详见 `docker/README.md`。
-
-**优点**: 启动快速，易于调试，支持热重载
-**缺点**: 单节点，资源限制
-
-### 选项2: Kubernetes生产环境
-
-适合生产部署，具有高可用性。详见 `k8s/README.md`。
-
-**优点**: 可扩展，多节点，生产就绪
-**缺点**: 资源需求高，设置复杂
-
-## 📚 API文档
-
-服务运行后可访问：
-
-- **数据摄取API**: `http://localhost:8080/swagger-ui.html`
-- **威胁评估API**: `http://localhost:8083/swagger-ui.html`
-- **告警管理API**: `http://localhost:8082/swagger-ui.html`
-- **Flink Web UI**: `http://localhost:8081`
-
-## 📊 监控
-
-### 健康检查
-
-```bash
-# 服务健康状态
-curl http://localhost:8080/actuator/health  # 数据摄取服务
-curl http://localhost:8081/overview         # Flink作业状态
-curl http://localhost:8082/actuator/health  # 告警管理服务
-curl http://localhost:8083/api/v1/assessment/health  # 威胁评估服务
-
-# 指标数据
-curl http://localhost:8080/actuator/metrics
-curl http://localhost:8082/actuator/metrics
-curl http://localhost:8083/actuator/metrics
-
-# Flink作业状态
-curl http://localhost:8081/jobs/overview
-```
-
-### 日志查看
-
-```bash
-# Docker日志
-docker-compose logs -f data-ingestion
-docker-compose logs -f threat-assessment
-docker-compose logs -f alert-management
-
-# Kubernetes日志
-kubectl logs -f deployment/data-ingestion -n threat-detection-dev
-kubectl logs -f deployment/threat-assessment -n threat-detection-dev
-kubectl logs -f deployment/alert-management -n threat-detection-dev
-```
-
-### 数据库查询
-
-```bash
-# 连接到PostgreSQL
-docker-compose exec postgres psql -U threat_user -d threat_detection
-
-# 查看威胁评估结果
-SELECT * FROM threat_assessments ORDER BY risk_score DESC LIMIT 10;
-
-# 查看威胁告警统计
-SELECT COUNT(*) as total_alerts FROM threat_alerts;
-
-# 查看通知统计
-SELECT COUNT(*) as total_notifications FROM notifications;
-SELECT channel, COUNT(*) as count FROM notifications GROUP BY channel;
+│   ├── data-ingestion/    # ✅ 数据摄取服务 (批量处理、高可靠性)
+│   ├── stream-processing/ # ✅ Flink流处理服务 (增强威胁评分)
+│   ├── threat-assessment/ # ✅ 威胁评估服务 (风险评估、趋势分析)
+│   ├── alert-management/  # ✅ 告警管理服务 (多通道通知、智能去重)
+│   ├── customer-management/ # ✅ 客户管理服务 (CRUD、设备绑定)
+│   ├── api-gateway/       # 🟡 API网关 (代码存在, 缺少测试/K8s)
+│   └── config-server/     # 🔴 配置服务器 (仅有README)
+├── scripts/               # 工具脚本
+│   ├── test/              # 测试脚本
+│   ├── tools/             # 生产工具 (full_restart.sh, bulk_ingest_logs.py)
+│   └── utils/             # 辅助工具
+├── docs/                  # 文档
+│   ├── api/               # REST API文档
+│   ├── design/            # 架构设计文档
+│   ├── fixes/             # 问题修复记录
+│   └── progress/          # 进度报告
+└── infrastructure/        # 基础设施配置
 ```
 
 ## 配置
@@ -654,72 +161,61 @@ SELECT channel, COUNT(*) as count FROM notifications GROUP BY channel;
 | `SPRING_PROFILES_ACTIVE` | Spring激活配置文件 | `development` |
 | `FLINK_JOBMANAGER_RPC_ADDRESS` | Flink JobManager地址 | `stream-processing` |
 | `SMS_PROVIDER` | SMS服务提供商 | `twilio` |
-| `SLACK_WEBHOOK_URL` | Slack webhook URL | - |
-| `TEAMS_WEBHOOK_URL` | Microsoft Teams webhook URL | - |
+| `SLACK_WEBHOOK_URL` | Slack webhook URL | — |
+| `TEAMS_WEBHOOK_URL` | Microsoft Teams webhook URL | — |
+| `ENCRYPT_KEY` | 配置服务器加密密钥 | — |
+| `GIT_CONFIG_URI` | 配置Git仓库URI | — |
+| **⭐ `TIER1_WINDOW_SECONDS`** | Tier 1 时间窗口 — 勒索软件检测 | `30` (推荐 10–300) |
+| **⭐ `TIER2_WINDOW_SECONDS`** | Tier 2 时间窗口 — 主要威胁检测 | `300` (推荐 60–1800) |
+| **⭐ `TIER3_WINDOW_SECONDS`** | Tier 3 时间窗口 — APT检测 | `900` (推荐 300–7200) |
 
-### 配置文件
+> 📖 时间窗口配置详见 [TIME_WINDOW_CONFIGURATION.md](docs/guides/TIME_WINDOW_CONFIGURATION.md)
 
-- `docker-compose.yml`: Docker服务定义
-- `k8s/base/`: Kubernetes基础配置
-- `k8s/overlays/`: 环境特定覆盖配置
+## 📚 API文档
 
-## Contributing
+服务运行后可访问：
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-### Development Workflow
-
-1. **Local Development**: Use Docker Compose for fast iteration
-2. **Testing**: Run unit and integration tests
-3. **Code Review**: Submit PR with detailed description
-4. **CI/CD**: Automated testing and deployment
-5. **Production**: Deploy via Kubernetes manifests
+| 服务 | 地址 |
+|------|------|
+| 数据摄取 API | `http://localhost:8080/swagger-ui.html` |
+| 告警管理 API | `http://localhost:8082/swagger-ui.html` |
+| 威胁评估 API | `http://localhost:8083/swagger-ui.html` |
+| 客户管理 API | `http://localhost:8084/swagger-ui.html` |
+| Flink Web UI | `http://localhost:8081` |
+| API 网关 | `http://localhost:8888` |
 
 ## 📚 文档中心
 
-### 📖 文档导航指南 (必读)
-
-**请按照以下三步流程使用文档系统：**
-
-1. **📋 第一步：从 README.md 开始了解项目概况**
-   - 阅读本页面的系统架构、技术栈、快速启动等核心信息
-   - 了解项目的整体功能和部署方式
-
-2. **🔍 第二步：查看 DOCUMENTATION_INDEX.md 快速定位所需文档**
-   - 访问 [📚 文档索引](docs/DOCUMENTATION_INDEX.md) 获取完整的文档目录
-   - 根据您的需求类型快速定位相关文档
-
-3. **📂 第三步：根据需求进入相应子目录获取详细信息**
-   - API文档 → `docs/api/`
-   - 设计规范 → `docs/design/`
-   - 测试指南 → `docs/testing/`
-   - 构建部署 → `docs/build/`
-
 ### 🎯 核心文档 (按使用频率排序)
-- **[📚 文档索引](docs/DOCUMENTATION_INDEX.md)** ⭐ **导航起点** - 完整的文档目录和导航指南
-- **[下一步研发工作计划](docs/NEXT_DEVELOPMENT_PLAN.md)** ⭐ **最新** - 详细的研发计划和优先级
-- **[调试与测试指南](docs/debugging_and_testing_guide.md)** ⭐ **必读** - 常见问题、调试流程、最佳实践
-- **[快速参考卡片](docs/QUICK_REFERENCE.md)** - 最常用命令速查
-- **[使用指南](USAGE_GUIDE.md)** - 详细的系统使用文档
-- **[开发规范](.github/copilot-instructions.md)** - 代码规范和架构设计
+- **[📚 文档索引](docs/DOCUMENTATION_INDEX.md)** ⭐ 导航起点
+- **[下一步研发工作计划](docs/NEXT_DEVELOPMENT_PLAN.md)** ⭐ 最新
+- **[调试与测试指南](docs/debugging_and_testing_guide.md)** ⭐ 必读
+- **[快速参考卡片](docs/QUICK_REFERENCE.md)**
+- **[使用指南](USAGE_GUIDE.md)**
+- **[开发规范](.github/copilot-instructions.md)**
 
 ### 快速工具脚本
 ```bash
-# 完整重启 (代码修改后必做)
-./scripts/tools/full_restart.sh
+./scripts/tools/full_restart.sh          # 完整重启 (代码修改后必做)
+./scripts/tools/check_persistence.sh     # 检查数据持久化状态
+./scripts/tools/tail_logs.sh             # 实时查看多服务日志
+python3 scripts/test/e2e_mvp_test.py     # 运行E2E测试
+```
 
-# 检查数据持久化状态
-./scripts/tools/check_persistence.sh
+## 🛠️ 开发
 
-# 实时查看多服务日志
-./scripts/tools/tail_logs.sh
+### 环境要求
 
-# 运行E2E测试
-python3 scripts/test/e2e_mvp_test.py
+- Ubuntu 24.04.3 LTS (或WSL2) · OpenJDK 21 LTS · Maven 3.8.7
+- Docker Engine 20.10+ · kubectl 1.25+ (K8s部署)
+
+### 构建与测试
+
+```bash
+mvn clean install                    # 构建所有服务
+mvn test                             # 运行所有测试
+mvn verify                           # 运行集成测试
+mvn test jacoco:report               # 覆盖率报告
 ```
 
 ## Troubleshooting
@@ -729,41 +225,57 @@ python3 scripts/test/e2e_mvp_test.py
 **代码修改后必须重新构建Docker镜像!** 容器不会自动加载新代码。
 
 ```bash
-# 完整重启流程 (推荐使用自动化脚本)
+# 推荐使用自动化脚本
 ./scripts/tools/full_restart.sh
 
 # 或手动执行
 mvn clean package -DskipTests && \
-cd docker && \
-docker compose build --no-cache && \
-docker compose up -d
+cd docker && docker compose build --no-cache && docker compose up -d
 ```
 
-### Common Issues
+### 常见问题
 
-详细的问题排查步骤请参考 **[调试与测试指南](docs/debugging_and_testing_guide.md)**
+详细排查请参考 **[调试与测试指南](docs/debugging_and_testing_guide.md)**
 
-常见问题速查:
-1. **Kafka消费者未启动** → 检查配置文件优先级 (application.properties vs application-docker.yml)
-2. **数据未持久化** → 验证JSONB字段注解 (`@JdbcTypeCode(SqlTypes.JSON)`)
-3. **容器行为未改变** → 使用 `--no-cache` 重新构建镜像
-4. **E2E测试失败** → 确认数据库表名 (threat_alerts vs threat_assessments)
-5. **Port Conflicts** → 检查端口占用 `sudo lsof -i :5432`
+| 问题 | 解决方案 |
+|------|---------|
+| Kafka消费者未启动 | 检查配置文件优先级 (application.properties vs application-docker.yml) |
+| 数据未持久化 | 验证JSONB字段注解 (`@JdbcTypeCode(SqlTypes.JSON)`) |
+| 容器行为未改变 | 使用 `--no-cache` 重新构建镜像 |
+| E2E测试失败 | 确认数据库表名 (threat_alerts vs threat_assessments) |
+| 端口冲突 | 检查端口 8080–8084, 8888 是否被占用 |
+| Connection Reset | `python3 scripts/tools/bulk_ingest_logs.py --count 5 --workers 4 --batch-size 25` |
 
 ### Getting Help
 
 - **📖 查看文档**: [调试与测试指南](docs/debugging_and_testing_guide.md)
-- **📝 查看日志**: `docker logs -f data-ingestion-service`
+- **📝 查看日志**: `docker-compose logs -f <service-name>`
 - **🔍 检查状态**: `./scripts/tools/check_persistence.sh`
 - **💬 GitHub Issues**: 报告新问题或查看已知问题
 
+## Contributing
+
+1. Fork → 2. Feature branch → 3. Changes + Tests → 4. Pull request
+
+### Development Workflow
+
+1. **Local**: Docker Compose → 2. **Test**: Unit + Integration → 3. **Review**: PR → 4. **Deploy**: K8s
+
 ## Roadmap
 
-- [ ] Implement API Gateway with authentication
-- [ ] Add comprehensive monitoring and alerting
-- [ ] Implement data persistence layer
-- [ ] Add machine learning-based threat detection
-- [ ] Create web-based management dashboard
+- [x] 数据摄取与实时流处理
+- [x] 多维度威胁评分算法
+- [x] 多通道告警通知系统
+- [x] 数据库持久化层
+- [x] 客户管理与多租户隔离
+- [ ] API Gateway完善 (测试 + K8s清单)
+- [ ] Config Server实现
+- [ ] V2哨兵数据支持 (MQTT + JSON)
+- [ ] 网段权重配置系统
+- [ ] 高级威胁情报集成
+- [ ] 机器学习威胁检测
+- [ ] Web管理仪表板
+- [ ] 多区域部署支持
 
 ## License
 
@@ -771,6 +283,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-*最后更新时间：2025年10月10日*
-*系统版本：v2.1*
-*包含完整功能：数据摄取、流处理、威胁评估、多通道告警通知系统*
+*最后更新: 2026-03-26*
+*系统版本: v2.1*
+*部署状态: 核心服务 (5/7) 完成并可部署，API网关部分实现，配置服务器待实现*
