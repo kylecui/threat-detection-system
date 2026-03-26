@@ -255,7 +255,7 @@ alert-management:
 SPRING_MAIL_HOST: smtp.163.com
 SPRING_MAIL_PORT: 25
 SPRING_MAIL_USERNAME: threat_detection@163.com
-SPRING_MAIL_PASSWORD: TTXWjJiuxmE2HCRE
+SPRING_MAIL_PASSWORD: ${SMTP_PASSWORD}  # Set via environment variable
 INTEGRATION_TEST_EMAIL_RECIPIENT: kylecui@outlook.com
 ```
 

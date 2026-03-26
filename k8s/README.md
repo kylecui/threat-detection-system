@@ -107,10 +107,11 @@ kubectl get pods -n threat-detection-prod
 |------|------|------|
 | data-ingestion | 8080 | REST API和健康检查 |
 | stream-processing | 8081 | Flink Web UI |
-| api-gateway | 8082 | 统一API网关 |
+| alert-management | 8082 | 告警管理API |
 | threat-assessment | 8083 | 威胁评估API |
-| alert-management | 8084 | 告警管理API |
-| config-server | 8888 | 配置服务器API |
+| customer-management | 8084 | 客户管理API |
+| api-gateway | 8888 | 统一API网关 |
+| config-server | 8899 | 配置服务器API |
 | kafka | 9092 | Kafka客户端连接 |
 | zookeeper | 2181 | Zookeeper客户端连接 |
 
@@ -148,13 +149,13 @@ kubectl exec -it <threat-assessment-pod> -n threat-detection-dev -- curl http://
 
 ```bash
 # 转发API网关到本地
-kubectl port-forward -n threat-detection-dev svc/api-gateway 8082:8082
+kubectl port-forward -n threat-detection-dev svc/api-gateway 8888:8888
 
 # 转发Flink Web UI到本地
 kubectl port-forward -n threat-detection-dev svc/stream-processing 8081:8081
 
 # 转发配置服务器到本地
-kubectl port-forward -n threat-detection-dev svc/config-server 8888:8888
+kubectl port-forward -n threat-detection-dev svc/config-server 8899:8899
 ```
 
 ## 数据持久化
@@ -230,7 +231,7 @@ spec:
         - name: SPRING_PROFILES_ACTIVE
           value: "kubernetes"
         - name: SPRING_CLOUD_CONFIG_URI
-          value: "http://config-server:8888"
+          value: "http://config-server:8899"
 ```
 
 ### 环境特定配置
@@ -272,7 +273,7 @@ spec:
           service:
             name: api-gateway
             port:
-              number: 8082
+              number: 8888
 ```
 
 ## 故障排除
@@ -393,9 +394,9 @@ jobs:
 
     - name: Run integration tests
       run: |
-        kubectl port-forward -n threat-detection-dev svc/api-gateway 8082:8082 &
+        kubectl port-forward -n threat-detection-dev svc/api-gateway 8888:8888 &
         sleep 10
-        curl http://localhost:8082/api/v1/gateway/health
+        curl http://localhost:8888/actuator/health
 ```
 
 ### ArgoCD配置

@@ -141,7 +141,7 @@ INSERT INTO smtp_configs (
     'smtp.163.com',
     25,
     'threat_detection@163.com',
-    'TTXWjJiuxmE2HCRE',
+    'CHANGEME_SET_VIA_ENV',
     'threat_detection@163.com',
     '威胁检测系统',
     false,

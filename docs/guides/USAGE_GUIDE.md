@@ -413,8 +413,8 @@ alert-management:
     SPRING_MAIL_HOST: smtp.163.com
     SPRING_MAIL_PORT: 25
     SPRING_MAIL_USERNAME: threat_detection@163.com
-    SPRING_MAIL_PASSWORD: TTXWjJiuxmE2HCRE
-    # TTXWjJiuxmE2HCRE will expire in 180 days. 
+    SPRING_MAIL_PASSWORD: ${SMTP_PASSWORD}  # Set via environment variable
+    # Never commit real SMTP credentials to version control.
     # SMS配置 (Twilio)
     SMS_PROVIDER: twilio
     TWILIO_ACCOUNT_SID: your-twilio-sid

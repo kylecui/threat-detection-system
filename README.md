@@ -31,8 +31,8 @@
 | **告警管理服务** (Alert Management) | ✅ 完成 | 8082 | 多通道通知 (Email/SMS/Webhook/Slack/Teams)，智能去重和升级 |
 | **威胁评估服务** (Threat Assessment) | ✅ 完成 | 8083 | 威胁评分和风险评估，历史趋势分析 |
 | **客户管理服务** (Customer Management) | ✅ 完成 | 8084 | 客户CRUD、设备绑定、通知配置 |
-| **API网关** (API Gateway) | 🟡 部分实现 | 8888 | 代码存在，缺少测试和K8s清单 |
-| **配置服务器** (Config Server) | 🔴 未实现 | — | 目录仅有README，无Java代码 |
+| **API网关** (API Gateway) | ✅ 完成 | 8888 | 统一入口，路由管理、熔断降级，含单元测试和K8s清单 |
+| **配置服务器** (Config Server) | 🟡 部分实现 | 8899 | Spring Cloud Config Server (native backend)，含Dockerfile和K8s清单，缺少单元测试 |
 
 ## 🛠️ 技术栈
 
@@ -137,8 +137,8 @@ threat-detection-system/
 │   ├── threat-assessment/ # ✅ 威胁评估服务 (风险评估、趋势分析)
 │   ├── alert-management/  # ✅ 告警管理服务 (多通道通知、智能去重)
 │   ├── customer-management/ # ✅ 客户管理服务 (CRUD、设备绑定)
-│   ├── api-gateway/       # 🟡 API网关 (代码存在, 缺少测试/K8s)
-│   └── config-server/     # 🔴 配置服务器 (仅有README)
+│   ├── api-gateway/       # ✅ API网关 (路由、熔断、测试、K8s)
+│   └── config-server/     # 🟡 配置服务器 (native backend, 缺少测试)
 ├── scripts/               # 工具脚本
 │   ├── test/              # 测试脚本
 │   ├── tools/             # 生产工具 (full_restart.sh, bulk_ingest_logs.py)
@@ -268,8 +268,8 @@ cd docker && docker compose build --no-cache && docker compose up -d
 - [x] 多通道告警通知系统
 - [x] 数据库持久化层
 - [x] 客户管理与多租户隔离
-- [ ] API Gateway完善 (测试 + K8s清单)
-- [ ] Config Server实现
+- [x] API Gateway完善 (测试 + K8s清单)
+- [x] Config Server实现 (native backend, Docker, K8s)
 - [ ] V2哨兵数据支持 (MQTT + JSON)
 - [ ] 网段权重配置系统
 - [ ] 高级威胁情报集成
@@ -285,4 +285,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 *最后更新: 2026-03-26*
 *系统版本: v2.1*
-*部署状态: 核心服务 (5/7) 完成并可部署，API网关部分实现，配置服务器待实现*
+*部署状态: 核心服务 (6/7) 完成并可部署，配置服务器部分实现 (缺少测试)*
