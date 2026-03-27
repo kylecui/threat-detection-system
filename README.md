@@ -31,6 +31,7 @@
 | **告警管理服务** (Alert Management) | ✅ 完成 | 8082 | 多通道通知 (Email/SMS/Webhook/Slack/Teams)，智能去重和升级 |
 | **威胁评估服务** (Threat Assessment) | ✅ 完成 | 8083 | 威胁评分和风险评估，历史趋势分析 |
 | **客户管理服务** (Customer Management) | ✅ 完成 | 8084 | 客户CRUD、设备绑定、通知配置 |
+| **威胁情报服务** (Threat Intelligence) | ✅ 完成 | 8085 | 威胁情报指标管理、IP信誉查询、多源IOC聚合 |
 | **API网关** (API Gateway) | ✅ 完成 | 8888 | 统一入口，路由管理、熔断降级，含单元测试和K8s清单 |
 | **配置服务器** (Config Server) | ✅ 完成 | 8899 | Spring Cloud Config Server (native backend)，含Dockerfile、K8s清单和单元测试 |
 
@@ -69,6 +70,7 @@ curl http://localhost:8081/overview                  # Flink Web UI
 curl http://localhost:8082/actuator/health          # 告警管理服务
 curl http://localhost:8083/api/v1/assessment/health  # 威胁评估服务
 curl http://localhost:8084/actuator/health          # 客户管理服务
+curl http://localhost:8085/actuator/health          # 威胁情报服务
 curl http://localhost:8888/actuator/health          # API网关
 
 # 查看日志
@@ -107,7 +109,7 @@ V2哨兵 (MQTT JSON) → EMQX:1883  ↗                        ↓
 ## 🧮 威胁评分算法
 
 ```
-threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeight × portWeight × deviceWeight × netWeight
+threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeight × portWeight × deviceWeight × netWeight × intelWeight
 ```
 
 | 因子 | 说明 | 范围 |
@@ -120,6 +122,7 @@ threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeigh
 | `portWeight` | 端口多样性权重 | 1.0–2.0 |
 | `deviceWeight` | 多设备覆盖奖励 | 1.0–1.5 |
 | `netWeight` | 网段权重 (按客户+CIDR配置) | 0.01–10.0 |
+| `intelWeight` | 威胁情报权重 (IOC置信度+严重性) | 1.0–4.5 |
 
 **威胁等级**: INFO (<10) · LOW (10–50) · MEDIUM (50–100) · HIGH (100–200) · CRITICAL (>200)
 
@@ -129,7 +132,7 @@ threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeigh
 threat-detection-system/
 ├── docker/                 # Docker开发环境
 │   ├── docker-compose.yml  # 服务编排配置 (含EMQX MQTT Broker)
-│   ├── *.sql              # 数据库初始化脚本 (01-21)
+│   ├── *.sql              # 数据库初始化脚本 (01-23)
 │   └── README.md
 ├── k8s/                   # Kubernetes部署配置
 │   ├── base/              # 基础配置
@@ -140,6 +143,7 @@ threat-detection-system/
 │   ├── threat-assessment/ # ✅ 威胁评估服务 (风险评估、趋势分析)
 │   ├── alert-management/  # ✅ 告警管理服务 (多通道通知、智能去重)
 │   ├── customer-management/ # ✅ 客户管理服务 (CRUD、设备绑定、网段权重)
+│   ├── threat-intelligence/ # ✅ 威胁情报服务 (IOC管理、IP信誉、情报聚合)
 │   ├── api-gateway/       # ✅ API网关 (路由、熔断、测试、K8s)
 │   └── config-server/     # ✅ 配置服务器 (native backend, 含单元测试)
 ├── scripts/               # 工具脚本
@@ -171,6 +175,7 @@ threat-detection-system/
 | `MQTT_ENABLED` | 启用V2哨兵MQTT摄取 | `false` |
 | `MQTT_BROKER_URL` | EMQX MQTT Broker地址 | `tcp://emqx:1883` |
 | `NET_WEIGHT_SERVICE_URL` | 网段权重服务地址 | `http://customer-management:8084` |
+| `THREAT_INTEL_SERVICE_URL` | 威胁情报服务地址 | `http://threat-intelligence:8085` |
 | **⭐ `TIER1_WINDOW_SECONDS`** | Tier 1 时间窗口 — 勒索软件检测 | `30` (推荐 10–300) |
 | **⭐ `TIER2_WINDOW_SECONDS`** | Tier 2 时间窗口 — 主要威胁检测 | `300` (推荐 60–1800) |
 | **⭐ `TIER3_WINDOW_SECONDS`** | Tier 3 时间窗口 — APT检测 | `900` (推荐 300–7200) |
@@ -187,6 +192,7 @@ threat-detection-system/
 | 告警管理 API | `http://localhost:8082/swagger-ui.html` |
 | 威胁评估 API | `http://localhost:8083/swagger-ui.html` |
 | 客户管理 API | `http://localhost:8084/swagger-ui.html` |
+| 威胁情报 API | `http://localhost:8085/swagger-ui.html` |
 | Flink Web UI | `http://localhost:8081` |
 | API 网关 | `http://localhost:8888` |
 
@@ -279,7 +285,7 @@ cd docker && docker compose build --no-cache && docker compose up -d
 - [x] V2哨兵数据支持 (MQTT + JSON，EMQX Broker)
 - [x] 网段权重配置系统 (CRUD API + 评分集成)
 - [x] 网络拓扑与心跳持久化 (设备清单、拓扑快照、主机发现)
-- [ ] 高级威胁情报集成
+- [x] 高级威胁情报集成
 - [ ] 机器学习威胁检测
 - [ ] Web管理仪表板
 - [ ] 多区域部署支持
@@ -291,5 +297,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ---
 
 *最后更新: 2026-03-27*
-*系统版本: v2.3*
-*部署状态: 全部核心服务 (7/7) 完成并可部署，V2哨兵MQTT支持已集成，心跳拓扑持久化已完成*
+*系统版本: v2.4*
+*部署状态: 全部核心服务 (8/8) 完成并可部署，V2哨兵MQTT支持已集成，威胁情报集成已完成*

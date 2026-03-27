@@ -22,6 +22,8 @@ public class AggregatedAttackData implements Serializable {
     private int uniqueDevices;
     private double mixedPortWeight;
     private double netWeight;
+    private int intelScore;        // 威胁情报置信度 (0-100)
+    private double intelWeight;    // 威胁情报权重因子
     private int tier;
     private String windowType;
     private Instant windowStart;
@@ -43,7 +45,9 @@ public class AggregatedAttackData implements Serializable {
     public AggregatedAttackData(String customerId, String attackMac, String attackIp,
                                String mostAccessedHoneypotIp, int attackCount,
                                int uniqueIps, int uniquePorts, int uniqueDevices,
-                               double mixedPortWeight, double netWeight, int tier, String windowType,
+                               double mixedPortWeight, double netWeight,
+                               int intelScore, double intelWeight,
+                               int tier, String windowType,
                                Instant windowStart, Instant windowEnd, Instant timestamp,
                                double threatScore, String threatLevel,
                                long eventTimeSpan, double burstIntensity, double timeDistributionWeight) {
@@ -57,6 +61,8 @@ public class AggregatedAttackData implements Serializable {
         this.uniqueDevices = uniqueDevices;
         this.mixedPortWeight = mixedPortWeight;
         this.netWeight = netWeight;
+        this.intelScore = intelScore;
+        this.intelWeight = intelWeight;
         this.tier = tier;
         this.windowType = windowType;
         this.windowStart = windowStart;
@@ -85,6 +91,8 @@ public class AggregatedAttackData implements Serializable {
         private int uniqueDevices;
         private double mixedPortWeight;
         private double netWeight;
+        private int intelScore;
+        private double intelWeight;
         private int tier;
         private String windowType;
         private Instant windowStart;
@@ -145,6 +153,16 @@ public class AggregatedAttackData implements Serializable {
             this.netWeight = netWeight;
             return this;
         }
+
+        public Builder intelScore(int intelScore) {
+            this.intelScore = intelScore;
+            return this;
+        }
+
+        public Builder intelWeight(double intelWeight) {
+            this.intelWeight = intelWeight;
+            return this;
+        }
         
         public Builder tier(int tier) {
             this.tier = tier;
@@ -199,7 +217,8 @@ public class AggregatedAttackData implements Serializable {
         public AggregatedAttackData build() {
             return new AggregatedAttackData(customerId, attackMac, attackIp,
                 mostAccessedHoneypotIp, attackCount, uniqueIps, uniquePorts, 
-                uniqueDevices, mixedPortWeight, netWeight, tier, windowType, windowStart,
+                uniqueDevices, mixedPortWeight, netWeight, intelScore, intelWeight,
+                tier, windowType, windowStart,
                 windowEnd, timestamp, threatScore, threatLevel,
                 eventTimeSpan, burstIntensity, timeDistributionWeight);
         }
@@ -237,6 +256,12 @@ public class AggregatedAttackData implements Serializable {
 
     public double getNetWeight() { return netWeight; }
     public void setNetWeight(double netWeight) { this.netWeight = netWeight; }
+
+    public int getIntelScore() { return intelScore; }
+    public void setIntelScore(int intelScore) { this.intelScore = intelScore; }
+
+    public double getIntelWeight() { return intelWeight; }
+    public void setIntelWeight(double intelWeight) { this.intelWeight = intelWeight; }
     
     public int getTier() { return tier; }
     public void setTier(int tier) { this.tier = tier; }

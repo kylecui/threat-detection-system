@@ -46,6 +46,8 @@ services:
       - ./19-device-inventory.sql:/docker-entrypoint-initdb.d/19-device-inventory.sql
       - ./20-topology-snapshots.sql:/docker-entrypoint-initdb.d/20-topology-snapshots.sql
       - ./21-discovered-hosts.sql:/docker-entrypoint-initdb.d/21-discovered-hosts.sql
+      - ./22-threat-indicators.sql:/docker-entrypoint-initdb.d/22-threat-indicators.sql
+      - ./23-threat-intel-feeds.sql:/docker-entrypoint-initdb.d/23-threat-intel-feeds.sql
     networks:
       - threat-detection-network
     healthcheck:
@@ -239,6 +241,7 @@ services:
       
       # ✅ 端口权重服务配置 (Port Weight Service Integration)
       THREAT_ASSESSMENT_SERVICE_URL: http://threat-assessment:8082
+      THREAT_INTEL_SERVICE_URL: http://threat-intelligence:8085
       
       # ✅ 时间窗口配置（可自定义）
       # 时长配置（单位：秒，推荐范围见下方说明）
@@ -423,6 +426,46 @@ services:
         reservations:
           cpus: '1.0'
           memory: 1G
+    restart: unless-stopped
+
+  threat-intelligence:
+    build:
+      context: ../services/threat-intelligence
+      dockerfile: Dockerfile
+      cache_from: []
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+    image: threat-intelligence:latest
+    hostname: threat-intelligence
+    container_name: threat-intelligence-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports: ["8085:8085"]
+    environment:
+      <<: *common-env
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
+      SPRING_DATASOURCE_USERNAME: threat_user
+      SPRING_DATASOURCE_PASSWORD: threat_password
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+    networks:
+      - threat-detection-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8085/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
     restart: unless-stopped
 
   api-gateway:

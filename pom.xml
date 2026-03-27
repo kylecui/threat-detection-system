@@ -132,6 +132,7 @@
     <module>services/data-ingestion</module>
     <module>services/stream-processing</module>
     <module>services/threat-assessment</module>
+    <module>services/threat-intelligence</module>
   </modules>
 
   <build>
