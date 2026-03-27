@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE
+pyrightconfig.json
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ONNX model artifacts (large binary files)
+models/*.onnx
+
+# Testing / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db

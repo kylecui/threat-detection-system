@@ -34,6 +34,7 @@
 | **威胁情报服务** (Threat Intelligence) | ✅ 完成 | 8085 | 威胁情报指标管理、IP信誉查询、多源IOC聚合 |
 | **API网关** (API Gateway) | ✅ 完成 | 8888 | 统一入口，路由管理、熔断降级，含单元测试和K8s清单 |
 | **配置服务器** (Config Server) | ✅ 完成 | 8899 | Spring Cloud Config Server (native backend)，含Dockerfile、K8s清单和单元测试 |
+| **ML检测服务** (ML Detection) | ✅ 完成 | 8086 | PyTorch自编码器异常检测，ONNX Runtime推理，Kafka异步集成 |
 
 ## 🛠️ 技术栈
 
@@ -48,6 +49,8 @@
 | 数据库 | PostgreSQL | 15 |
 | 缓存 | Redis | 可选 |
 | MQTT Broker | EMQX | 5.5.1 |
+| ML推理 | PyTorch + ONNX Runtime | 2.2+ |
+| ML后端 | Python (FastAPI) | 3.11+ |
 
 ## 🚀 快速启动
 
@@ -71,6 +74,7 @@ curl http://localhost:8082/actuator/health          # 告警管理服务
 curl http://localhost:8083/api/v1/assessment/health  # 威胁评估服务
 curl http://localhost:8084/actuator/health          # 客户管理服务
 curl http://localhost:8085/actuator/health          # 威胁情报服务
+curl http://localhost:8086/health                    # ML检测服务
 curl http://localhost:8888/actuator/health          # API网关
 
 # 查看日志
@@ -93,9 +97,13 @@ V2哨兵 (MQTT JSON) → EMQX:1883  ↗                        ↓
                                                     Flink Stream Processing
                                                           ↓
                                                     Kafka (threat-alerts)
-                                                          ↓
-                                       Threat Assessment ← → PostgreSQL
-                                                          ↓
+                                                      ↓         ↓
+                                   Threat Assessment ← → PostgreSQL
+                                                      ↓         ↓
+                                                      ↓    ML Detection (PyTorch/ONNX)
+                                                      ↓         ↓
+                                                      ↓    Kafka (ml-threat-detections)
+                                                      ↓
                                                     Alert Management → Email/SMS/Slack/Webhook/Teams
 ```
 
@@ -104,7 +112,8 @@ V2哨兵 (MQTT JSON) → EMQX:1883  ↗                        ↓
 3. **事件发布**: 结构化事件发布到Kafka主题 (`attack-events`, `status-events`)
 4. **实时处理**: Apache Flink多维度威胁评分 (30s/5min/15min 三级时间窗口)
 5. **威胁评估**: 风险等级评估 + 历史趋势分析 → PostgreSQL持久化
-6. **告警通知**: 多通道通知 + 智能去重 + 升级策略
+6. **ML检测**: PyTorch自编码器异常检测 → ONNX Runtime推理 → mlWeight建议性评分倍率 (0.5-3.0)
+7. **告警通知**: 多通道通知 + 智能去重 + 升级策略
 
 ## 🧮 威胁评分算法
 
@@ -145,7 +154,8 @@ threat-detection-system/
 │   ├── customer-management/ # ✅ 客户管理服务 (CRUD、设备绑定、网段权重)
 │   ├── threat-intelligence/ # ✅ 威胁情报服务 (IOC管理、IP信誉、情报聚合)
 │   ├── api-gateway/       # ✅ API网关 (路由、熔断、测试、K8s)
-│   └── config-server/     # ✅ 配置服务器 (native backend, 含单元测试)
+│   ├── config-server/     # ✅ 配置服务器 (native backend, 含单元测试)
+│   └── ml-detection/      # ✅ ML检测服务 (PyTorch自编码器、ONNX Runtime、FastAPI)
 ├── scripts/               # 工具脚本
 │   ├── test/              # 测试脚本
 │   ├── tools/             # 生产工具 (full_restart.sh, bulk_ingest_logs.py)
@@ -193,6 +203,7 @@ threat-detection-system/
 | 威胁评估 API | `http://localhost:8083/swagger-ui.html` |
 | 客户管理 API | `http://localhost:8084/swagger-ui.html` |
 | 威胁情报 API | `http://localhost:8085/swagger-ui.html` |
+| ML检测 API | `http://localhost:8086/docs` |
 | Flink Web UI | `http://localhost:8081` |
 | API 网关 | `http://localhost:8888` |
 
@@ -286,7 +297,7 @@ cd docker && docker compose build --no-cache && docker compose up -d
 - [x] 网段权重配置系统 (CRUD API + 评分集成)
 - [x] 网络拓扑与心跳持久化 (设备清单、拓扑快照、主机发现)
 - [x] 高级威胁情报集成
-- [ ] 机器学习威胁检测
+- [x] 机器学习威胁检测 (PyTorch自编码器 + ONNX Runtime推理)
 - [ ] Web管理仪表板
 - [ ] 多区域部署支持
 
@@ -297,5 +308,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ---
 
 *最后更新: 2026-03-27*
-*系统版本: v2.4*
-*部署状态: 全部核心服务 (8/8) 完成并可部署，V2哨兵MQTT支持已集成，威胁情报集成已完成*
+*系统版本: v2.5*
+*部署状态: 全部核心服务 (9/9) 完成并可部署，ML威胁检测已集成，V2哨兵MQTT支持已集成，威胁情报集成已完成*

@@ -558,6 +558,46 @@ services:
           memory: 256M
     restart: unless-stopped
 
+  ml-detection:
+    build:
+      context: ../services/ml-detection
+      dockerfile: Dockerfile
+    image: ml-detection:latest
+    hostname: ml-detection
+    container_name: ml-detection-service
+    depends_on:
+      - kafka
+      - postgres
+    ports: ["8086:8086"]
+    environment:
+      ML_SERVICE_PORT: 8086
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_INPUT_TOPIC: threat-alerts
+      KAFKA_OUTPUT_TOPIC: ml-threat-detections
+      KAFKA_CONSUMER_GROUP: ml-detection-consumer
+      MODEL_DIR: /app/models
+      ML_CONFIDENCE_THRESHOLD: 0.3
+      ML_DEFAULT_WEIGHT: 1.0
+      DATABASE_URL: postgresql://threat_user:threat_password@postgres:5432/threat_detection
+      LOG_LEVEL: INFO
+    networks:
+      - threat-detection-network
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8086/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    restart: unless-stopped
+
   topic-init:
     image: confluentinc/cp-kafka:7.4.0
     hostname: topic-init
@@ -572,7 +612,8 @@ services:
       kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic status-events &&
       kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic threat-alerts &&
       kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic minute-aggregations &&
-      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic device-health-alerts
+      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic device-health-alerts &&
+      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic ml-threat-detections
       "
     networks:
       - threat-detection-network
