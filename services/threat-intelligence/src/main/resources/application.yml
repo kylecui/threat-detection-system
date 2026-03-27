@@ -28,3 +28,20 @@ logging:
   level:
     com.threatdetection.intelligence: INFO
     org.hibernate.SQL: WARN
+
+feed:
+  poller:
+    enabled: ${FEED_POLLER_ENABLED:true}
+    check-interval-ms: ${FEED_POLLER_CHECK_INTERVAL_MS:300000}
+    initial-delay-ms: ${FEED_POLLER_INITIAL_DELAY_MS:60000}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      feedPoller:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 300s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true

@@ -312,25 +312,52 @@ services/threat-intelligence/
 
 ---
 
-## 7. Phase 2 — External Feed Connectors (Future)
+## 7. Phase 2 — External Feed Connectors (Implemented)
 
-### Planned Feeds
+### Feeds
 
-| Feed | Type | Rate Limit | Priority |
-|------|------|-----------|----------|
-| Internal Honeypot | Direct DB write | Unlimited | P0 |
-| AbuseIPDB | REST API | 1000 req/day (free) | P1 |
-| AlienVault OTX | REST API | Generous free tier | P1 |
-| VirusTotal | REST API | 500 req/day (free) | P2 |
-| GreyNoise | REST API | 5000 req/day (community) | P2 |
+| Feed | Type | Rate Limit | Priority | Status |
+|------|------|-----------|----------|--------|
+| Internal Honeypot | Direct DB write | Unlimited | P0 | ✅ Phase 1 |
+| AbuseIPDB | REST API | 1000 req/day (free) | P1 | ✅ Phase 2 |
+| AlienVault OTX | REST API | Generous free tier | P1 | ✅ Phase 2 |
+| VirusTotal | REST API | 500 req/day (free) | P2 | ✅ Phase 2 |
+| GreyNoise | REST API | 5000 req/day (community) | P2 | ✅ Phase 2 |
 
 ### Feed Poller Architecture
 
-- `@Scheduled` with `fixedDelay` (not `fixedRate`) to prevent overlap
-- Bucket4j token bucket per feed for rate limiting
-- Resilience4j `@CircuitBreaker` per feed
-- Caffeine cache for deduplication
-- Bulk upsert on poll completion
+- `FeedPoller` abstract base class with template method pattern (`buildRequest()`, `parseResponse()`)
+- `FeedPollerScheduler` — `@Scheduled` with `fixedDelay` (not `fixedRate`) to prevent overlap
+- `FeedRateLimiter` — Caffeine-backed token-bucket per feed for rate limiting
+- Resilience4j `@CircuitBreaker` per feed (name: `feedPoller`)
+- Bulk upsert via `ThreatIndicatorService.bulkUpsert()` on poll completion
+- All feeds start disabled — operators enable after setting API key env vars
+
+### Feed Management API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/threat-intel/feeds` | GET | List all feed configs |
+| `/api/v1/threat-intel/feeds/{id}` | PUT | Update feed (enable/disable, interval, URL) |
+| `/api/v1/threat-intel/feeds/{id}/poll` | POST | Trigger manual poll |
+
+### Configuration
+
+```yaml
+feed:
+  poller:
+    enabled: ${FEED_POLLER_ENABLED:true}
+    check-interval-ms: 300000
+    initial-delay-ms: 60000
+
+# Env vars for API keys:
+# ABUSEIPDB_API_KEY, OTX_API_KEY, VIRUSTOTAL_API_KEY, GREYNOISE_API_KEY
+```
+
+### Schema Upgrades (Migration 25)
+
+- `ioc_inet` upgraded from `VARCHAR(50)` to `INET` for GiST containment queries (`<<` operator)
+- GiST index on `ioc_inet` for CIDR range matching
 
 ### ipit/TIRE Reference Integration
 
@@ -350,6 +377,8 @@ stream-processing → ThreatIntelServiceClient → threat-intelligence (8085)
 
 - `22-threat-indicators.sql` — Main table + indexes
 - `23-threat-intel-feeds.sql` — Feed configuration table
+- `24-threat-intel-feed-seeds.sql` — External feed seed configs (abuseipdb, otx, virustotal, greynoise)
+- `25-threat-indicators-phase2-upgrade.sql` — INET type upgrade + GiST index
 
 ---
 

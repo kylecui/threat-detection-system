@@ -36,7 +36,7 @@ public class ThreatIndicator {
     @Column(name = "ioc_type", nullable = false, length = 20)
     private IocType iocType;
 
-    @Column(name = "ioc_inet")
+    @Column(name = "ioc_inet", columnDefinition = "inet")
     private String iocInet;
 
     @Builder.Default

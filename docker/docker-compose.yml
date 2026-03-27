@@ -48,6 +48,8 @@ services:
       - ./21-discovered-hosts.sql:/docker-entrypoint-initdb.d/21-discovered-hosts.sql
       - ./22-threat-indicators.sql:/docker-entrypoint-initdb.d/22-threat-indicators.sql
       - ./23-threat-intel-feeds.sql:/docker-entrypoint-initdb.d/23-threat-intel-feeds.sql
+      - ./24-threat-intel-feed-seeds.sql:/docker-entrypoint-initdb.d/24-threat-intel-feed-seeds.sql
+      - ./25-threat-indicators-phase2-upgrade.sql:/docker-entrypoint-initdb.d/25-threat-indicators-phase2-upgrade.sql
     networks:
       - threat-detection-network
     healthcheck:
@@ -450,6 +452,11 @@ services:
       SPRING_DATASOURCE_PASSWORD: threat_password
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
+      OTX_API_KEY: ${OTX_API_KEY:-}
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      GREYNOISE_API_KEY: ${GREYNOISE_API_KEY:-}
+      FEED_POLLER_ENABLED: ${FEED_POLLER_ENABLED:-true}
     networks:
       - threat-detection-network
     healthcheck:

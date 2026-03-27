@@ -282,6 +282,11 @@ public class ThreatIndicatorService {
         return threatIntelFeedRepository.findAll();
     }
 
+    @Transactional
+    public ThreatIntelFeed saveFeed(ThreatIntelFeed feed) {
+        return threatIntelFeedRepository.save(feed);
+    }
+
     private void applyUpsertUpdate(ThreatIndicator indicator, CreateIndicatorRequest item) {
         indicator.setIocType(item.getIocType());
         indicator.setIocInet(resolveIocInet(item.getIocType(), item.getIocValue()));

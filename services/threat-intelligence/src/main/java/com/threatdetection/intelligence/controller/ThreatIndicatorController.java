@@ -6,6 +6,8 @@ import com.threatdetection.intelligence.dto.IndicatorResponse;
 import com.threatdetection.intelligence.dto.LookupResponse;
 import com.threatdetection.intelligence.dto.StatisticsResponse;
 import com.threatdetection.intelligence.dto.UpdateIndicatorRequest;
+import com.threatdetection.intelligence.feed.FeedPollerResult;
+import com.threatdetection.intelligence.feed.FeedPollerScheduler;
 import com.threatdetection.intelligence.model.ThreatIntelFeed;
 import com.threatdetection.intelligence.service.ThreatIndicatorService;
 import jakarta.validation.Valid;
@@ -37,9 +39,11 @@ public class ThreatIndicatorController {
     private static final Logger logger = LoggerFactory.getLogger(ThreatIndicatorController.class);
 
     private final ThreatIndicatorService threatIndicatorService;
+    private final FeedPollerScheduler feedPollerScheduler;
 
-    public ThreatIndicatorController(ThreatIndicatorService threatIndicatorService) {
+    public ThreatIndicatorController(ThreatIndicatorService threatIndicatorService, FeedPollerScheduler feedPollerScheduler) {
         this.threatIndicatorService = threatIndicatorService;
+        this.feedPollerScheduler = feedPollerScheduler;
     }
 
     @GetMapping("/lookup")
@@ -98,5 +102,35 @@ public class ThreatIndicatorController {
     @GetMapping("/statistics")
     public ResponseEntity<StatisticsResponse> getStatistics() {
         return ResponseEntity.ok(threatIndicatorService.getStatistics());
+    }
+
+    @PutMapping("/feeds/{id}")
+    public ResponseEntity<ThreatIntelFeed> updateFeed(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> updates
+    ) {
+        ThreatIntelFeed feed = threatIndicatorService.listFeeds().stream()
+                .filter(f -> f.getId().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Feed not found: " + id));
+
+        if (updates.containsKey("enabled")) {
+            feed.setEnabled((Boolean) updates.get("enabled"));
+        }
+        if (updates.containsKey("pollIntervalHours")) {
+            feed.setPollIntervalHours((Integer) updates.get("pollIntervalHours"));
+        }
+        if (updates.containsKey("feedUrl")) {
+            feed.setFeedUrl((String) updates.get("feedUrl"));
+        }
+
+        ThreatIntelFeed saved = threatIndicatorService.saveFeed(feed);
+        return ResponseEntity.ok(saved);
+    }
+
+    @PostMapping("/feeds/{id}/poll")
+    public ResponseEntity<FeedPollerResult> triggerPoll(@PathVariable Long id) {
+        FeedPollerResult result = feedPollerScheduler.triggerManualPoll(id);
+        return ResponseEntity.ok(result);
     }
 }
