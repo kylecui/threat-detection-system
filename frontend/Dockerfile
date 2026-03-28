@@ -8,8 +8,9 @@ WORKDIR /app
 # 复制依赖文件
 COPY package.json ./
 
-# 安装依赖 (利用Docker缓存)
-RUN npm install --legacy-peer-deps
+# 使用国内镜像加速 + 安装依赖
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install --legacy-peer-deps
 
 # ===========================
 # 阶段2: 开发环境
