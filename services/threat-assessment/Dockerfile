@@ -4,7 +4,7 @@
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /workspace
 
-# Copy parent POM first for dependency caching
+COPY maven-settings.xml /root/.m2/settings.xml
 COPY pom.xml ./pom.xml
 
 # Copy all module POMs for dependency resolution
