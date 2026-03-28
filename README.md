@@ -118,7 +118,7 @@ V2哨兵 (MQTT JSON) → EMQX:1883  ↗                        ↓
 ## 🧮 威胁评分算法
 
 ```
-threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeight × portWeight × deviceWeight × netWeight × intelWeight
+threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeight × portWeight × deviceWeight × netWeight × intelWeight × mlWeight
 ```
 
 | 因子 | 说明 | 范围 |
@@ -132,6 +132,7 @@ threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeigh
 | `deviceWeight` | 多设备覆盖奖励 | 1.0–1.5 |
 | `netWeight` | 网段权重 (按客户+CIDR配置) | 0.01–10.0 |
 | `intelWeight` | 威胁情报权重 (IOC置信度+严重性) | 1.0–4.5 |
+| `mlWeight` | ML异常检测建议性倍率 (自编码器异常分数→乘数，特征开关控制) | 0.5–3.0 |
 
 **威胁等级**: INFO (<10) · LOW (10–50) · MEDIUM (50–100) · HIGH (100–200) · CRITICAL (>200)
 

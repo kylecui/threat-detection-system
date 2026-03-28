@@ -562,7 +562,7 @@ ml-detection:
 
 ## 10. Phased Rollout
 
-### Phase 1 (Current): Tabular Anomaly Detection
+### Phase 1 (Complete ✅): Tabular Anomaly Detection
 - FastAPI skeleton + health endpoint + Dockerfile
 - Kafka consumer (`threat-alerts`) + producer (`ml-threat-detections`)
 - Feature engineering with tier stratification and per-customer normalization
@@ -572,11 +572,14 @@ ml-detection:
 - Database tables for predictions + customer stats
 - Unit tests
 
-### Phase 2 (Future): Scoring Integration
-- Add `mlWeight` to `ThreatScoreCalculator` in threat-assessment service
-- Feature-flagged (disabled by default)
-- Store pre-ML and post-ML scores separately
-- Java REST client or Kafka consumer in threat-assessment
+### Phase 2 (Complete ✅): Scoring Integration
+- `mlWeight` advisory multiplier integrated into `ThreatScoreCalculator` (applied after rawScore, before log-normalization)
+- Feature-flagged via `ml.weight.enabled` (default false in properties, true in Docker)
+- `MlWeightService` Kafka consumer on `ml-threat-detections` with ConcurrentHashMap cache (5000 max, TTL-based eviction)
+- `pre_ml_score` and `ml_weight` columns added to `threat_assessments` table (migration 27)
+- `mlWeight=1.0` fallback when no cache entry, disabled, or confidence below threshold
+- Prometheus counters for cache hits/misses
+- 8 unit tests passing
 
 ### Phase 3 (Future): BiGRU Temporal Model
 - Sequence construction from historical windows per `customerId:attackMac`

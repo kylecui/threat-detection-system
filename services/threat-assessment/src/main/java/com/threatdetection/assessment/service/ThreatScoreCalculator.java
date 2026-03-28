@@ -4,6 +4,7 @@ import com.threatdetection.assessment.dto.AggregatedAttackData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -48,18 +49,24 @@ public class ThreatScoreCalculator {
     private final IpSegmentWeightServiceV4 ipSegmentWeightServiceV4;  // V4.0双维度服务
     private final CustomerPortWeightService customerPortWeightService;  // V4.0 Phase3端口权重服务
     private final CustomerTimeWeightService customerTimeWeightService;  // V5.0时间段权重服务
+    private final MlWeightService mlWeightService;
+
+    @Value("${ml.weight.enabled:false}")
+    private boolean mlWeightEnabled;
     
     @Autowired
     public ThreatScoreCalculator(PortRiskService portRiskService, 
                                  IpSegmentWeightService ipSegmentWeightService,
                                  IpSegmentWeightServiceV4 ipSegmentWeightServiceV4,
                                  CustomerPortWeightService customerPortWeightService,
-                                 CustomerTimeWeightService customerTimeWeightService) {
+                                 CustomerTimeWeightService customerTimeWeightService,
+                                 MlWeightService mlWeightService) {
         this.portRiskService = portRiskService;
         this.ipSegmentWeightService = ipSegmentWeightService;
         this.ipSegmentWeightServiceV4 = ipSegmentWeightServiceV4;
         this.customerPortWeightService = customerPortWeightService;
         this.customerTimeWeightService = customerTimeWeightService;
+        this.mlWeightService = mlWeightService;
     }
     
     /**
@@ -154,18 +161,30 @@ public class ThreatScoreCalculator {
         // 最终评分 (V5.1 - 攻击速率权重)
         double rawScore = baseScore * timeWeight * ipWeight * portWeight * deviceWeight 
                          * combinedSegmentWeight * attackRateWeight;
-        
+
+        // ML Weight (Phase 2 - advisory multiplier from autoencoder anomaly detection)
+        double mlWeight = 1.0;  // neutral default
+        if (mlWeightEnabled) {
+            Integer tier = data.getDetectionTier();
+            mlWeight = mlWeightService.getMlWeight(data.getCustomerId(), data.getAttackMac(), tier);
+            rawScore *= mlWeight;
+            logger.info("ML weight applied: customerId={}, attackMac={}, mlWeight={}, mlEnabled=true",
+                    data.getCustomerId(), data.getAttackMac(), mlWeight);
+        } else {
+            logger.debug("ML weight disabled, using default 1.0");
+        }
+
         // 标准化到 (0,100) 范围 - 使用对数变换
         double normalizedScore = normalizeThreatScore(rawScore);
         
         logger.debug("Threat score calculation: customerId={}, attackMac={}, attackIp={}, honeypotIp={}, " +
                     "baseScore={}, timeWeight={}, ipWeight={}, portWeight={}, deviceWeight={}, " +
                     "attackSourceWeight={}, honeypotSensitivityWeight={}, combinedSegmentWeight={}, " +
-                    "attackRateWeight={}, timeWindowSeconds={}, rawScore={}, normalizedScore={}",
-                    data.getCustomerId(), data.getAttackMac(), data.getAttackIp(), data.getMostAccessedHoneypotIp(),
-                    baseScore, timeWeight, ipWeight, portWeight, deviceWeight, 
-                    attackSourceWeight, honeypotSensitivityWeight, combinedSegmentWeight, 
-                    attackRateWeight, data.getTimeWindowSeconds(), rawScore, normalizedScore);
+                    "attackRateWeight={}, mlWeight={}, timeWindowSeconds={}, rawScore={}, normalizedScore={}",
+                     data.getCustomerId(), data.getAttackMac(), data.getAttackIp(), data.getMostAccessedHoneypotIp(),
+                     baseScore, timeWeight, ipWeight, portWeight, deviceWeight, 
+                     attackSourceWeight, honeypotSensitivityWeight, combinedSegmentWeight, 
+                     attackRateWeight, mlWeight, data.getTimeWindowSeconds(), rawScore, normalizedScore);
         
         return normalizedScore;
     }

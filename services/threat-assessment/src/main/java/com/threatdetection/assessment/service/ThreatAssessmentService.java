@@ -9,6 +9,7 @@ import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +39,10 @@ public class ThreatAssessmentService {
     private final ThreatScoreCalculator calculator;
     private final ThreatAssessmentRepository repository;
     private final RecommendationEngine recommendationEngine;
+    private final MlWeightService mlWeightService;
+
+    @Value("${ml.weight.enabled:false}")
+    private boolean mlWeightEnabled;
     
     // Prometheus指标
     private final Timer assessmentTimer;
@@ -49,10 +54,12 @@ public class ThreatAssessmentService {
             ThreatScoreCalculator calculator,
             ThreatAssessmentRepository repository,
             RecommendationEngine recommendationEngine,
+            MlWeightService mlWeightService,
             MeterRegistry meterRegistry) {
         this.calculator = calculator;
         this.repository = repository;
         this.recommendationEngine = recommendationEngine;
+        this.mlWeightService = mlWeightService;
         
         // 初始化Prometheus指标
         this.assessmentTimer = Timer.builder("threat.assessment.duration")
@@ -136,6 +143,15 @@ public class ThreatAssessmentService {
         assessment.setIpWeight(ipWeight);
         assessment.setPortWeight(portWeight);
         assessment.setDeviceWeight(deviceWeight);
+
+        if (mlWeightEnabled) {
+            Integer tier = data.getDetectionTier();
+            double mlWeight = mlWeightService.getMlWeight(data.getCustomerId(), data.getAttackMac(), tier);
+            assessment.setMlWeight(mlWeight);
+        } else {
+            assessment.setMlWeight(1.0);
+        }
+        assessment.setPreMLScore(threatScore);
         
         // 设置缓解建议 (转换为JSON字符串)
         assessment.setMitigationRecommendations(String.join("; ", recommendations));
@@ -220,6 +236,8 @@ public class ThreatAssessmentService {
         fallback.setUniqueIps(data.getUniqueIps());
         fallback.setUniquePorts(data.getUniquePorts());
         fallback.setUniqueDevices(data.getUniqueDevices());
+        fallback.setMlWeight(1.0);
+        fallback.setPreMLScore(0.0);
         
         fallback.setMitigationRecommendations("系统暂时不可用,请稍后重试");
         fallback.setMitigationStatus("PENDING");

@@ -91,6 +91,12 @@ public class ThreatAssessment {
     @Column(name = "device_weight")
     private Double deviceWeight;
 
+    @Column(name = "ml_weight")
+    private Double mlWeight;
+
+    @Column(name = "pre_ml_score")
+    private Double preMLScore;
+
     // 新增字段 - 攻击源IP
     @Size(max = 45)
     @Column(name = "attack_ip", length = 45)
@@ -182,6 +188,12 @@ public class ThreatAssessment {
     public Double getDeviceWeight() { return deviceWeight; }
     public void setDeviceWeight(Double deviceWeight) { this.deviceWeight = deviceWeight; }
 
+    public Double getMlWeight() { return mlWeight; }
+    public void setMlWeight(Double mlWeight) { this.mlWeight = mlWeight; }
+
+    public Double getPreMLScore() { return preMLScore; }
+    public void setPreMLScore(Double preMLScore) { this.preMLScore = preMLScore; }
+
     public String getAttackIp() { return attackIp; }
     public void setAttackIp(String attackIp) { this.attackIp = attackIp; }
 
@@ -208,6 +220,8 @@ public class ThreatAssessment {
                 ", uniqueIps=" + uniqueIps +
                 ", uniquePorts=" + uniquePorts +
                 ", uniqueDevices=" + uniqueDevices +
+                ", mlWeight=" + mlWeight +
+                ", preMLScore=" + preMLScore +
                 ", assessmentTime=" + assessmentTime +
                 '}';
     }

@@ -83,6 +83,12 @@ public class AggregatedAttackData {
      * V5.1新增字段 - 支持爆发性检测
      */
     private Integer timeWindowSeconds;
+
+    /**
+     * 检测层级 (1=勒索软件/30s, 2=主要威胁/5min, 3=APT/15min)
+     * 用于ML权重缓存键和分层模型选择
+     */
+    private Integer detectionTier;
     
     /**
      * 验证数据完整性

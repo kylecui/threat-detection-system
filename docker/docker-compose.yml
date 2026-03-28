@@ -50,6 +50,7 @@ services:
       - ./23-threat-intel-feeds.sql:/docker-entrypoint-initdb.d/23-threat-intel-feeds.sql
       - ./24-threat-intel-feed-seeds.sql:/docker-entrypoint-initdb.d/24-threat-intel-feed-seeds.sql
       - ./25-threat-indicators-phase2-upgrade.sql:/docker-entrypoint-initdb.d/25-threat-indicators-phase2-upgrade.sql
+      - ./27-ml-weight-columns.sql:/docker-entrypoint-initdb.d/27-ml-weight-columns.sql
     networks:
       - threat-detection-network
     healthcheck:
@@ -316,6 +317,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
       SPRING_DATASOURCE_USERNAME: threat_user
       SPRING_DATASOURCE_PASSWORD: threat_password
+      ML_WEIGHT_ENABLED: "true"
+      ML_WEIGHT_CACHE_TTL: "300"
     networks:
       - threat-detection-network
     healthcheck:

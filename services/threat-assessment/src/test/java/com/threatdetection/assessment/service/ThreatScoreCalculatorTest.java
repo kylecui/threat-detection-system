@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.time.LocalTime;
@@ -40,11 +41,14 @@ class ThreatScoreCalculatorTest {
     @Mock
     private CustomerTimeWeightService customerTimeWeightService;
 
+    @Mock
+    private MlWeightService mlWeightService;
+
     private ThreatScoreCalculator calculator;
     
     @BeforeEach
     void setUp() {
-        calculator = new ThreatScoreCalculator(portRiskService, ipSegmentWeightService, ipSegmentWeightServiceV4, customerPortWeightService, customerTimeWeightService);
+        calculator = new ThreatScoreCalculator(portRiskService, ipSegmentWeightService, ipSegmentWeightServiceV4, customerPortWeightService, customerTimeWeightService, mlWeightService);
 
         // Mock customerTimeWeightService to return default weights (same as hardcoded logic)
         lenient().when(customerTimeWeightService.getTimeWeight(anyString(), any(Instant.class))).thenAnswer(invocation -> {
@@ -64,6 +68,88 @@ class ThreatScoreCalculatorTest {
         // Mock ipSegmentWeightServiceV4 for V4.0 dual-dimension weights
         lenient().when(ipSegmentWeightServiceV4.getAttackSourceWeight(anyString(), anyString())).thenReturn(1.0);
         lenient().when(ipSegmentWeightServiceV4.getHoneypotSensitivityWeight(anyString(), anyString())).thenReturn(1.0);
+
+        lenient().when(mlWeightService.getMlWeight(anyString(), anyString(), any())).thenReturn(1.0);
+    }
+
+    @Test
+    @DisplayName("ML权重关闭时评分保持不变")
+    void testMlWeightDisabled_ScoreUnchanged() {
+        AggregatedAttackData data = AggregatedAttackData.builder()
+                .customerId("customer-001")
+                .attackMac("00:11:22:33:44:55")
+                .attackIp("10.0.0.1")
+                .attackCount(30)
+                .uniqueIps(2)
+                .uniquePorts(3)
+                .uniqueDevices(1)
+                .detectionTier(2)
+                .timeWindowSeconds(300)
+                .timestamp(Instant.parse("2025-01-15T06:00:00Z"))
+                .build();
+
+        ReflectionTestUtils.setField(calculator, "mlWeightEnabled", false);
+        double scoreWhenDisabled = calculator.calculateThreatScore(data);
+
+        ReflectionTestUtils.setField(calculator, "mlWeightEnabled", false);
+        double scoreWithSameDisabledConfig = calculator.calculateThreatScore(data);
+
+        assertEquals(scoreWhenDisabled, scoreWithSameDisabledConfig, 1e-9);
+        verify(mlWeightService, never()).getMlWeight(anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("ML权重开启时应用倍率")
+    void testMlWeightEnabled_AppliesMultiplier() {
+        AggregatedAttackData data = AggregatedAttackData.builder()
+                .customerId("customer-001")
+                .attackMac("00:11:22:33:44:55")
+                .attackIp("10.0.0.1")
+                .attackCount(30)
+                .uniqueIps(2)
+                .uniquePorts(3)
+                .uniqueDevices(1)
+                .detectionTier(2)
+                .timeWindowSeconds(300)
+                .timestamp(Instant.parse("2025-01-15T06:00:00Z"))
+                .build();
+
+        ReflectionTestUtils.setField(calculator, "mlWeightEnabled", false);
+        double disabledScore = calculator.calculateThreatScore(data);
+
+        when(mlWeightService.getMlWeight("customer-001", "00:11:22:33:44:55", 2)).thenReturn(2.0);
+        ReflectionTestUtils.setField(calculator, "mlWeightEnabled", true);
+        double enabledScore = calculator.calculateThreatScore(data);
+
+        assertTrue(enabledScore > disabledScore);
+        verify(mlWeightService).getMlWeight("customer-001", "00:11:22:33:44:55", 2);
+    }
+
+    @Test
+    @DisplayName("ML权重开启且返回1.0时评分无变化")
+    void testMlWeightEnabled_FallbackNeutral() {
+        AggregatedAttackData data = AggregatedAttackData.builder()
+                .customerId("customer-001")
+                .attackMac("00:11:22:33:44:55")
+                .attackIp("10.0.0.1")
+                .attackCount(30)
+                .uniqueIps(2)
+                .uniquePorts(3)
+                .uniqueDevices(1)
+                .detectionTier(2)
+                .timeWindowSeconds(300)
+                .timestamp(Instant.parse("2025-01-15T06:00:00Z"))
+                .build();
+
+        ReflectionTestUtils.setField(calculator, "mlWeightEnabled", false);
+        double disabledScore = calculator.calculateThreatScore(data);
+
+        when(mlWeightService.getMlWeight("customer-001", "00:11:22:33:44:55", 2)).thenReturn(1.0);
+        ReflectionTestUtils.setField(calculator, "mlWeightEnabled", true);
+        double enabledNeutralScore = calculator.calculateThreatScore(data);
+
+        assertEquals(disabledScore, enabledNeutralScore, 1e-9);
+        verify(mlWeightService).getMlWeight("customer-001", "00:11:22:33:44:55", 2);
     }
     
     // ==================== 时间权重测试 ====================

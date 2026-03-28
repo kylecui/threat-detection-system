@@ -90,6 +90,13 @@ public class ThreatAlertMessage {
     @JsonProperty(value = "uniqueDevices", access = JsonProperty.Access.WRITE_ONLY)
     @JsonAlias({"unique_devices", "uniqueDevices"})
     private Integer uniqueDevices;
+
+    /**
+     * 检测层级 (1=Tier1/30s, 2=Tier2/5min, 3=Tier3/15min)
+     */
+    @JsonProperty(value = "detectionTier", access = JsonProperty.Access.WRITE_ONLY)
+    @JsonAlias({"detection_tier", "detectionTier", "tier"})
+    private Integer detectionTier;
     
     /**
      * 评估时间戳 (ISO8601格式 或 Unix时间戳)
@@ -110,6 +117,7 @@ public class ThreatAlertMessage {
             .uniqueIps(uniqueIps)
             .uniquePorts(uniquePorts)
             .uniqueDevices(uniqueDevices)
+            .detectionTier(detectionTier)
             .timestamp(parseTimestamp(timestamp))
             .build();
     }
