@@ -9,8 +9,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: 8082
-      targetPort: 8082
+    - port: 8083
+      targetPort: 8083
       protocol: TCP
       name: http
   selector:
@@ -25,7 +25,7 @@ metadata:
   labels:
     app: threat-assessment
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: threat-assessment
@@ -62,14 +62,14 @@ spec:
         image: threat-detection/threat-assessment:latest
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8082
+        - containerPort: 8083
           name: http
           protocol: TCP
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "kubernetes"
         - name: SERVER_PORT
-          value: "8082"
+          value: "8083"
         - name: SPRING_DATASOURCE_URL
           value: "jdbc:postgresql://postgres:5432/threat_detection"
         - name: SPRING_DATASOURCE_USERNAME
@@ -83,7 +83,7 @@ spec:
               name: postgres-secret
               key: POSTGRES_PASSWORD
         - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:9092"
+          value: "kafka:29092"
         - name: SPRING_KAFKA_CONSUMER_GROUP_ID
           value: "threat-assessment-group"
         - name: LOGGING_LEVEL_ROOT
@@ -100,7 +100,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /actuator/health/liveness
-            port: 8082
+            port: 8083
           initialDelaySeconds: 90
           periodSeconds: 30
           timeoutSeconds: 10
@@ -108,7 +108,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /actuator/health/readiness
-            port: 8082
+            port: 8083
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5

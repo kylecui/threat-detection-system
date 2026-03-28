@@ -18,7 +18,9 @@ spec:
         image: confluentinc/cp-kafka:7.4.0
         ports:
         - containerPort: 9092
-          name: kafka
+          name: external
+        - containerPort: 29092
+          name: internal
         - containerPort: 9101
           name: jmx
         env:
@@ -28,6 +30,8 @@ spec:
           value: "zookeeper:2181"
         - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
           value: "PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+        - name: KAFKA_LISTENERS
+          value: "PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092"
         - name: KAFKA_ADVERTISED_LISTENERS
           value: "PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092"
         - name: KAFKA_INTER_BROKER_LISTENER_NAME
@@ -38,6 +42,8 @@ spec:
           value: "1"
         - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
           value: "1"
+        - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+          value: "0"
         resources:
           requests:
             memory: "1Gi"
@@ -48,20 +54,18 @@ spec:
         livenessProbe:
           exec:
             command:
-            - kafka-topics
+            - kafka-broker-api-versions
             - --bootstrap-server
             - localhost:9092
-            - --list
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 10
         readinessProbe:
           exec:
             command:
-            - kafka-topics
+            - kafka-broker-api-versions
             - --bootstrap-server
             - localhost:9092
-            - --list
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
@@ -77,7 +81,10 @@ spec:
   ports:
   - port: 9092
     targetPort: 9092
-    name: kafka
+    name: external
+  - port: 29092
+    targetPort: 29092
+    name: internal
   - port: 9101
     targetPort: 9101
     name: jmx

@@ -18,14 +18,17 @@ resources:
   - config-server.yaml
   - data-ingestion.yaml
   - stream-processing.yaml
-  - taskmanager.yaml
+  # taskmanager.yaml removed — stream-processing.yaml already includes TaskManager
+  # with our custom image containing the application JAR
   - customer-management.yaml
   - threat-assessment.yaml
   - alert-management.yaml
+  - threat-intelligence.yaml
+  - ml-detection.yaml
   - api-gateway.yaml
-  - kafka-mirrormaker.yaml
-  - postgres-replication.yaml
-  - global-ingress.yaml
+  # Multi-region resources (enable in region overlays):
+  # - kafka-mirrormaker.yaml
+  # - postgres-replication.yaml
 
 commonLabels:
   app.kubernetes.io/name: threat-detection-system
@@ -39,6 +42,16 @@ images:
   - name: threat-detection/api-gateway
     newTag: latest
   - name: threat-detection/config-server
+    newTag: latest
+  - name: threat-detection/customer-management
+    newTag: latest
+  - name: threat-detection/alert-management
+    newTag: latest
+  - name: threat-detection/threat-assessment
+    newTag: latest
+  - name: threat-detection/threat-intelligence
+    newTag: latest
+  - name: threat-detection/ml-detection
     newTag: latest
 
 configMapGenerator:

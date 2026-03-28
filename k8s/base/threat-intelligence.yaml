@@ -2,37 +2,37 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: alert-management
+  name: threat-intelligence
   namespace: threat-detection
   labels:
-    app: alert-management
+    app: threat-intelligence
 spec:
   type: ClusterIP
   ports:
-    - port: 8082
-      targetPort: 8082
+    - port: 8085
+      targetPort: 8085
       protocol: TCP
       name: http
   selector:
-    app: alert-management
+    app: threat-intelligence
 
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: alert-management
+  name: threat-intelligence
   namespace: threat-detection
   labels:
-    app: alert-management
+    app: threat-intelligence
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: alert-management
+      app: threat-intelligence
   template:
     metadata:
       labels:
-        app: alert-management
+        app: threat-intelligence
     spec:
       initContainers:
       - name: wait-for-postgres
@@ -46,30 +46,19 @@ spec:
             sleep 2
           done
           echo "PostgreSQL is ready!"
-      - name: wait-for-kafka
-        image: busybox:1.35
-        command:
-        - sh
-        - -c
-        - |
-          until nc -z kafka 9092; do
-            echo "Waiting for Kafka..."
-            sleep 2
-          done
-          echo "Kafka is ready!"
       containers:
-      - name: alert-management
-        image: threat-detection/alert-management:latest
+      - name: threat-intelligence
+        image: threat-detection/threat-intelligence:latest
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8082
+        - containerPort: 8085
           name: http
           protocol: TCP
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "kubernetes"
         - name: SERVER_PORT
-          value: "8082"
+          value: "8085"
         - name: SPRING_DATASOURCE_URL
           value: "jdbc:postgresql://postgres:5432/threat_detection"
         - name: SPRING_DATASOURCE_USERNAME
@@ -82,10 +71,10 @@ spec:
             secretKeyRef:
               name: postgres-secret
               key: POSTGRES_PASSWORD
-        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:29092"
-        - name: SPRING_KAFKA_CONSUMER_GROUP_ID
-          value: "alert-management-group"
+        - name: SPRING_REDIS_HOST
+          value: "redis"
+        - name: SPRING_REDIS_PORT
+          value: "6379"
         - name: LOGGING_LEVEL_ROOT
           value: "INFO"
         - name: LOGGING_LEVEL_COM_THREATDETECTION
@@ -100,7 +89,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /actuator/health/liveness
-            port: 8082
+            port: 8085
           initialDelaySeconds: 90
           periodSeconds: 30
           timeoutSeconds: 10
@@ -108,7 +97,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /actuator/health/readiness
-            port: 8082
+            port: 8085
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5

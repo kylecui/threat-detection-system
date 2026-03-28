@@ -9,8 +9,8 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: 8081
-      targetPort: 8081
+    - port: 8084
+      targetPort: 8084
       protocol: TCP
       name: http
   selector:
@@ -25,7 +25,7 @@ metadata:
   labels:
     app: customer-management
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: customer-management
@@ -51,14 +51,14 @@ spec:
         image: threat-detection/customer-management:latest
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8081
+        - containerPort: 8084
           name: http
           protocol: TCP
         env:
         - name: SPRING_PROFILES_ACTIVE
           value: "kubernetes"
         - name: SERVER_PORT
-          value: "8081"
+          value: "8084"
         - name: SPRING_DATASOURCE_URL
           value: "jdbc:postgresql://postgres:5432/threat_detection"
         - name: SPRING_DATASOURCE_USERNAME
@@ -89,7 +89,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /actuator/health/liveness
-            port: 8081
+            port: 8084
           initialDelaySeconds: 90
           periodSeconds: 30
           timeoutSeconds: 10
@@ -97,7 +97,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /actuator/health/readiness
-            port: 8081
+            port: 8084
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
