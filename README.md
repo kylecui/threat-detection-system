@@ -299,8 +299,8 @@ cd docker && docker compose build --no-cache && docker compose up -d
 - [x] 网络拓扑与心跳持久化 (设备清单、拓扑快照、主机发现)
 - [x] 高级威胁情报集成
 - [x] 机器学习威胁检测 (PyTorch自编码器 + ONNX Runtime推理)
-- [ ] Web管理仪表板
-- [ ] 多区域部署支持
+- [x] Web管理仪表板
+- [x] 多区域部署支持
 
 ## License
 

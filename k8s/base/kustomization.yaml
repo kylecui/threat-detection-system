@@ -23,6 +23,9 @@ resources:
   - threat-assessment.yaml
   - alert-management.yaml
   - api-gateway.yaml
+  - kafka-mirrormaker.yaml
+  - postgres-replication.yaml
+  - global-ingress.yaml
 
 commonLabels:
   app.kubernetes.io/name: threat-detection-system

@@ -486,3 +486,46 @@ export interface SmtpConfig {
   createdAt: string;
   updatedAt: string;
 }
+
+// ============================================================
+// 多区域部署 (Multi-Region)
+// ============================================================
+
+/** 区域标识 */
+export type RegionId = 'auto' | 'east' | 'west' | 'cn';
+
+/** 区域配置 */
+export interface RegionConfig {
+  id: RegionId;
+  label: string;
+  apiBase: string;
+  description: string;
+}
+
+/** 预定义区域端点 */
+export const REGION_ENDPOINTS: Record<RegionId, RegionConfig> = {
+  auto: {
+    id: 'auto',
+    label: '自动 (Auto)',
+    apiBase: '',
+    description: '根据网络延迟自动选择最近区域',
+  },
+  east: {
+    id: 'east',
+    label: 'US East',
+    apiBase: 'https://east.threat-detection.io',
+    description: '美国东部 (主区域)',
+  },
+  west: {
+    id: 'west',
+    label: 'US West',
+    apiBase: 'https://west.threat-detection.io',
+    description: '美国西部 (DR备份)',
+  },
+  cn: {
+    id: 'cn',
+    label: '中国 (China)',
+    apiBase: 'https://cn.threat-detection.io',
+    description: '中国区域 (数据主权隔离)',
+  },
+};

@@ -1,5 +1,20 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { message } from 'antd';
+import { REGION_ENDPOINTS, type RegionId } from '@/types';
+
+/**
+ * 区域路由优先级: localStorage.region → VITE_API_BASE_URL → /api
+ */
+function getRegionBaseURL(): string {
+  const regionId = (localStorage.getItem('region') || 'auto') as RegionId;
+  const regionConfig = REGION_ENDPOINTS[regionId];
+
+  // 'auto' 或空 apiBase → 回退到环境变量或默认值
+  if (!regionConfig || !regionConfig.apiBase) {
+    return import.meta.env.VITE_API_BASE_URL || '/api';
+  }
+  return regionConfig.apiBase;
+}
 
 /**
  * Axios实例配置
@@ -7,14 +22,20 @@ import { message } from 'antd';
  * API网关地址:
  * - 开发环境: http://localhost:8888
  * - 生产环境: /api (Nginx代理)
+ * - 多区域: https://{region}.threat-detection.io
  */
 const apiClient: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: getRegionBaseURL(),
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+export function switchRegion(regionId: RegionId): void {
+  localStorage.setItem('region', regionId);
+  apiClient.defaults.baseURL = getRegionBaseURL();
+}
 
 /**
  * 请求拦截器

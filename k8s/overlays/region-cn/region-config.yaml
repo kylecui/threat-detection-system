@@ -1,0 +1,145 @@
+# Region-specific environment injection for all services — CN
+# CN region runs as independent primary for data sovereignty
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-ingestion
+spec:
+  template:
+    spec:
+      containers:
+      - name: data-ingestion
+        env:
+        - name: REGION
+          value: "cn"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+spec:
+  template:
+    spec:
+      containers:
+      - name: api-gateway
+        env:
+        - name: REGION
+          value: "cn"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stream-processing-jobmanager
+spec:
+  template:
+    spec:
+      containers:
+      - name: flink-jobmanager
+        env:
+        - name: REGION
+          value: "cn"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stream-processing-taskmanager
+spec:
+  template:
+    spec:
+      containers:
+      - name: flink-taskmanager
+        env:
+        - name: REGION
+          value: "cn"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: threat-assessment
+spec:
+  template:
+    spec:
+      containers:
+      - name: threat-assessment
+        env:
+        - name: REGION
+          value: "cn"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-management
+spec:
+  template:
+    spec:
+      containers:
+      - name: alert-management
+        env:
+        - name: REGION
+          value: "cn"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customer-management
+spec:
+  template:
+    spec:
+      containers:
+      - name: customer-management
+        env:
+        - name: REGION
+          value: "cn"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-server
+spec:
+  template:
+    spec:
+      containers:
+      - name: config-server
+        env:
+        - name: REGION
+          value: "cn"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: emqx
+spec:
+  template:
+    spec:
+      containers:
+      - name: emqx
+        env:
+        - name: REGION
+          value: "cn"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+spec:
+  template:
+    spec:
+      containers:
+      - name: logstash
+        env:
+        - name: REGION
+          value: "cn"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskmanager
+spec:
+  template:
+    spec:
+      containers:
+      - name: taskmanager
+        env:
+        - name: REGION
+          value: "cn"

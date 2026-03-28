@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: threat-detection-region-east
+
+namespace: threat-detection-east
+
+resources:
+  - ../../base
+
+patchesStrategicMerge:
+  - replica-patch.yaml
+  - resource-patch.yaml
+  - region-config.yaml
+
+images:
+  - name: threat-detection/data-ingestion
+    newTag: "1.0.0"
+  - name: threat-detection/stream-processing
+    newTag: "1.0.0"
+  - name: threat-detection/api-gateway
+    newTag: "1.0.0"
+  - name: threat-detection/config-server
+    newTag: "1.0.0"
+
+configMapGenerator:
+  - name: threat-detection-config
+    behavior: replace
+    literals:
+      - ENVIRONMENT=production
+      - REGION=east
+      - LOG_LEVEL=INFO
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - ZOOKEEPER_CONNECT=zookeeper:2181
+  - name: region-config
+    literals:
+      - REGION=east
+      - REGION_LABEL=US East
+      - POSTGRES_ROLE=primary
+      - CROSS_REGION_KAFKA_ENABLED=true

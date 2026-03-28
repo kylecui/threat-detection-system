@@ -1,0 +1,265 @@
+# PostgreSQL Cross-Region Replication Configuration
+# Enables streaming replication on the primary and provides standby config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-replication-config
+  namespace: threat-detection
+data:
+  # Primary configuration additions (append to postgresql.conf)
+  primary-replication.conf: |
+    # Streaming Replication - Primary Settings
+    wal_level = replica
+    max_wal_senders = 10
+    max_replication_slots = 5
+    wal_keep_size = '1GB'
+    hot_standby = on
+    synchronous_commit = on
+
+    # Archive settings (optional, for PITR)
+    # archive_mode = on
+    # archive_command = 'cp %p /var/lib/postgresql/archive/%f'
+
+  # pg_hba.conf additions for replication
+  pg_hba_replication.conf: |
+    # Allow replication connections from any pod in the cluster
+    host replication repl_user 0.0.0.0/0 md5
+    host replication repl_user ::/0 md5
+
+  # Standby configuration
+  standby.signal: |
+    # This file triggers standby mode
+
+  # Standby recovery settings
+  standby-recovery.conf: |
+    primary_conninfo = 'host=${PRIMARY_HOST} port=5432 user=repl_user password=${REPL_PASSWORD} application_name=${REGION}_standby'
+    primary_slot_name = '${REGION}_slot'
+    recovery_target_timeline = 'latest'
+    hot_standby = on
+    hot_standby_feedback = on
+
+  # PgBouncer configuration for connection pooling
+  pgbouncer.ini: |
+    [databases]
+    threat_detection = host=127.0.0.1 port=5432 dbname=threat_detection pool_size=20
+
+    [pgbouncer]
+    listen_addr = 0.0.0.0
+    listen_port = 6432
+    auth_type = md5
+    auth_file = /etc/pgbouncer/userlist.txt
+    pool_mode = transaction
+    max_client_conn = 200
+    default_pool_size = 20
+    min_pool_size = 5
+    reserve_pool_size = 5
+    reserve_pool_timeout = 3
+    server_lifetime = 3600
+    server_idle_timeout = 600
+    log_connections = 0
+    log_disconnections = 0
+    stats_period = 60
+
+  # Init script for replication user setup
+  init-replication.sh: |
+    #!/bin/bash
+    set -e
+
+    # Create replication user if not exists
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+      DO \$\$
+      BEGIN
+        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'repl_user') THEN
+          CREATE ROLE repl_user WITH REPLICATION LOGIN PASSWORD '${REPL_PASSWORD:-repl_password_change_me}';
+          RAISE NOTICE 'Replication user created';
+        END IF;
+      END
+      \$\$;
+    EOSQL
+
+    # Create replication slots for each remote region
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+      SELECT pg_create_physical_replication_slot('west_slot', true)
+        WHERE NOT EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = 'west_slot');
+      SELECT pg_create_physical_replication_slot('cn_slot', true)
+        WHERE NOT EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = 'cn_slot');
+      SELECT pg_create_physical_replication_slot('east_slot', true)
+        WHERE NOT EXISTS (SELECT 1 FROM pg_replication_slots WHERE slot_name = 'east_slot');
+    EOSQL
+
+    echo "Replication initialization complete"
+
+---
+# Secret for replication credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-replication-secret
+  namespace: threat-detection
+type: Opaque
+stringData:
+  REPL_USER: repl_user
+  REPL_PASSWORD: repl_password_change_me
+  PRIMARY_HOST: postgres.threat-detection-east.svc.cluster.local
+
+---
+# Standby PostgreSQL StatefulSet (deployed in non-primary regions)
+# Enable by including this resource in region overlays that need a standby
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-standby
+  namespace: threat-detection
+  labels:
+    app: postgres-standby
+    role: standby
+spec:
+  serviceName: postgres-standby
+  replicas: 0  # Set to 1 in standby region overlays
+  selector:
+    matchLabels:
+      app: postgres-standby
+  template:
+    metadata:
+      labels:
+        app: postgres-standby
+        role: standby
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5432
+          name: postgresql
+          protocol: TCP
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: PRIMARY_HOST
+          valueFrom:
+            secretKeyRef:
+              name: postgres-replication-secret
+              key: PRIMARY_HOST
+        - name: REPL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-replication-secret
+              key: REPL_PASSWORD
+        volumeMounts:
+        - name: postgres-standby-storage
+          mountPath: /var/lib/postgresql/data
+        - name: replication-config
+          mountPath: /etc/postgresql/conf.d
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - threat_user
+            - -d
+            - threat_detection
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - threat_user
+            - -d
+            - threat_detection
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+      # PgBouncer sidecar for connection pooling
+      - name: pgbouncer
+        image: edoburu/pgbouncer:1.21.0
+        ports:
+        - containerPort: 6432
+          name: pgbouncer
+          protocol: TCP
+        env:
+        - name: DATABASE_URL
+          value: "postgresql://threat_user:threat_password_k8s_change_me@127.0.0.1:5432/threat_detection"
+        - name: POOL_MODE
+          value: "transaction"
+        - name: MAX_CLIENT_CONN
+          value: "200"
+        - name: DEFAULT_POOL_SIZE
+          value: "20"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+        livenessProbe:
+          tcpSocket:
+            port: 6432
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+      volumes:
+      - name: replication-config
+        configMap:
+          name: postgres-replication-config
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-standby-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+# Headless service for standby discovery
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-standby
+  namespace: threat-detection
+  labels:
+    app: postgres-standby
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+      name: postgresql
+    - port: 6432
+      targetPort: 6432
+      protocol: TCP
+      name: pgbouncer
+  selector:
+    app: postgres-standby

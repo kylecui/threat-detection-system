@@ -24,9 +24,11 @@ import {
   BellOutlined,
   SaveOutlined,
   ReloadOutlined,
+  GlobalOutlined,
 } from '@ant-design/icons';
-import apiClient from '@/services/api';
-import type { SmtpConfig, NotificationConfig } from '@/types';
+import apiClient, { switchRegion } from '@/services/api';
+import type { SmtpConfig, NotificationConfig, RegionId } from '@/types';
+import { REGION_ENDPOINTS } from '@/types';
 
 /**
  * 系统设置页面
@@ -89,10 +91,12 @@ const Settings = () => {
     customer_id: string;
     auto_refresh: boolean;
     refresh_interval: number;
+    region: RegionId;
   }) => {
     localStorage.setItem('customer_id', values.customer_id);
     localStorage.setItem('auto_refresh', String(values.auto_refresh));
     localStorage.setItem('refresh_interval', String(values.refresh_interval));
+    switchRegion(values.region);
     message.success('基础设置已保存');
   };
 
@@ -150,6 +154,7 @@ const Settings = () => {
               customer_id: customerId,
               auto_refresh: localStorage.getItem('auto_refresh') !== 'false',
               refresh_interval: Number(localStorage.getItem('refresh_interval')) || 30,
+              region: (localStorage.getItem('region') || 'auto') as RegionId,
             }}
             style={{ maxWidth: 500 }}
           >
@@ -160,6 +165,26 @@ const Settings = () => {
               tooltip="多租户隔离标识，用于API请求"
             >
               <Input prefix={<UserOutlined />} placeholder="demo-customer" />
+            </Form.Item>
+
+            <Form.Item
+              label="部署区域 (Region)"
+              name="region"
+              tooltip="选择API服务器区域，影响所有请求的目标端点"
+            >
+              <Select>
+                {Object.values(REGION_ENDPOINTS).map((r) => (
+                  <Select.Option key={r.id} value={r.id}>
+                    <Space>
+                      <GlobalOutlined />
+                      {r.label}
+                      <Tag color={r.id === 'auto' ? 'default' : r.id === 'cn' ? 'red' : 'blue'}>
+                        {r.description}
+                      </Tag>
+                    </Space>
+                  </Select.Option>
+                ))}
+              </Select>
             </Form.Item>
 
             <Form.Item
@@ -194,6 +219,11 @@ const Settings = () => {
             </Descriptions.Item>
             <Descriptions.Item label="当前客户ID">
               <Tag color="blue">{customerId}</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="当前区域">
+              <Tag color="green">
+                {REGION_ENDPOINTS[(localStorage.getItem('region') || 'auto') as RegionId]?.label || 'Auto'}
+              </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="应用版本">v1.0.0</Descriptions.Item>
           </Descriptions>

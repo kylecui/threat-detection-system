@@ -1,0 +1,213 @@
+# Global Ingress + cert-manager + external-dns for Multi-Region
+# Each region deploys its own Ingress pointing to the local api-gateway
+---
+# cert-manager ClusterIssuer for Let's Encrypt
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@threat-detection.io
+    privateKeySecretRef:
+      name: letsencrypt-prod-key
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+
+---
+# Wildcard Certificate for all region subdomains
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: threat-detection-tls
+  namespace: threat-detection
+spec:
+  secretName: threat-detection-tls-secret
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - threat-detection.io
+    - "*.threat-detection.io"
+    - east.threat-detection.io
+    - west.threat-detection.io
+    - cn.threat-detection.io
+
+---
+# Global Ingress — routes to api-gateway within the region
+# Each region overlay can override annotations for geo-routing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: threat-detection-ingress
+  namespace: threat-detection
+  labels:
+    app: threat-detection-system
+    component: ingress
+  annotations:
+    # Nginx Ingress Controller
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+
+    # CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, X-Region"
+
+    # cert-manager automatic TLS
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+    # external-dns: auto-create DNS records from this Ingress
+    external-dns.alpha.kubernetes.io/hostname: "threat-detection.io"
+    external-dns.alpha.kubernetes.io/ttl: "300"
+spec:
+  tls:
+  - hosts:
+    - threat-detection.io
+    - east.threat-detection.io
+    - west.threat-detection.io
+    - cn.threat-detection.io
+    secretName: threat-detection-tls-secret
+  rules:
+  # Default domain → api-gateway
+  - host: threat-detection.io
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway
+            port:
+              number: 8888
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway
+            port:
+              number: 8888
+  # Region-specific domains (override hostname via overlays)
+  - host: east.threat-detection.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway
+            port:
+              number: 8888
+  - host: west.threat-detection.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway
+            port:
+              number: 8888
+  - host: cn.threat-detection.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway
+            port:
+              number: 8888
+
+---
+# external-dns Deployment — auto-manages DNS records from Ingress/Service annotations
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: external-dns
+  namespace: threat-detection
+  labels:
+    app: external-dns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: external-dns
+  template:
+    metadata:
+      labels:
+        app: external-dns
+    spec:
+      serviceAccountName: external-dns
+      containers:
+      - name: external-dns
+        image: registry.k8s.io/external-dns/external-dns:v0.14.0
+        args:
+        - --source=ingress
+        - --source=service
+        - --domain-filter=threat-detection.io
+        - --provider=aws  # Change to your DNS provider (aws, cloudflare, google, etc.)
+        - --policy=upsert-only
+        - --registry=txt
+        - --txt-owner-id=threat-detection
+        - --log-level=info
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+
+---
+# ServiceAccount for external-dns
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: external-dns
+  namespace: threat-detection
+  labels:
+    app: external-dns
+
+---
+# RBAC for external-dns to read Ingress/Service resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: external-dns
+rules:
+- apiGroups: [""]
+  resources: ["services", "endpoints", "pods"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["extensions", "networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: external-dns-viewer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: external-dns
+subjects:
+- kind: ServiceAccount
+  name: external-dns
+  namespace: threat-detection
