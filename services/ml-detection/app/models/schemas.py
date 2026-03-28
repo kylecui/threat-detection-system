@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Dict, Literal
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -54,6 +54,9 @@ class MlDetectionResult(BaseModel):
     temporalScore: float = 0.0
     ensembleMethod: str = "autoencoder_only"
     ensembleAlpha: float = 0.6
+    challengerScore: Optional[float] = None
+    challengerWeight: Optional[float] = None
+    challengerVersion: Optional[str] = None
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -71,3 +74,26 @@ class ModelInfo(BaseModel):
     modelPath: str
     bigruAvailable: bool = False
     bigruModelPath: str = ""
+    optimalAlpha: float = 0.6
+
+
+class ReloadResponse(BaseModel):
+    status: str
+    reloadCount: int = 0
+    modelsLoaded: Optional[Dict[str, bool]] = None
+    error: Optional[str] = None
+
+
+class ShadowComparisonStats(BaseModel):
+    totalComparisons: int = 0
+    meanChampionScore: float = 0.0
+    meanChallengerScore: float = 0.0
+    meanScoreDelta: float = 0.0
+    meanAbsScoreDelta: float = 0.0
+    meanChampionWeight: float = 0.0
+    meanChallengerWeight: float = 0.0
+    challengerBetterCount: int = 0
+    challengerBetterPct: float = 0.0
+    championModelVersion: str = ""
+    challengerModelVersion: str = ""
+    perTier: Dict[str, object] = Field(default_factory=dict)

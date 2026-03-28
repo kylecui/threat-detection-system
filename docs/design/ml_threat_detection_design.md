@@ -1,8 +1,8 @@
 # ML Threat Detection — Design Document
 
-**Version**: 2.0  
+**Version**: 3.0  
 **Date**: 2026-03-28  
-**Status**: Phase 3 — BiGRU Temporal Model + Ensemble Scoring  
+**Status**: Phase 4 — Advanced Ensemble + Training Automation  
 **Service Port**: 8086  
 **Language**: Python 3.11 + FastAPI + PyTorch + ONNX Runtime
 
@@ -39,51 +39,77 @@ The ML Threat Detection service adds machine-learning-based anomaly detection to
 ## 2. Architecture
 
 ```
-                          ┌──────────────────────────────────────────────────────────┐
-                          │  ML Detection Service (port 8086)                         │
-                          │                                                           │
- Kafka (threat-alerts) ──▶│  ┌──────────────┐   ┌────────────────────┐              │
-                          │  │ Kafka Consumer │──▶│ Feature Extractor  │              │
-                          │  │ (aiokafka)    │   │ (tier-stratified)  │              │
-                          │  └──────────────┘   └─────────┬──────────┘              │
-                          │                                │                         │
-                          │              ┌─────────────────┼──────────────────┐      │
-                          │              ▼                  ▼                  │      │
-                          │  ┌─────────────────────┐  ┌──────────────────┐   │      │
-                          │  │ ONNX Autoencoder     │  │ Sequence Buffer  │   │      │
-                          │  │ (FP16, per-tier)     │  │ (per attacker,   │   │      │
-                          │  │ → recon error        │  │  LRU+TTL, 10K)  │   │      │
-                          │  └─────────┬───────────┘  └────────┬─────────┘   │      │
-                          │            │ anomaly_score          │ sequence     │      │
-                          │            │                        ▼             │      │
-                          │            │              ┌──────────────────┐   │      │
-                          │            │              │ ONNX BiGRU       │   │      │
-                          │            │              │ (FP16, attention) │   │      │
-                          │            │              │ → temporal_score  │   │      │
-                          │            │              └────────┬─────────┘   │      │
-                          │            │                       │             │      │
-                          │            └───────────┬───────────┘             │      │
-                          │                        ▼                         │      │
-                          │              ┌──────────────────────┐           │      │
-                          │              │ Ensemble Scorer       │           │      │
-                          │              │ ae^0.6 × bigru^0.4   │           │      │
-                          │              │ (cold-start: ae only) │           │      │
-                          │              └──────────┬───────────┘           │      │
-                          │                         │                       │      │
-                          │  ┌──────────────┐  ┌────▼──────────────────┐   │      │
-                          │  │ Kafka Producer │◀─│ Score Calculator      │   │      │
-                          │  │ (aiokafka)    │  │ (mlWeight 0.5-3.0)   │   │      │
-                          │  └──────┬───────┘  └───────────────────────┘   │      │
-                          │         │                                       │      │
-                          │  ┌──────▼──────────────────────────────────┐   │      │
-                          │  │ REST API: POST /api/v1/ml/detect         │   │      │
-                          │  │           GET  /health                    │   │      │
-                          │  │           GET  /api/v1/ml/buffer/stats    │   │      │
-                          │  └─────────────────────────────────────────┘   │      │
-                          └──────────────────────────────────────────────────────────┘
+                          ┌──────────────────────────────────────────────────────────────┐
+                          │  ML Detection Service (port 8086)                             │
+                          │                                                               │
+ Kafka (threat-alerts) ──▶│  ┌──────────────┐   ┌────────────────────┐                  │
+                          │  │ Kafka Consumer │──▶│ Feature Extractor  │                  │
+                          │  │ (aiokafka)    │   │ (tier-stratified)  │                  │
+                          │  └──────────────┘   └─────────┬──────────┘                  │
+                          │                                │                             │
+                          │              ┌─────────────────┼──────────────────┐          │
+                          │              ▼                  ▼                  │          │
+                          │  ┌─────────────────────┐  ┌──────────────────┐   │          │
+                          │  │ ONNX Autoencoder     │  │ Sequence Buffer  │   │          │
+                          │  │ (FP16, per-tier)     │  │ (per attacker,   │   │          │
+                          │  │ → recon error        │  │  LRU+TTL, 10K)  │   │          │
+                          │  └─────────┬───────────┘  └────────┬─────────┘   │          │
+                          │            │ anomaly_score          │ sequence     │          │
+                          │            │                        ▼             │          │
+                          │            │              ┌──────────────────┐   │          │
+                          │            │              │ ONNX BiGRU       │   │          │
+                          │            │              │ (FP16, attention) │   │          │
+                          │            │              │ → temporal_score  │   │          │
+                          │            │              └────────┬─────────┘   │          │
+                          │            │                       │             │          │
+                          │            └───────────┬───────────┘             │          │
+                          │                        ▼                         │          │
+                          │              ┌──────────────────────┐           │          │
+                          │              │ Ensemble Scorer       │           │          │
+                          │              │ ae^α × bigru^(1-α)   │           │          │
+                          │              │ (α per-tier optimized)│ ◀── 4A   │          │
+                          │              │ (cold-start: ae only) │           │          │
+                          │              └──────────┬───────────┘           │          │
+                          │                         │                       │          │
+                          │  ┌──────────────┐  ┌────▼──────────────────┐   │          │
+                          │  │ Kafka Producer │◀─│ Score Calculator      │   │          │
+                          │  │ (aiokafka)    │  │ (mlWeight 0.5-3.0)   │   │          │
+                          │  └──────┬───────┘  └───────────────────────┘   │          │
+                          │         │                                       │          │
+                          │  ┌──────▼──────────────────────────────────┐   │          │
+                          │  │ REST API:                                │   │          │
+                          │  │   POST /api/v1/ml/detect                 │   │          │
+                          │  │   GET  /health                           │   │          │
+                          │  │   GET  /api/v1/ml/buffer/stats           │   │          │
+                          │  │   POST /api/v1/ml/models/reload    (4C)  │   │          │
+                          │  │   GET  /api/v1/ml/drift/status     (4D)  │   │          │
+                          │  │   GET  /api/v1/ml/shadow/stats     (4E)  │   │          │
+                          │  └─────────────────────────────────────────┘   │          │
+                          │                                                 │          │
+                          │  ┌──────────────────────────────────────────┐   │          │
+                          │  │ Phase 4 Background Subsystems             │   │          │
+                          │  │                                           │   │          │
+                          │  │  ┌─────────────────┐  ┌───────────────┐  │   │          │
+                          │  │  │ Model Watcher   │  │ Drift Monitor │  │   │          │
+                          │  │  │ (file mtime,    │  │ (PSI-based,   │  │   │          │
+                          │  │  │  periodic poll) │  │  per-feature)  │  │   │          │
+                          │  │  │  → hot-reload   │  │  → alert on   │  │   │          │
+                          │  │  │    (4C)         │  │    shift (4D) │  │   │          │
+                          │  │  └─────────────────┘  └───────────────┘  │   │          │
+                          │  │                                           │   │          │
+                          │  │  ┌─────────────────┐  ┌───────────────┐  │   │          │
+                          │  │  │ Shadow Scorer   │  │ Unified       │  │   │          │
+                          │  │  │ (challenger vs  │  │ Pipeline      │  │   │          │
+                          │  │  │  champion, A/B) │  │ (train AE +   │  │   │          │
+                          │  │  │  → comparison   │  │  BiGRU + alpha │  │   │          │
+                          │  │  │    stats (4E)   │  │  optimize)(4B)│  │   │          │
+                          │  │  └─────────────────┘  └───────────────┘  │   │          │
+                          │  └──────────────────────────────────────────┘   │          │
+                          └──────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
                     Kafka (ml-threat-detections)
+                    (+ challengerScore, challengerWeight, challengerVersion)
                                     │
                                     ▼
                     ┌────────────────────────────────┐
@@ -192,6 +218,16 @@ The ML Threat Detection service adds machine-learning-based anomaly detection to
 | `temporalScore` | float | `0.0` | BiGRU predicted next-window anomaly score (0–1) |
 | `ensembleMethod` | string | `"autoencoder_only"` | `"autoencoder_only"` (cold start) or `"ensemble"` (BiGRU active) |
 | `ensembleAlpha` | float | `0.6` | Autoencoder weight in the ensemble formula |
+
+**New fields (Phase 4E — Shadow Scoring)**:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `challengerScore` | float \| null | `null` | Challenger model's anomaly score (only present when shadow scoring enabled and challenger model loaded) |
+| `challengerWeight` | float \| null | `null` | Challenger model's calculated mlWeight (0.5–3.0) |
+| `challengerVersion` | string \| null | `null` | Challenger model version identifier (e.g., `"autoencoder_v2_tier2"`) |
+
+These fields are always `null` when `SHADOW_SCORING_ENABLED=false` or no challenger model is loaded. They are informational only — the champion model's score determines the actual `mlWeight`.
 
 ### 3.4 mlWeight Calculation
 
@@ -334,6 +370,75 @@ GET /api/v1/ml/buffer/stats
 
 Returns `{"enabled": false}` when BiGRU feature flag is off.
 
+### 4.5 Model Reload Endpoint (Phase 4C)
+
+```
+POST /api/v1/ml/models/reload
+```
+
+Triggers immediate hot-reload of all ONNX model sessions (autoencoder, BiGRU, challenger). Thread-safe — uses a lock to prevent concurrent reloads. Falls back to previous sessions if reload fails.
+
+**Response**:
+```json
+{
+  "status": "reloaded",
+  "reloadedModels": ["autoencoder_tier1", "autoencoder_tier2", "bigru_tier1"],
+  "timestamp": "2026-03-28T10:00:01Z"
+}
+```
+
+Returns `{"status": "no_change", ...}` if no model files have changed since last load.
+
+### 4.6 Drift Status Endpoint (Phase 4D)
+
+```
+GET /api/v1/ml/drift/status
+```
+
+Returns per-feature PSI (Population Stability Index) drift status. Drift is detected when PSI exceeds the configured threshold (default 0.2).
+
+**Response**:
+```json
+{
+  "enabled": true,
+  "drifted": false,
+  "features": {
+    "attack_count_log": {"psi": 0.05, "drifted": false},
+    "unique_ips_norm": {"psi": 0.12, "drifted": false},
+    "burst_intensity": {"psi": 0.31, "drifted": true}
+  },
+  "threshold": 0.2,
+  "windowSize": 500,
+  "observationCount": 487
+}
+```
+
+Returns `{"enabled": false}` when drift detection is disabled.
+
+### 4.7 Shadow Scoring Stats Endpoint (Phase 4E)
+
+```
+GET /api/v1/ml/shadow/stats
+```
+
+Returns champion vs. challenger comparison statistics accumulated during shadow scoring.
+
+**Response**:
+```json
+{
+  "enabled": true,
+  "championVersion": "autoencoder_v1_tier2",
+  "challengerVersion": "autoencoder_v2_tier2",
+  "totalComparisons": 1234,
+  "meanChampionScore": 0.42,
+  "meanChallengerScore": 0.45,
+  "agreementRate": 0.87,
+  "startedAt": "2026-03-28T08:00:00Z"
+}
+```
+
+Returns `{"enabled": false}` when shadow scoring is disabled or no challenger model is loaded.
+
 ---
 
 ## 5. Model Architecture
@@ -459,8 +564,9 @@ def ensemble_anomaly_score(ae_score, bigru_pred, seq_len, min_seq_len=4, alpha=0
     """
     Combine autoencoder anomaly and BiGRU temporal scores.
     
-    alpha = 0.6 → autoencoder-dominant (trusted, immediate signal)
-    (1 - alpha) = 0.4 → BiGRU contribution (temporal context)
+    alpha is per-tier optimized (Phase 4A). Default 0.6 if no optimization metadata.
+    alpha > 0.5 → autoencoder-dominant (trusted, immediate signal)
+    (1 - alpha) → BiGRU contribution (temporal context)
     """
     # Cold start: BiGRU not ready
     if bigru_pred is None or seq_len < min_seq_len:
@@ -478,7 +584,7 @@ def ensemble_anomaly_score(ae_score, bigru_pred, seq_len, min_seq_len=4, alpha=0
 #### Design Rationale
 
 - **Geometric mean** (not arithmetic): Penalizes disagreement between models. If one scores low and the other high, the result is pulled toward the lower value — conservative by design.
-- **alpha=0.6**: Autoencoder is the trusted baseline (per-window, immediate signal). BiGRU adds temporal context but should not override.
+- **alpha=0.6 (default, per-tier optimized in Phase 4A)**: Autoencoder is the trusted baseline (per-window, immediate signal). BiGRU adds temporal context but should not override. Phase 4A optimizes alpha per-tier via grid search on validation data.
 - **Cold start**: Until 4+ windows accumulate, BiGRU has insufficient context. Return autoencoder score unchanged.
 - **Feeds into existing `score_to_weight()`**: The ensemble score replaces the raw autoencoder score in the existing pipeline. The `score_to_weight()` function is NOT modified.
 
@@ -500,33 +606,37 @@ BiGRU is disabled by default (`BIGRU_ENABLED=false`). When disabled:
 services/ml-detection/
 ├── Dockerfile
 ├── pyproject.toml
-├── requirements.txt
+├── requirements.txt                     # + watchdog>=4.0.0 (Phase 4C)
 ├── app/
 │   ├── __init__.py
-│   ├── main.py                  # FastAPI app + lifespan (+ sequence buffer wiring)
-│   ├── config.py                # Settings via pydantic-settings (+ BiGRU config)
+│   ├── main.py                  # FastAPI app + lifespan (+ model watch loop, Phase 4 endpoints)
+│   ├── config.py                # Settings via pydantic-settings (+ Phase 4 config)
 │   ├── models/
 │   │   ├── __init__.py
 │   │   ├── autoencoder.py       # PyTorch autoencoder model definition
 │   │   ├── bigru.py             # PyTorch BiGRU + AdditiveAttention model (Phase 3)
-│   │   └── schemas.py           # Pydantic request/response models (+ temporal fields)
+│   │   └── schemas.py           # Pydantic request/response models (+ challenger fields, Phase 4E)
 │   ├── features/
 │   │   ├── __init__.py
 │   │   ├── extractor.py         # Feature engineering + tier stratification
 │   │   └── sequence_builder.py  # Per-attacker sequence buffer (LRU+TTL) (Phase 3)
 │   ├── serving/
 │   │   ├── __init__.py
-│   │   ├── engine.py            # ONNX Runtime inference (autoencoder + BiGRU)
-│   │   ├── scorer.py            # Anomaly score → mlWeight mapping
+│   │   ├── engine.py            # ONNX Runtime inference (+ hot-reload, challenger models, Phase 4C/E)
+│   │   ├── scorer.py            # Anomaly score → mlWeight mapping (LOCKED)
 │   │   └── ensemble.py          # Ensemble scoring (ae + bigru) (Phase 3)
 │   ├── kafka/
 │   │   ├── __init__.py
-│   │   ├── consumer.py          # aiokafka consumer (+ BiGRU integration path)
+│   │   ├── consumer.py          # aiokafka consumer (+ drift feed, shadow scoring, Phase 4D/E)
 │   │   └── producer.py          # aiokafka producer for ml-threat-detections
-│   └── training/
-│       ├── __init__.py
-│       ├── trainer.py           # Autoencoder offline batch training pipeline
-│       └── bigru_trainer.py     # BiGRU training pipeline (Phase 3)
+│   ├── training/
+│   │   ├── __init__.py
+│   │   ├── trainer.py           # Autoencoder offline batch training pipeline
+│   │   ├── bigru_trainer.py     # BiGRU training pipeline (+ alpha optimization, Phase 4A)
+│   │   └── pipeline.py          # Unified training pipeline: AE → BiGRU → alpha → ONNX (Phase 4B)
+│   └── monitoring/
+│       ├── __init__.py          # (Phase 4D)
+│       └── drift.py             # PSI-based feature drift detection (Phase 4D)
 ├── models/                      # Saved model artifacts (.onnx files)
 │   └── .gitkeep
 └── tests/
@@ -538,7 +648,12 @@ services/ml-detection/
     ├── test_autoencoder_regression.py  # Autoencoder regression tests (Phase 3)
     ├── test_bigru.py            # BiGRU model unit tests (Phase 3)
     ├── test_sequence_builder.py # Sequence buffer unit tests (Phase 3)
-    └── test_ensemble.py         # Ensemble scoring unit tests (Phase 3)
+    ├── test_ensemble.py         # Ensemble scoring unit tests (Phase 3)
+    ├── test_alpha_optimization.py  # Per-tier alpha optimization tests (Phase 4A)
+    ├── test_pipeline.py         # Unified training pipeline tests (Phase 4B)
+    ├── test_hot_reload.py       # Model hot-reload + file watcher tests (Phase 4C)
+    ├── test_drift.py            # PSI drift detection tests (Phase 4D)
+    └── test_shadow.py           # Shadow scoring + challenger model tests (Phase 4E)
 ```
 
 ### 6.2 Technology Choices
@@ -580,6 +695,16 @@ services/ml-detection/
 | `BIGRU_BUFFER_TTL_TIER1` | Buffer TTL for Tier 1 (seconds) | `1800` |
 | `BIGRU_BUFFER_TTL_TIER2` | Buffer TTL for Tier 2 (seconds) | `10800` |
 | `BIGRU_BUFFER_TTL_TIER3` | Buffer TTL for Tier 3 (seconds) | `86400` |
+| **Phase 4 Configuration** | | |
+| `ALPHA_SEARCH_VALUES` | Comma-separated alpha candidates for per-tier optimization (4A) | `0.3,0.4,0.5,0.6,0.7,0.8` |
+| `MODEL_WATCH_ENABLED` | Enable file-based model hot-reload watcher (4C) | `false` |
+| `MODEL_WATCH_INTERVAL_SECONDS` | Polling interval for model file changes (4C) | `30` |
+| `DRIFT_ENABLED` | Enable PSI-based feature drift detection (4D) | `true` |
+| `DRIFT_PSI_THRESHOLD` | PSI threshold above which drift is flagged (4D) | `0.2` |
+| `DRIFT_WINDOW_SIZE` | Number of recent observations in the drift sliding window (4D) | `500` |
+| `DRIFT_BASELINE_PATH` | Directory for drift baseline `.npz` files (4D) | `/app/models/drift_baselines` |
+| `SHADOW_SCORING_ENABLED` | Enable champion vs. challenger shadow scoring (4E) | `false` |
+| `CHALLENGER_MODEL_DIR` | Directory containing challenger ONNX model files (4E) | `/app/models/challenger` |
 
 ---
 
@@ -784,11 +909,47 @@ ml-detection:
 - REST endpoint `GET /api/v1/ml/buffer/stats` for sequence buffer monitoring
 - 51 unit tests (7 BiGRU + 13 sequence builder + 14 ensemble + 4 autoencoder regression + existing)
 
-### Phase 4 (Future): Advanced Ensemble + Training Automation
-- Learned ensemble weights (train alpha from data instead of fixed 0.6)
-- Feature store (PostgreSQL-backed)
-- Nightly batch retraining with PSI drift detection
-- Champion/challenger model promotion
+### Phase 4 (Complete ✅): Advanced Ensemble + Training Automation
+
+#### 4A: Per-Tier Alpha Optimization
+- Alpha (autoencoder weight in ensemble) is no longer fixed at 0.6 — it is optimized per-tier during BiGRU training
+- Grid search over configurable candidates (default: `0.3, 0.4, 0.5, 0.6, 0.7, 0.8`) on validation set
+- Optimal alpha is stored in ONNX model metadata (`alpha` key) and loaded at inference time
+- Falls back to configured `BIGRU_ENSEMBLE_ALPHA` if no metadata found (backward-compatible)
+- Training data is split using `_prepare_splits()` with `GroupShuffleSplit(groups=attacker_mac)` to prevent leakage
+
+#### 4B: Unified Training Pipeline (`pipeline.py`)
+- Single-command pipeline that executes: (1) Autoencoder training → (2) BiGRU training → (3) Alpha optimization → (4) ONNX export
+- Takes raw feature `.npz` files as input, produces production-ready `.onnx` models as output
+- Supports per-tier or all-tiers execution
+- CLI entrypoint: `python -m app.training.pipeline --tiers 1 2 3 --data-dir data/ --model-dir models/`
+
+#### 4C: Model Hot-Reload
+- File-based model watcher polls model directory every `MODEL_WATCH_INTERVAL_SECONDS` (default 30s)
+- Detects file changes via `os.path.getmtime()` comparison
+- Thread-safe reload with `threading.Lock` — serves from old sessions during reload
+- If reload fails (corrupt file, wrong format), logs error and keeps previous sessions
+- REST endpoint `POST /api/v1/ml/models/reload` for manual trigger
+- Feature-flagged via `MODEL_WATCH_ENABLED` (default false)
+- Dependency: `watchdog>=4.0.0` added to `requirements.txt`
+
+#### 4D: PSI Drift Detection
+- Population Stability Index (PSI) monitors per-feature distribution shift between training baseline and live traffic
+- Baseline distributions are saved as `.npz` files during training (histogram bin edges + counts)
+- Live observations are collected in a sliding window (configurable size, default 500)
+- PSI > threshold (default 0.2) flags drift on that feature
+- REST endpoint `GET /api/v1/ml/drift/status` returns per-feature PSI values and drift flags
+- Consumer feeds each feature vector to the drift monitor after inference
+- Feature-flagged via `DRIFT_ENABLED` (default true — monitoring is passive/read-only)
+
+#### 4E: Shadow Scoring (Champion/Challenger)
+- Challenger models are loaded from `CHALLENGER_MODEL_DIR` alongside champion models
+- Every inference runs BOTH champion and challenger, but only champion's score determines `mlWeight`
+- Challenger results are attached to the Kafka output as informational fields (`challengerScore`, `challengerWeight`, `challengerVersion`)
+- `ShadowStats` tracks per-tier comparison statistics: total comparisons, mean scores, agreement rate
+- REST endpoint `GET /api/v1/ml/shadow/stats` exposes accumulated statistics
+- Feature-flagged via `SHADOW_SCORING_ENABLED` (default false)
+- Promotion decision is manual (operator reviews stats and promotes by swapping model files)
 
 ---
 
@@ -811,6 +972,12 @@ ml-detection:
 | Multi-tenant contamination | Medium | Per-customer normalization of volume-dependent features |
 | Python service doesn't use Spring Cloud Config | Medium | Use env vars consistent with docker-compose pattern |
 | Data leakage in BiGRU training | Medium | `GroupShuffleSplit(groups=attacker_mac)` prevents same attacker in train+val |
+| Alpha overfitting on small validation set | Medium | Grid search uses GroupShuffleSplit; alpha candidates are coarse (0.1 step) to avoid overfitting; falls back to 0.6 if optimization fails |
+| Hot-reload race condition | Medium | Thread-safe `threading.Lock`; old sessions served during reload; failed reload preserves previous state |
+| Drift false positives (small sample) | Medium | PSI requires `drift_window_size` observations before computing; threshold tunable per deployment; drift is informational only (no auto-action) |
+| Challenger model degrades scoring | Low | Shadow scoring is read-only — challenger never affects `mlWeight`; promotion is manual after operator review |
+| ONNX FP16/FP32 mismatch in challenger | Medium | Challenger models must match champion dtype (FP16); engine casts input dtype to match session; test with real models before enabling |
+| Model watcher disk I/O | Low | Polling interval is 30s (configurable); only checks `os.path.getmtime()`, no full file reads until change detected |
 
 ---
 

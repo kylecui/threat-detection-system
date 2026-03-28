@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import numpy as np
 from fastapi import FastAPI
@@ -13,7 +14,15 @@ from app.features.extractor import FeatureExtractor
 from app.features.sequence_builder import SequenceBuffer
 from app.kafka.consumer import MlDetectionConsumer
 from app.kafka.producer import MlDetectionProducer
-from app.models.schemas import AggregatedAttackData, HealthResponse, MlDetectionResult, ModelInfo
+from app.models.schemas import (
+    AggregatedAttackData,
+    HealthResponse,
+    MlDetectionResult,
+    ModelInfo,
+    ReloadResponse,
+    ShadowComparisonStats,
+)
+from app.monitoring.drift import DriftMonitor
 from app.serving.engine import InferenceEngine, get_engine
 from app.serving.scorer import anomaly_type, reconstruction_to_anomaly_score, score_to_weight
 
@@ -29,6 +38,8 @@ class AppState:
         self.producer: MlDetectionProducer | None = None
         self.consumer: MlDetectionConsumer | None = None
         self.sequence_buffer: SequenceBuffer | None = None
+        self.drift_monitor: DriftMonitor | None = None
+        self._watch_task: Optional[asyncio.Task[None]] = None
 
 
 state = AppState()
@@ -55,6 +66,17 @@ async def lifespan(_: FastAPI):
             max_total_entries=settings.bigru_buffer_max_entries,
         )
 
+    if settings.drift_enabled:
+        state.drift_monitor = DriftMonitor(
+            window_size=settings.drift_window_size,
+            psi_threshold=settings.drift_psi_threshold,
+            baseline_dir=settings.drift_baseline_path,
+        )
+        state.drift_monitor.load_baselines()
+
+    if settings.shadow_scoring_enabled and state.engine:
+        state.engine.load_challenger(settings.challenger_model_dir)
+
     state.consumer = MlDetectionConsumer(
         bootstrap_servers=settings.kafka_bootstrap_servers,
         topic=settings.kafka_input_topic,
@@ -67,19 +89,39 @@ async def lifespan(_: FastAPI):
         bigru_enabled=settings.bigru_enabled,
         bigru_min_seq_len=settings.bigru_min_seq_len,
         bigru_ensemble_alpha=settings.bigru_ensemble_alpha,
+        drift_monitor=state.drift_monitor,
+        shadow_scoring_enabled=settings.shadow_scoring_enabled,
     )
     await state.consumer.start()
+
+    if settings.model_watch_enabled and state.engine:
+        state._watch_task = asyncio.create_task(_model_watch_loop())
 
     try:
         yield
     finally:
+        if state._watch_task:
+            state._watch_task.cancel()
+            try:
+                await state._watch_task
+            except asyncio.CancelledError:
+                pass
         if state.consumer:
             await state.consumer.stop()
         if state.producer:
             await state.producer.stop()
 
 
-app = FastAPI(title="ML Threat Detection Service", version="1.0.0", lifespan=lifespan)
+async def _model_watch_loop() -> None:
+    interval = settings.model_watch_interval_seconds
+    while True:
+        await asyncio.sleep(interval)
+        if state.engine and state.engine.check_for_updates():
+            logger.info("Model file change detected, triggering reload")
+            state.engine.reload()
+
+
+app = FastAPI(title="ML Threat Detection Service", version="2.0.0", lifespan=lifespan)
 
 
 def _run_inference_sync(data: AggregatedAttackData) -> MlDetectionResult:
@@ -155,9 +197,23 @@ async def models() -> List[ModelInfo]:
             modelPath=str(info["modelPath"]),
             bigruAvailable=bool(info.get("bigruAvailable", False)),
             bigruModelPath=str(info.get("bigruModelPath", "")),
+            optimalAlpha=float(info.get("optimalAlpha", 0.6)),
         )
         for tier, info in metadata.items()
     ]
+
+
+@app.post("/api/v1/ml/models/reload", response_model=ReloadResponse)
+async def reload_models() -> ReloadResponse:
+    if not state.engine:
+        return ReloadResponse(status="error", error="Engine not initialized")
+    result = state.engine.reload()
+    return ReloadResponse(
+        status=result.get("status", "error"),
+        reloadCount=result.get("reloadCount", 0),
+        modelsLoaded=result.get("modelsLoaded"),
+        error=result.get("error"),
+    )
 
 
 @app.get("/api/v1/ml/buffer/stats")
@@ -168,4 +224,25 @@ async def buffer_stats() -> dict:
         "enabled": True,
         "totalKeys": state.sequence_buffer.total_keys,
         "totalWindows": state.sequence_buffer.total_windows,
+    }
+
+
+@app.get("/api/v1/ml/drift/status")
+async def drift_status() -> dict:
+    if state.drift_monitor is None:
+        return {"enabled": False}
+    for tier in (1, 2, 3):
+        state.drift_monitor.compute_drift(tier)
+    return {"enabled": True, **state.drift_monitor.get_status()}
+
+
+@app.get("/api/v1/ml/shadow/stats")
+async def shadow_stats() -> dict:
+    if state.consumer is None:
+        return {"enabled": False, "totalComparisons": 0}
+    return {
+        "enabled": settings.shadow_scoring_enabled,
+        "challengerDir": settings.challenger_model_dir,
+        "challengerLoaded": bool(state.engine and state.engine.is_challenger_loaded()),
+        **state.consumer.shadow_stats.get_stats(),
     }

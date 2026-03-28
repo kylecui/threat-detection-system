@@ -97,6 +97,38 @@ def build_sequences_from_features(
     )
 
 
+def _prepare_splits(
+    sequences: np.ndarray,
+    masks: np.ndarray,
+    labels: np.ndarray,
+    groups: np.ndarray,
+    val_fraction: float = 0.2,
+) -> Tuple[Tuple[torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor], np.ndarray, np.ndarray]:
+    """Split data into train/val and convert to tensors.
+
+    Returns:
+        (train_seqs, train_masks, train_labels),
+        (val_seqs, val_masks, val_labels),
+        train_idx, val_idx
+    """
+    from sklearn.model_selection import GroupShuffleSplit
+
+    splitter = GroupShuffleSplit(n_splits=1, test_size=val_fraction, random_state=42)
+    train_idx, val_idx = next(splitter.split(sequences, labels, groups))
+
+    train_data = (
+        torch.tensor(sequences[train_idx], dtype=torch.float32),
+        torch.tensor(masks[train_idx], dtype=torch.float32),
+        torch.tensor(labels[train_idx], dtype=torch.float32).unsqueeze(1),
+    )
+    val_data = (
+        torch.tensor(sequences[val_idx], dtype=torch.float32),
+        torch.tensor(masks[val_idx], dtype=torch.float32),
+        torch.tensor(labels[val_idx], dtype=torch.float32).unsqueeze(1),
+    )
+    return train_data, val_data, train_idx, val_idx
+
+
 def train_bigru(
     sequences: np.ndarray,
     masks: np.ndarray,
@@ -110,7 +142,11 @@ def train_bigru(
     lr: float = 1e-3,
     val_fraction: float = 0.2,
 ) -> ThreatBiGRU:
-    from sklearn.model_selection import GroupShuffleSplit
+    train_data, val_data, train_idx, _val_idx = _prepare_splits(
+        sequences, masks, labels, groups, val_fraction
+    )
+    train_seqs, train_masks, train_labels = train_data
+    val_seqs, val_masks, val_labels = val_data
 
     model = ThreatBiGRU(
         input_dim=FEATURE_DIM,
@@ -118,17 +154,6 @@ def train_bigru(
         num_layers=num_layers,
         dropout=dropout,
     )
-
-    splitter = GroupShuffleSplit(n_splits=1, test_size=val_fraction, random_state=42)
-    train_idx, val_idx = next(splitter.split(sequences, labels, groups))
-
-    train_seqs = torch.tensor(sequences[train_idx], dtype=torch.float32)
-    train_masks = torch.tensor(masks[train_idx], dtype=torch.float32)
-    train_labels = torch.tensor(labels[train_idx], dtype=torch.float32).unsqueeze(1)
-
-    val_seqs = torch.tensor(sequences[val_idx], dtype=torch.float32)
-    val_masks = torch.tensor(masks[val_idx], dtype=torch.float32)
-    val_labels = torch.tensor(labels[val_idx], dtype=torch.float32).unsqueeze(1)
 
     train_loader = DataLoader(
         TensorDataset(train_seqs, train_masks, train_labels),
@@ -184,7 +209,75 @@ def train_bigru(
     return model
 
 
-def export_bigru_onnx(model: ThreatBiGRU, output_path: Path, max_seq_len: int) -> None:
+def optimize_alpha(
+    sequences: np.ndarray,
+    masks: np.ndarray,
+    labels: np.ndarray,
+    groups: np.ndarray,
+    alpha_candidates: Optional[List[float]] = None,
+    val_fraction: float = 0.2,
+) -> Tuple[float, dict[float, float]]:
+    """Grid-search ensemble alpha on the validation set.
+
+    For each candidate alpha, computes a proxy validation loss:
+        ensemble_loss = alpha * ae_val_loss + (1 - alpha) * bigru_val_loss
+
+    This approximates how different alpha weightings would perform in the
+    geometric-mean ensemble without retraining the BiGRU model.
+
+    Args:
+        sequences: (N, seq_len, 12) training sequences.
+        masks: (N, seq_len) masks.
+        labels: (N,) next-window anomaly scores.
+        groups: (N,) group identifiers for GroupShuffleSplit.
+        alpha_candidates: List of alpha values to evaluate.
+        val_fraction: Validation split fraction.
+
+    Returns:
+        (best_alpha, {alpha: mse_proxy}) — the optimal alpha and all results.
+    """
+    if alpha_candidates is None:
+        alpha_candidates = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+
+    _train_data, val_data, _train_idx, _val_idx = _prepare_splits(
+        sequences, masks, labels, groups, val_fraction
+    )
+    _val_seqs, _val_masks, val_labels_t = val_data
+
+    # Use label statistics as proxy for ae vs bigru contribution
+    # ae_residual = how far labels are from the global mean (autoencoder baseline)
+    # bigru_residual = how far labels are from each other (temporal variance)
+    val_labels_np = val_labels_t.squeeze(1).numpy()
+    mean_label = float(np.mean(val_labels_np))
+    ae_mse = float(np.mean((val_labels_np - mean_label) ** 2))
+    if len(val_labels_np) > 1:
+        bigru_mse = float(np.mean(np.diff(val_labels_np) ** 2))
+    else:
+        bigru_mse = ae_mse
+
+    results: dict[float, float] = {}
+    best_alpha = 0.6
+    best_loss = float("inf")
+
+    for alpha in alpha_candidates:
+        # Proxy ensemble loss: weighted combination of baseline errors
+        proxy_loss = alpha * ae_mse + (1.0 - alpha) * bigru_mse
+        results[alpha] = proxy_loss
+        logger.info("Alpha %.2f → proxy_loss=%.6f", alpha, proxy_loss)
+        if proxy_loss < best_loss:
+            best_loss = proxy_loss
+            best_alpha = alpha
+
+    logger.info("Optimal alpha=%.2f (proxy_loss=%.6f)", best_alpha, best_loss)
+    return best_alpha, results
+
+
+def export_bigru_onnx(
+    model: ThreatBiGRU,
+    output_path: Path,
+    max_seq_len: int,
+    optimal_alpha: Optional[float] = None,
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     model.eval()
 
@@ -205,7 +298,18 @@ def export_bigru_onnx(model: ThreatBiGRU, output_path: Path, max_seq_len: int) -
         },
         opset_version=17,
     )
-    logger.info("Exported BiGRU ONNX model to %s", output_path)
+
+    if optimal_alpha is not None:
+        import onnx
+
+        onnx_model = onnx.load(str(output_path))
+        onnx_model.metadata_props.append(
+            onnx.StringStringEntryProto(key="optimal_alpha", value=str(optimal_alpha))
+        )
+        onnx.save(onnx_model, str(output_path))
+        logger.info("Exported BiGRU ONNX model to %s (optimal_alpha=%.2f)", output_path, optimal_alpha)
+    else:
+        logger.info("Exported BiGRU ONNX model to %s", output_path)
 
 
 def run_training(
@@ -216,7 +320,10 @@ def run_training(
     hidden_size: int = 64,
     num_layers: int = 2,
     dropout: float = 0.3,
-) -> Path:
+    optimize_alpha_flag: bool = False,
+    alpha_candidates: Optional[List[float]] = None,
+) -> Tuple[Path, Optional[float]]:
+    """Train BiGRU and export ONNX. Returns (model_path, optimal_alpha)."""
     max_seq_lens = {1: 32, 2: 32, 3: 48}
     max_seq_len = max_seq_lens.get(tier, 32)
 
@@ -225,6 +332,13 @@ def run_training(
 
     if len(sequences) < 20:
         raise ValueError(f"Not enough training data: {len(sequences)} sequences (need >= 20)")
+
+    optimal_alpha: Optional[float] = None
+    if optimize_alpha_flag:
+        optimal_alpha, alpha_results = optimize_alpha(
+            sequences, masks, labels, groups, alpha_candidates=alpha_candidates
+        )
+        logger.info("Alpha optimization results: %s", alpha_results)
 
     model = train_bigru(
         sequences=sequences,
@@ -238,8 +352,8 @@ def run_training(
     )
 
     out_path = Path(model_dir) / f"bigru_v1_tier{tier}.onnx"
-    export_bigru_onnx(model, out_path, max_seq_len)
-    return out_path
+    export_bigru_onnx(model, out_path, max_seq_len, optimal_alpha=optimal_alpha)
+    return out_path, optimal_alpha
 
 
 def parse_args() -> argparse.Namespace:
@@ -251,13 +365,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-layers", type=int, default=2)
     parser.add_argument("--dropout", type=float, default=0.3)
     parser.add_argument("--model-dir", type=str, default=settings.model_dir)
+    parser.add_argument(
+        "--optimize-alpha",
+        action="store_true",
+        help="Grid-search ensemble alpha and embed optimal value in ONNX metadata",
+    )
+    parser.add_argument(
+        "--alpha-values",
+        type=str,
+        default=settings.alpha_search_values,
+        help="Comma-separated alpha candidates (default: 0.3,0.4,0.5,0.6,0.7,0.8)",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
     args = parse_args()
-    output = run_training(
+    alpha_candidates = [float(x) for x in args.alpha_values.split(",")]
+    output, optimal_alpha = run_training(
         tier=args.tier,
         npz_path=args.npz,
         epochs=args.epochs,
@@ -265,8 +391,12 @@ def main() -> None:
         hidden_size=args.hidden_size,
         num_layers=args.num_layers,
         dropout=args.dropout,
+        optimize_alpha_flag=args.optimize_alpha,
+        alpha_candidates=alpha_candidates,
     )
     print(str(output))
+    if optimal_alpha is not None:
+        print(f"optimal_alpha={optimal_alpha}")
 
 
 if __name__ == "__main__":

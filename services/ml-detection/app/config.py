@@ -28,6 +28,23 @@ class Settings(BaseSettings):
     bigru_buffer_ttl_tier2: int = 10800
     bigru_buffer_ttl_tier3: int = 86400
 
+    # Phase 4A: Alpha optimization
+    alpha_search_values: str = "0.3,0.4,0.5,0.6,0.7,0.8"
+
+    # Phase 4C: Model hot-reload
+    model_watch_enabled: bool = False
+    model_watch_interval_seconds: int = 30
+
+    # Phase 4D: Drift detection
+    drift_enabled: bool = True
+    drift_psi_threshold: float = 0.2
+    drift_window_size: int = 500
+    drift_baseline_path: str = "/app/models/drift_baselines"
+
+    # Phase 4E: Shadow scoring (champion/challenger)
+    shadow_scoring_enabled: bool = False
+    challenger_model_dir: str = "/app/models/challenger"
+
     model_config = SettingsConfigDict(env_file=".env", protected_namespaces=("settings_",))
 
 
