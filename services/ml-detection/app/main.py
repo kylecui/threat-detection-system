@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from app.config import settings
 from app.features.extractor import FeatureExtractor
+from app.features.sequence_builder import SequenceBuffer
 from app.kafka.consumer import MlDetectionConsumer
 from app.kafka.producer import MlDetectionProducer
 from app.models.schemas import AggregatedAttackData, HealthResponse, MlDetectionResult, ModelInfo
@@ -27,6 +28,7 @@ class AppState:
         self.extractor = FeatureExtractor()
         self.producer: MlDetectionProducer | None = None
         self.consumer: MlDetectionConsumer | None = None
+        self.sequence_buffer: SequenceBuffer | None = None
 
 
 state = AppState()
@@ -38,6 +40,21 @@ async def lifespan(_: FastAPI):
     state.producer = MlDetectionProducer(settings.kafka_bootstrap_servers, settings.kafka_output_topic)
     await state.producer.start()
 
+    if settings.bigru_enabled:
+        state.sequence_buffer = SequenceBuffer(
+            max_seq_lens={
+                1: settings.bigru_max_seq_len_tier1,
+                2: settings.bigru_max_seq_len_tier2,
+                3: settings.bigru_max_seq_len_tier3,
+            },
+            ttls={
+                1: settings.bigru_buffer_ttl_tier1,
+                2: settings.bigru_buffer_ttl_tier2,
+                3: settings.bigru_buffer_ttl_tier3,
+            },
+            max_total_entries=settings.bigru_buffer_max_entries,
+        )
+
     state.consumer = MlDetectionConsumer(
         bootstrap_servers=settings.kafka_bootstrap_servers,
         topic=settings.kafka_input_topic,
@@ -46,6 +63,10 @@ async def lifespan(_: FastAPI):
         feature_extractor=state.extractor,
         engine=state.engine,
         default_weight=settings.ml_default_weight,
+        sequence_buffer=state.sequence_buffer,
+        bigru_enabled=settings.bigru_enabled,
+        bigru_min_seq_len=settings.bigru_min_seq_len,
+        bigru_ensemble_alpha=settings.bigru_ensemble_alpha,
     )
     await state.consumer.start()
 
@@ -132,6 +153,19 @@ async def models() -> List[ModelInfo]:
             available=bool(info["available"]),
             threshold=float(info["threshold"]),
             modelPath=str(info["modelPath"]),
+            bigruAvailable=bool(info.get("bigruAvailable", False)),
+            bigruModelPath=str(info.get("bigruModelPath", "")),
         )
         for tier, info in metadata.items()
     ]
+
+
+@app.get("/api/v1/ml/buffer/stats")
+async def buffer_stats() -> dict:
+    if state.sequence_buffer is None:
+        return {"enabled": False, "totalKeys": 0, "totalWindows": 0}
+    return {
+        "enabled": True,
+        "totalKeys": state.sequence_buffer.total_keys,
+        "totalWindows": state.sequence_buffer.total_windows,
+    }

@@ -50,6 +50,10 @@ class MlDetectionResult(BaseModel):
     reconstructionError: float
     threshold: float
     modelVersion: str
+    sequenceLength: int = 0
+    temporalScore: float = 0.0
+    ensembleMethod: str = "autoencoder_only"
+    ensembleAlpha: float = 0.6
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -65,3 +69,5 @@ class ModelInfo(BaseModel):
     available: bool
     threshold: float
     modelPath: str
+    bigruAvailable: bool = False
+    bigruModelPath: str = ""

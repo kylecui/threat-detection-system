@@ -1,8 +1,8 @@
 # ML Threat Detection — Design Document
 
-**Version**: 1.0  
-**Date**: 2026-03-27  
-**Status**: Phase 1 — Tabular Anomaly Detection (Autoencoder)  
+**Version**: 2.0  
+**Date**: 2026-03-28  
+**Status**: Phase 3 — BiGRU Temporal Model + Ensemble Scoring  
 **Service Port**: 8086  
 **Language**: Python 3.11 + FastAPI + PyTorch + ONNX Runtime
 
@@ -39,40 +39,59 @@ The ML Threat Detection service adds machine-learning-based anomaly detection to
 ## 2. Architecture
 
 ```
-                                    ┌─────────────────────────────────────────────┐
-                                    │  ML Detection Service (port 8086)            │
-                                    │                                              │
- Kafka (threat-alerts) ──────────▶ │  ┌──────────────┐   ┌────────────────────┐  │
-                                    │  │ Kafka Consumer │──▶│ Feature Extractor  │  │
-                                    │  │ (aiokafka)    │   │ (tier-stratified)  │  │
-                                    │  └──────────────┘   └─────────┬──────────┘  │
-                                    │                                │              │
-                                    │                    ┌───────────▼──────────┐  │
-                                    │                    │ ONNX Runtime Engine   │  │
-                                    │                    │ (FP16, per-tier model)│  │
-                                    │                    └───────────┬──────────┘  │
-                                    │                                │              │
-                                    │  ┌──────────────┐   ┌────────▼───────────┐  │
-                                    │  │ Kafka Producer │◀──│ Score Calculator    │  │
-                                    │  │ (aiokafka)    │   │ (mlWeight 0.5-3.0) │  │
-                                    │  └──────┬───────┘   └────────────────────┘  │
-                                    │         │                                    │
-                                    │  ┌──────▼────────────────────────────────┐  │
-                                    │  │ REST API: POST /api/v1/ml/detect       │  │
-                                    │  │           GET  /health                  │  │
-                                    │  └───────────────────────────────────────┘  │
-                                    └─────────────────────────────────────────────┘
-                                              │
-                                              ▼
-                              Kafka (ml-threat-detections)
-                                              │
-                                              ▼
-                              ┌────────────────────────────────┐
-                              │  Threat Assessment Service      │
-                              │  ThreatScoreCalculator          │
-                              │  finalScore = ruleScore × mlW   │
-                              │  (Phase 2 integration)          │
-                              └────────────────────────────────┘
+                          ┌──────────────────────────────────────────────────────────┐
+                          │  ML Detection Service (port 8086)                         │
+                          │                                                           │
+ Kafka (threat-alerts) ──▶│  ┌──────────────┐   ┌────────────────────┐              │
+                          │  │ Kafka Consumer │──▶│ Feature Extractor  │              │
+                          │  │ (aiokafka)    │   │ (tier-stratified)  │              │
+                          │  └──────────────┘   └─────────┬──────────┘              │
+                          │                                │                         │
+                          │              ┌─────────────────┼──────────────────┐      │
+                          │              ▼                  ▼                  │      │
+                          │  ┌─────────────────────┐  ┌──────────────────┐   │      │
+                          │  │ ONNX Autoencoder     │  │ Sequence Buffer  │   │      │
+                          │  │ (FP16, per-tier)     │  │ (per attacker,   │   │      │
+                          │  │ → recon error        │  │  LRU+TTL, 10K)  │   │      │
+                          │  └─────────┬───────────┘  └────────┬─────────┘   │      │
+                          │            │ anomaly_score          │ sequence     │      │
+                          │            │                        ▼             │      │
+                          │            │              ┌──────────────────┐   │      │
+                          │            │              │ ONNX BiGRU       │   │      │
+                          │            │              │ (FP16, attention) │   │      │
+                          │            │              │ → temporal_score  │   │      │
+                          │            │              └────────┬─────────┘   │      │
+                          │            │                       │             │      │
+                          │            └───────────┬───────────┘             │      │
+                          │                        ▼                         │      │
+                          │              ┌──────────────────────┐           │      │
+                          │              │ Ensemble Scorer       │           │      │
+                          │              │ ae^0.6 × bigru^0.4   │           │      │
+                          │              │ (cold-start: ae only) │           │      │
+                          │              └──────────┬───────────┘           │      │
+                          │                         │                       │      │
+                          │  ┌──────────────┐  ┌────▼──────────────────┐   │      │
+                          │  │ Kafka Producer │◀─│ Score Calculator      │   │      │
+                          │  │ (aiokafka)    │  │ (mlWeight 0.5-3.0)   │   │      │
+                          │  └──────┬───────┘  └───────────────────────┘   │      │
+                          │         │                                       │      │
+                          │  ┌──────▼──────────────────────────────────┐   │      │
+                          │  │ REST API: POST /api/v1/ml/detect         │   │      │
+                          │  │           GET  /health                    │   │      │
+                          │  │           GET  /api/v1/ml/buffer/stats    │   │      │
+                          │  └─────────────────────────────────────────┘   │      │
+                          └──────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+                    Kafka (ml-threat-detections)
+                                    │
+                                    ▼
+                    ┌────────────────────────────────┐
+                    │  Threat Assessment Service      │
+                    │  ThreatScoreCalculator          │
+                    │  finalScore = ruleScore × mlW   │
+                    │  (Phase 2 integration)          │
+                    └────────────────────────────────┘
 ```
 
 ### Data Flow
@@ -80,10 +99,13 @@ The ML Threat Detection service adds machine-learning-based anomaly detection to
 1. Flink `TierWindowProcessor` publishes `AggregatedAttackData` JSON to `threat-alerts` topic
 2. ML service consumes from `threat-alerts` via `ml-detection-consumer` consumer group
 3. Feature extractor transforms JSON → numpy feature vector (tier-stratified, customer-normalized)
-4. ONNX Runtime runs autoencoder inference → reconstruction error → anomaly score
-5. Score calculator maps anomaly score → `mlWeight` (0.5–3.0) + `mlConfidence` (0–1.0) + `anomalyType`
-6. Result published to `ml-threat-detections` topic
-7. (Phase 2) Threat-assessment service consumes `ml-threat-detections` and applies `mlWeight` as advisory multiplier
+4. ONNX Runtime runs **autoencoder** inference → reconstruction error → anomaly score
+5. **(Phase 3)** Feature vector is appended to the per-attacker **Sequence Buffer** (keyed by `customerId:attackMac:tier`)
+6. **(Phase 3)** If sequence length ≥ 4 and BiGRU model is loaded, ONNX Runtime runs **BiGRU** inference → temporal score (predicted next-window anomaly)
+7. **(Phase 3)** **Ensemble scorer** combines autoencoder anomaly score and BiGRU temporal score via weighted geometric mean: `combined = ae^0.6 × bigru^0.4`. Cold start (seq < 4): autoencoder score only.
+8. Score calculator maps final anomaly score → `mlWeight` (0.5–3.0) + `mlConfidence` (0–1.0) + `anomalyType`
+9. Result published to `ml-threat-detections` topic (enriched with `sequenceLength`, `temporalScore`, `ensembleMethod`, `ensembleAlpha`)
+10. (Phase 2) Threat-assessment service consumes `ml-threat-detections` and applies `mlWeight` as advisory multiplier
 
 ---
 
@@ -154,9 +176,22 @@ The ML Threat Detection service adds machine-learning-based anomaly detection to
   "reconstructionError": 0.0342,
   "threshold": 0.0150,
   "modelVersion": "autoencoder_v1_tier2",
+  "sequenceLength": 12,
+  "temporalScore": 0.78,
+  "ensembleMethod": "ensemble",
+  "ensembleAlpha": 0.6,
   "timestamp": "2026-03-27T10:05:01Z"
 }
 ```
+
+**New fields (Phase 3)**:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `sequenceLength` | int | `0` | Number of windows in the attacker's sequence buffer |
+| `temporalScore` | float | `0.0` | BiGRU predicted next-window anomaly score (0–1) |
+| `ensembleMethod` | string | `"autoencoder_only"` | `"autoencoder_only"` (cold start) or `"ensemble"` (BiGRU active) |
+| `ensembleAlpha` | float | `0.6` | Autoencoder weight in the ensemble formula |
 
 ### 3.4 mlWeight Calculation
 
@@ -276,6 +311,29 @@ GET /api/v1/ml/models
 }
 ```
 
+### 4.4 Sequence Buffer Stats Endpoint (Phase 3)
+
+```
+GET /api/v1/ml/buffer/stats
+```
+
+**Response**:
+```json
+{
+  "enabled": true,
+  "totalEntries": 1234,
+  "maxEntries": 10000,
+  "utilizationPercent": 12.34,
+  "tierBreakdown": {
+    "tier1": 456,
+    "tier2": 567,
+    "tier3": 211
+  }
+}
+```
+
+Returns `{"enabled": false}` when BiGRU feature flag is off.
+
 ---
 
 ## 5. Model Architecture
@@ -311,13 +369,126 @@ torch.onnx.export(model, dummy_input, "autoencoder_v1_tier{tier}.onnx",
                   dynamic_axes={"features": {0: "batch"}, "reconstruction": {0: "batch"}})
 ```
 
-### 5.2 Phase 2: BiGRU Temporal Detector (Future)
+### 5.2 Phase 2: BiGRU Temporal Detector (Complete ✅)
 
-Detects attack progressions over time (port scan → service enumeration → exploitation). Operates on sequences of aggregated windows for the same `customerId:attackMac`.
+Detects attack progressions over time (port scan → service enumeration → exploitation). Operates on sequences of aggregated windows for the same `customerId:attackMac:tier` key.
 
-### 5.3 Phase 3: Ensemble (Future)
+**Why BiGRU for honeypots**: While the autoencoder detects per-window anomalies, many real attacks exhibit temporal patterns — gradual escalation, periodic reconnaissance, slow-and-low lateral movement. The BiGRU sees the sequence of anomaly scores over time and predicts what comes next. A rising trend (predicted high next-window score) amplifies the alert; a falling trend dampens it.
 
-Combines autoencoder anomaly score with BiGRU temporal score. Weighted ensemble with learned combination weights.
+**Training Target**: Self-supervised next-window anomaly score regression. The BiGRU predicts the autoencoder's reconstruction error on the next time window. Labels are generated automatically from the autoencoder's own output — no manual labeling required.
+
+#### Architecture
+
+```
+Input (seq of 12-dim features) → Input Projection → BiGRU → Additive Attention → Output Head → Prediction
+
+Input Projection: Linear(12, 64) + LayerNorm + ReLU + Dropout(0.3)
+BiGRU: GRU(64, 32, bidirectional=True, num_layers=2, dropout=0.3) → output 64-dim
+Additive Attention: energy = Linear(64, 64), v = Linear(64, 1)
+  - Mask: scores + (1.0 - mask) * (-1e4)  [FP16-safe, NOT float('-inf')]
+  - Softmax → weighted sum → context vector [B, 64]
+Output Head: Linear(64, 32) + ReLU + Dropout(0.3) + Linear(32, 1) + Sigmoid
+  - nan_to_num guard on output (FP16 safety)
+```
+
+#### Sequence Buffer
+
+Per-attacker rolling window buffer, keyed by `(customerId, attackMac, tier)`:
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| Max entries | 10,000 | Global cap across all attacker keys (LRU eviction) |
+| Max seq len (Tier 1) | 32 | 30s windows × 32 = ~16 min history |
+| Max seq len (Tier 2) | 32 | 5min windows × 32 = ~2.5 hr history |
+| Max seq len (Tier 3) | 48 | 15min windows × 48 = ~12 hr history |
+| TTL (Tier 1) | 1,800s (30 min) | Short-lived burst detection |
+| TTL (Tier 2) | 10,800s (3 hr) | Medium-term campaign tracking |
+| TTL (Tier 3) | 86,400s (24 hr) | Long-term APT tracking |
+
+**Eviction**: LRU ordering via `OrderedDict`. TTL-based expiry checked every 60 seconds. State is NOT persisted across restarts — advisory system auto-recovers as new windows flow in.
+
+#### ONNX Export
+
+```python
+torch.onnx.export(model, (dummy_features, dummy_mask),
+    f"bigru_v1_tier{tier}.onnx",
+    input_names=["features_seq", "mask"],
+    output_names=["prediction", "attention_weights"],
+    dynamic_axes={
+        "features_seq": {0: "batch", 1: "seq_len"},
+        "mask": {0: "batch", 1: "seq_len"},
+        "prediction": {0: "batch"},
+        "attention_weights": {0: "batch", 1: "seq_len"}
+    },
+    opset_version=17)
+```
+
+**Critical ONNX constraints**:
+- NO `pack_padded_sequence` — does not export to ONNX. Use mask-based attention only.
+- Attention mask fill uses `-1e4` not `float('-inf')` for FP16 safety.
+- FP16 input: `np.float16` for both features and mask tensors.
+
+#### Training Pipeline (`bigru_trainer.py`)
+
+```bash
+python -m app.training.bigru_trainer \
+    --tier 2 \
+    --npz training_data_tier2.npz \
+    --epochs 100 \
+    --hidden-size 64 \
+    --num-layers 2 \
+    --dropout 0.3 \
+    --model-dir models/
+```
+
+- **Data**: Sequences built from per-attacker windows; labels = autoencoder anomaly scores of the next window
+- **Split**: `GroupShuffleSplit(groups=attacker_mac)` — prevents data leakage across train/val
+- **Optimizer**: Adam (lr=1e-3, weight_decay=1e-5)
+- **Early stopping**: Patience=10 on validation MSE
+- **Gradient clipping**: max_norm=1.0
+- **Batch size**: 64
+
+### 5.3 Phase 3: Ensemble Scoring (Complete ✅)
+
+Combines autoencoder per-window anomaly score with BiGRU temporal prediction into a single score.
+
+#### Formula: Weighted Geometric Mean
+
+```python
+def ensemble_anomaly_score(ae_score, bigru_pred, seq_len, min_seq_len=4, alpha=0.6):
+    """
+    Combine autoencoder anomaly and BiGRU temporal scores.
+    
+    alpha = 0.6 → autoencoder-dominant (trusted, immediate signal)
+    (1 - alpha) = 0.4 → BiGRU contribution (temporal context)
+    """
+    # Cold start: BiGRU not ready
+    if bigru_pred is None or seq_len < min_seq_len:
+        return ae_score, "autoencoder_only"
+    
+    # Clamp BiGRU prediction to [0.01, 1.0] for log safety
+    bigru_clamped = max(0.01, min(1.0, bigru_pred))
+    
+    # Weighted geometric mean
+    combined = (ae_score ** alpha) * (bigru_clamped ** (1.0 - alpha))
+    
+    return max(0.0, min(1.0, combined)), "ensemble"
+```
+
+#### Design Rationale
+
+- **Geometric mean** (not arithmetic): Penalizes disagreement between models. If one scores low and the other high, the result is pulled toward the lower value — conservative by design.
+- **alpha=0.6**: Autoencoder is the trusted baseline (per-window, immediate signal). BiGRU adds temporal context but should not override.
+- **Cold start**: Until 4+ windows accumulate, BiGRU has insufficient context. Return autoencoder score unchanged.
+- **Feeds into existing `score_to_weight()`**: The ensemble score replaces the raw autoencoder score in the existing pipeline. The `score_to_weight()` function is NOT modified.
+
+#### Feature Flag
+
+BiGRU is disabled by default (`BIGRU_ENABLED=false`). When disabled:
+- No sequence buffer is created
+- No BiGRU models are loaded
+- Consumer follows the original autoencoder-only path
+- Output fields default: `sequenceLength=0, temporalScore=0.0, ensembleMethod="autoencoder_only"`
 
 ---
 
@@ -332,26 +503,30 @@ services/ml-detection/
 ├── requirements.txt
 ├── app/
 │   ├── __init__.py
-│   ├── main.py                  # FastAPI app + lifespan
-│   ├── config.py                # Settings via pydantic-settings
+│   ├── main.py                  # FastAPI app + lifespan (+ sequence buffer wiring)
+│   ├── config.py                # Settings via pydantic-settings (+ BiGRU config)
 │   ├── models/
 │   │   ├── __init__.py
-│   │   ├── autoencoder.py       # PyTorch model definition
-│   │   └── schemas.py           # Pydantic request/response models
+│   │   ├── autoencoder.py       # PyTorch autoencoder model definition
+│   │   ├── bigru.py             # PyTorch BiGRU + AdditiveAttention model (Phase 3)
+│   │   └── schemas.py           # Pydantic request/response models (+ temporal fields)
 │   ├── features/
 │   │   ├── __init__.py
-│   │   └── extractor.py         # Feature engineering + tier stratification
+│   │   ├── extractor.py         # Feature engineering + tier stratification
+│   │   └── sequence_builder.py  # Per-attacker sequence buffer (LRU+TTL) (Phase 3)
 │   ├── serving/
 │   │   ├── __init__.py
-│   │   ├── engine.py            # ONNX Runtime inference singleton
-│   │   └── scorer.py            # Anomaly score → mlWeight mapping
+│   │   ├── engine.py            # ONNX Runtime inference (autoencoder + BiGRU)
+│   │   ├── scorer.py            # Anomaly score → mlWeight mapping
+│   │   └── ensemble.py          # Ensemble scoring (ae + bigru) (Phase 3)
 │   ├── kafka/
 │   │   ├── __init__.py
-│   │   ├── consumer.py          # aiokafka consumer for threat-alerts
+│   │   ├── consumer.py          # aiokafka consumer (+ BiGRU integration path)
 │   │   └── producer.py          # aiokafka producer for ml-threat-detections
 │   └── training/
 │       ├── __init__.py
-│       └── trainer.py           # Offline batch training pipeline
+│       ├── trainer.py           # Autoencoder offline batch training pipeline
+│       └── bigru_trainer.py     # BiGRU training pipeline (Phase 3)
 ├── models/                      # Saved model artifacts (.onnx files)
 │   └── .gitkeep
 └── tests/
@@ -359,7 +534,11 @@ services/ml-detection/
     ├── conftest.py
     ├── test_features.py         # Feature extraction unit tests
     ├── test_serving.py          # Inference + fallback tests
-    └── test_schemas.py          # Schema validation tests
+    ├── test_schemas.py          # Schema validation tests
+    ├── test_autoencoder_regression.py  # Autoencoder regression tests (Phase 3)
+    ├── test_bigru.py            # BiGRU model unit tests (Phase 3)
+    ├── test_sequence_builder.py # Sequence buffer unit tests (Phase 3)
+    └── test_ensemble.py         # Ensemble scoring unit tests (Phase 3)
 ```
 
 ### 6.2 Technology Choices
@@ -388,6 +567,19 @@ services/ml-detection/
 | `ML_CONFIDENCE_THRESHOLD` | Min confidence for non-neutral weight | `0.3` |
 | `ML_DEFAULT_WEIGHT` | Fallback mlWeight when no model | `1.0` |
 | `LOG_LEVEL` | Logging level | `INFO` |
+| `BIGRU_ENABLED` | Enable BiGRU temporal model (feature flag) | `false` |
+| `BIGRU_HIDDEN_SIZE` | BiGRU hidden dimension | `64` |
+| `BIGRU_NUM_LAYERS` | Number of BiGRU layers | `2` |
+| `BIGRU_DROPOUT` | BiGRU dropout rate | `0.3` |
+| `BIGRU_MAX_SEQ_LEN_TIER1` | Max sequence length for Tier 1 | `32` |
+| `BIGRU_MAX_SEQ_LEN_TIER2` | Max sequence length for Tier 2 | `32` |
+| `BIGRU_MAX_SEQ_LEN_TIER3` | Max sequence length for Tier 3 | `48` |
+| `BIGRU_MIN_SEQ_LEN` | Min windows before BiGRU activates | `4` |
+| `BIGRU_ENSEMBLE_ALPHA` | Autoencoder weight in ensemble (0-1) | `0.6` |
+| `BIGRU_BUFFER_MAX_ENTRIES` | Max total sequence buffer entries | `10000` |
+| `BIGRU_BUFFER_TTL_TIER1` | Buffer TTL for Tier 1 (seconds) | `1800` |
+| `BIGRU_BUFFER_TTL_TIER2` | Buffer TTL for Tier 2 (seconds) | `10800` |
+| `BIGRU_BUFFER_TTL_TIER3` | Buffer TTL for Tier 3 (seconds) | `86400` |
 
 ---
 
@@ -581,13 +773,19 @@ ml-detection:
 - Prometheus counters for cache hits/misses
 - 8 unit tests passing
 
-### Phase 3 (Future): BiGRU Temporal Model
-- Sequence construction from historical windows per `customerId:attackMac`
-- BiGRU with attention for temporal pattern detection
-- Multi-model inference (autoencoder + BiGRU)
+### Phase 3 (Complete ✅): BiGRU Temporal Model + Ensemble Scoring
+- BiGRU (Bidirectional GRU) with additive attention for temporal attack progression detection
+- Per-attacker sequence buffer (keyed by `customerId:attackMac:tier`) with LRU + TTL eviction
+- Self-supervised training: predict next-window autoencoder anomaly score (no manual labels needed)
+- Ensemble scoring: weighted geometric mean `ae^0.6 × bigru^0.4` with cold-start fallback
+- Feature-flagged via `BIGRU_ENABLED` (default false) — zero impact when disabled
+- ONNX export with mask-based attention (no `pack_padded_sequence`), FP16-safe `-1e4` fill
+- BiGRU training pipeline with `GroupShuffleSplit` to prevent data leakage
+- REST endpoint `GET /api/v1/ml/buffer/stats` for sequence buffer monitoring
+- 51 unit tests (7 BiGRU + 13 sequence builder + 14 ensemble + 4 autoencoder regression + existing)
 
-### Phase 4 (Future): Ensemble + Training Pipeline
-- Weighted ensemble combining autoencoder + BiGRU scores
+### Phase 4 (Future): Advanced Ensemble + Training Automation
+- Learned ensemble weights (train alpha from data instead of fixed 0.6)
 - Feature store (PostgreSQL-backed)
 - Nightly batch retraining with PSI drift detection
 - Champion/challenger model promotion
@@ -604,9 +802,15 @@ ml-detection:
 | Feature distribution differs by tier | High | Separate models per tier; never mix tier features |
 | Scoring feedback loop | High | Train ONLY on pre-ML features; store both scores |
 | INT8 quantization kills anomaly detection | High | Use FP16 minimum |
+| BiGRU sequence buffer memory (10K entries) | High | LRU eviction + per-tier TTL; max ~10MB memory footprint |
+| BiGRU state loss on restart | Medium | Acceptable — advisory system, buffers refill from live Kafka traffic within TTL windows |
+| FP16 NaN in attention masks | Medium | Use `-1e4` fill instead of `float('-inf')`; `nan_to_num` guard on output |
+| BiGRU cold start (seq < 4) | Medium | Graceful degradation — return autoencoder score only until buffer fills |
+| `pack_padded_sequence` ONNX incompatibility | Medium | Mask-based attention only; verified in ONNX export tests |
 | Cold start (no model available) | Medium | `mlWeight=1.0` fallback; service is fully functional without model |
 | Multi-tenant contamination | Medium | Per-customer normalization of volume-dependent features |
 | Python service doesn't use Spring Cloud Config | Medium | Use env vars consistent with docker-compose pattern |
+| Data leakage in BiGRU training | Medium | `GroupShuffleSplit(groups=attacker_mac)` prevents same attacker in train+val |
 
 ---
 
