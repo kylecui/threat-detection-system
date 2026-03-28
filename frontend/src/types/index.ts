@@ -1,12 +1,14 @@
 /**
  * 威胁检测系统 - TypeScript类型定义
- * 
+ *
  * 基于蜜罐机制的威胁评估系统数据结构
  */
 
-/**
- * 威胁等级
- */
+// ============================================================
+// 枚举
+// ============================================================
+
+/** 威胁等级 */
 export enum ThreatLevel {
   INFO = 'INFO',
   LOW = 'LOW',
@@ -15,45 +17,99 @@ export enum ThreatLevel {
   CRITICAL = 'CRITICAL',
 }
 
-/**
- * 威胁评估数据
- */
+/** 告警状态 */
+export enum AlertStatus {
+  NEW = 'NEW',
+  DEDUPLICATED = 'DEDUPLICATED',
+  ENRICHED = 'ENRICHED',
+  NOTIFIED = 'NOTIFIED',
+  ESCALATED = 'ESCALATED',
+  RESOLVED = 'RESOLVED',
+  ARCHIVED = 'ARCHIVED',
+}
+
+/** 告警严重程度 */
+export enum AlertSeverity {
+  CRITICAL = 'CRITICAL',
+  HIGH = 'HIGH',
+  MEDIUM = 'MEDIUM',
+  LOW = 'LOW',
+  INFO = 'INFO',
+}
+
+/** 客户状态 */
+export enum CustomerStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  SUSPENDED = 'SUSPENDED',
+}
+
+/** 订阅等级 */
+export enum SubscriptionTier {
+  BASIC = 'BASIC',
+  STANDARD = 'STANDARD',
+  PREMIUM = 'PREMIUM',
+  ENTERPRISE = 'ENTERPRISE',
+}
+
+/** IOC类型 */
+export enum IocType {
+  IPV4 = 'IPV4',
+  IPV6 = 'IPV6',
+  DOMAIN = 'DOMAIN',
+  URL = 'URL',
+  MD5 = 'MD5',
+  SHA1 = 'SHA1',
+  SHA256 = 'SHA256',
+  EMAIL = 'EMAIL',
+}
+
+/** 威胁情报严重性 */
+export enum IntelSeverity {
+  CRITICAL = 'CRITICAL',
+  HIGH = 'HIGH',
+  MEDIUM = 'MEDIUM',
+  LOW = 'LOW',
+  INFO = 'INFO',
+}
+
+// ============================================================
+// 威胁评估 (Threat Assessment) - 端口 8083
+// ============================================================
+
+/** 威胁评估数据 */
 export interface ThreatAssessment {
   id: number;
   customerId: string;
-  attackMac: string;            // 被诱捕者MAC (内网失陷主机)
-  attackIp?: string;            // 被诱捕者IP (可选)
+  attackMac: string;
+  attackIp?: string;
   threatScore: number;
   threatLevel: ThreatLevel;
-  attackCount: number;          // 对诱饵的探测次数
-  uniqueIps: number;            // 访问的诱饵IP数量 (横向移动范围)
-  uniquePorts: number;          // 尝试的端口种类 (攻击意图多样性)
-  uniqueDevices: number;        // 检测到该攻击者的设备数
-  assessmentTime: string;       // ISO 8601格式
+  attackCount: number;
+  uniqueIps: number;
+  uniquePorts: number;
+  uniqueDevices: number;
+  assessmentTime: string;
   createdAt: string;
-  portList?: string;            // 端口列表 (可选)
-  portRiskScore?: number;       // 端口风险分数 (可选)
-  detectionTier?: number;       // 检测层级 (可选)
-  mitigationRecommendations?: string[];  // 缓解建议 (可选)
+  portList?: string;
+  portRiskScore?: number;
+  detectionTier?: number;
+  mitigationRecommendations?: string[];
 }
 
-/**
- * 攻击事件
- */
+/** 攻击事件 */
 export interface AttackEvent {
-  attack_mac: string;           // 被诱捕者MAC
-  attack_ip: string;            // 被诱捕者IP (内网地址)
-  response_ip: string;          // 诱饵IP (不存在的虚拟哨兵)
-  response_port: number;        // 攻击者尝试的端口 (暴露攻击意图)
-  device_serial: string;        // 终端蜜罐设备序列号
+  attack_mac: string;
+  attack_ip: string;
+  response_ip: string;
+  response_port: number;
+  device_serial: string;
   customer_id: string;
   timestamp: string;
   log_time: number;
 }
 
-/**
- * 统计数据
- */
+/** 统计数据 */
 export interface Statistics {
   customerId: string;
   totalCount: number;
@@ -68,9 +124,279 @@ export interface Statistics {
   levelDistribution: Record<string, number>;
 }
 
-/**
- * API响应包装
- */
+// ============================================================
+// 告警管理 (Alert Management) - 端口 8082
+// ============================================================
+
+/** 告警 */
+export interface Alert {
+  id: number;
+  title: string;
+  description: string;
+  status: AlertStatus;
+  severity: AlertSeverity;
+  source: string;
+  eventType?: string;
+  metadata?: string;
+  attackMac?: string;
+  threatScore?: number;
+  affectedAssets: string[];
+  recommendations: string[];
+  assignedTo?: string;
+  resolution?: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
+  lastNotifiedAt?: string;
+  escalationLevel: number;
+  escalationReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 告警分析统计 */
+export interface AlertAnalytics {
+  totalAlerts: number;
+  resolvedAlerts: number;
+  averageResolutionTime: number;
+  escalatedAlerts: number;
+  bySeverity: Record<string, number>;
+  byStatus: Record<string, number>;
+  topSources: Array<{ source: string; count: number }>;
+}
+
+/** 通知分析统计 */
+export interface NotificationAnalytics {
+  totalNotifications: number;
+  successCount: number;
+  failureCount: number;
+  byChannel: Record<string, number>;
+}
+
+/** 升级分析统计 */
+export interface EscalationAnalytics {
+  totalEscalations: number;
+  averageEscalationTime: number;
+  byLevel: Record<string, number>;
+}
+
+// ============================================================
+// 客户管理 (Customer Management) - 端口 8084
+// ============================================================
+
+/** 客户 */
+export interface Customer {
+  id: number;
+  customerId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  status: CustomerStatus;
+  subscriptionTier: SubscriptionTier;
+  maxDevices: number;
+  currentDevices: number;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  updatedBy: string;
+  subscriptionStartDate?: string;
+  subscriptionEndDate?: string;
+  alertEnabled: boolean;
+}
+
+/** 设备 */
+export interface Device {
+  id: number;
+  devSerial: string;
+  customerId: string;
+  deviceName?: string;
+  deviceType?: string;
+  status: string;
+  ipAddress?: string;
+  macAddress?: string;
+  location?: string;
+  firmwareVersion?: string;
+  lastHeartbeat?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 设备配额 */
+export interface DeviceQuota {
+  customerId: string;
+  maxDevices: number;
+  currentDevices: number;
+  remainingQuota: number;
+}
+
+/** 网段权重 */
+export interface NetSegmentWeight {
+  id: number;
+  customerId: string;
+  cidr: string;
+  weight: number;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 通知配置 */
+export interface NotificationConfig {
+  customerId: string;
+  emailEnabled: boolean;
+  smsEnabled: boolean;
+  slackEnabled: boolean;
+  webhookEnabled: boolean;
+  emailRecipients?: string[];
+  slackWebhookUrl?: string;
+  webhookUrl?: string;
+}
+
+// ============================================================
+// 威胁情报 (Threat Intelligence) - 端口 8085
+// ============================================================
+
+/** 威胁指标 */
+export interface ThreatIndicator {
+  id: number;
+  iocValue: string;
+  iocType: IocType;
+  iocInet?: string;
+  indicatorType: string;
+  pattern?: string;
+  patternType: string;
+  confidence: number;
+  validFrom?: string;
+  validUntil?: string;
+  severity: IntelSeverity;
+  sourceName?: string;
+  description?: string;
+  tags?: string;
+  sightingCount: number;
+  firstSeenAt?: string;
+  lastSeenAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 威胁情报Feed */
+export interface ThreatFeed {
+  id: number;
+  name: string;
+  url: string;
+  feedType: string;
+  enabled: boolean;
+  pollingIntervalMinutes: number;
+  lastPolledAt?: string;
+  lastSuccessAt?: string;
+  indicatorCount: number;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** IP查询结果 */
+export interface IpLookupResult {
+  ip: string;
+  found: boolean;
+  indicators: ThreatIndicator[];
+  reputation?: number;
+  categories?: string[];
+}
+
+/** 威胁情报统计 */
+export interface IntelStatistics {
+  totalIndicators: number;
+  activeIndicators: number;
+  expiredIndicators: number;
+  byType: Record<string, number>;
+  bySeverity: Record<string, number>;
+  bySource: Record<string, number>;
+  totalFeeds: number;
+  activeFeeds: number;
+}
+
+// ============================================================
+// ML检测 (ML Detection) - 端口 8086
+// ============================================================
+
+/** ML模型信息 */
+export interface MlModelInfo {
+  tier: number;
+  available: boolean;
+  threshold: number;
+  modelPath: string;
+  bigruAvailable?: boolean;
+  bigruModelPath?: string;
+  optimalAlpha?: number;
+}
+
+/** ML健康状态 */
+export interface MlHealthStatus {
+  status: string;
+  modelLoaded: boolean;
+  modelsAvailable: Record<string, boolean>;
+  kafkaConnected: boolean;
+}
+
+/** ML模型重载结果 */
+export interface MlReloadResult {
+  status: string;
+  reloadCount?: number;
+  modelsLoaded?: Record<string, boolean>;
+  error?: string;
+}
+
+/** ML序列缓冲区统计 */
+export interface MlBufferStats {
+  enabled: boolean;
+  totalKeys: number;
+  totalWindows: number;
+}
+
+/** ML漂移状态 */
+export interface MlDriftStatus {
+  enabled: boolean;
+  [key: string]: unknown;
+}
+
+/** ML影子评分统计 */
+export interface MlShadowStats {
+  enabled: boolean;
+  challengerDir?: string;
+  challengerLoaded?: boolean;
+  totalComparisons: number;
+  [key: string]: unknown;
+}
+
+// ============================================================
+// 系统监控
+// ============================================================
+
+/** 服务健康状态 */
+export interface ServiceHealth {
+  name: string;
+  port: number;
+  status: 'UP' | 'DOWN' | 'UNKNOWN';
+  responseTime?: number;
+  details?: Record<string, unknown>;
+  lastChecked: string;
+}
+
+/** 数据摄取统计 */
+export interface DataIngestionStats {
+  totalEvents: number;
+  eventsPerSecond: number;
+  kafkaLag?: number;
+  lastEventTime?: string;
+}
+
+// ============================================================
+// 通用
+// ============================================================
+
+/** API响应包装 */
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -78,9 +404,7 @@ export interface ApiResponse<T> {
   timestamp: string;
 }
 
-/**
- * 分页参数
- */
+/** 分页参数 */
 export interface PaginationParams {
   page: number;
   page_size: number;
@@ -88,9 +412,7 @@ export interface PaginationParams {
   sort_order?: 'asc' | 'desc';
 }
 
-/**
- * 分页响应 (Spring Data Page格式)
- */
+/** 分页响应 (Spring Data Page格式) */
 export interface PaginatedResponse<T> {
   content: T[];
   pageable: {
@@ -110,9 +432,7 @@ export interface PaginatedResponse<T> {
   empty: boolean;
 }
 
-/**
- * 查询过滤器
- */
+/** 查询过滤器 */
 export interface ThreatQueryFilter extends PaginationParams {
   customer_id?: string;
   threat_level?: ThreatLevel;
@@ -121,19 +441,48 @@ export interface ThreatQueryFilter extends PaginationParams {
   attack_mac?: string;
 }
 
-/**
- * 时间范围
- */
+/** 告警查询过滤器 */
+export interface AlertQueryFilter {
+  customerId?: string;
+  status?: AlertStatus;
+  severity?: AlertSeverity;
+  startTime?: string;
+  endTime?: string;
+  page?: number;
+  size?: number;
+  sortBy?: string;
+  sortDir?: 'ASC' | 'DESC';
+}
+
+/** 时间范围 */
 export interface TimeRange {
   start: string;
   end: string;
 }
 
-/**
- * 图表数据点
- */
+/** 图表数据点 */
 export interface ChartDataPoint {
   time: string;
   value: number;
   category?: string;
+}
+
+// ============================================================
+// SMTP配置 (Alert Management)
+// ============================================================
+
+/** SMTP配置 */
+export interface SmtpConfig {
+  id: number;
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+  fromAddress: string;
+  fromName?: string;
+  encryption: 'NONE' | 'TLS' | 'SSL';
+  enabled: boolean;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
