@@ -19,6 +19,9 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>/api/v1/logs/** → Data Ingestion (8080)</li>
  *   <li>/api/v1/assessment/** → Threat Assessment (8081)</li>
  *   <li>/api/v1/alerts/** → Alert Management (8082)</li>
+ *   <li>/api/notification-config/** → Alert Management (8082)</li>
+ *   <li>/api/v1/threat-intel/** → Threat Intelligence (8085)</li>
+ *   <li>/api/v1/ml/** → ML Detection (8086)</li>
  * </ul>
  * 
  * <p>核心功能：
@@ -131,6 +134,30 @@ public class ApiGatewayApplication {
                     .stripPrefix(0)
                     .addRequestHeader("X-Gateway-Service", "alert-management"))
                 .uri("http://alert-management:8082"))
+
+            // Threat Intelligence Service (8085)
+            .route("threat-intelligence", r -> r
+                .path("/api/v1/threat-intel/**")
+                .filters(f -> f
+                    .stripPrefix(0)
+                    .addRequestHeader("X-Gateway-Service", "threat-intelligence"))
+                .uri("http://threat-intelligence:8085"))
+
+            // ML Detection Service (8086) - health endpoint rewrite
+            .route("ml-detection-health", r -> r
+                .path("/api/v1/ml/health")
+                .filters(f -> f
+                    .rewritePath("/api/v1/ml/health", "/health")
+                    .addRequestHeader("X-Gateway-Service", "ml-detection"))
+                .uri("http://ml-detection:8086"))
+
+            // ML Detection Service (8086)
+            .route("ml-detection", r -> r
+                .path("/api/v1/ml/**")
+                .filters(f -> f
+                    .stripPrefix(0)
+                    .addRequestHeader("X-Gateway-Service", "ml-detection"))
+                .uri("http://ml-detection:8086"))
             
             // Health Check (直接返回Gateway健康状态)
             .route("health", r -> r
