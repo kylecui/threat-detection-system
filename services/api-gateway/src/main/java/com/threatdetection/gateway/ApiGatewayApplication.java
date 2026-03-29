@@ -123,6 +123,14 @@ public class ApiGatewayApplication {
                         .setName("alertManagementCB")
                         .setFallbackUri("forward:/fallback/alert-management")))
                 .uri("http://alert-management:8082"))
+
+            // Alert Management - Notification Config (SMTP)
+            .route("alert-management-notification-config", r -> r
+                .path("/api/notification-config/**")
+                .filters(f -> f
+                    .stripPrefix(0)
+                    .addRequestHeader("X-Gateway-Service", "alert-management"))
+                .uri("http://alert-management:8082"))
             
             // Health Check (直接返回Gateway健康状态)
             .route("health", r -> r
