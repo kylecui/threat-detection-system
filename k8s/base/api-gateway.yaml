@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: api-gateway
-         image: threat-detection/api-gateway:latest
+        image: threat-detection/api-gateway:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 8888

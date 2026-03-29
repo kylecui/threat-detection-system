@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: config-server
-         image: threat-detection/config-server:latest
+        image: threat-detection/config-server:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 8899

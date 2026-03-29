@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: data-ingestion
-         image: threat-detection/data-ingestion:latest
+        image: threat-detection/data-ingestion:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 8080
