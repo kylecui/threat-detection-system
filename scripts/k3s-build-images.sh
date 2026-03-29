@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# Build all threat-detection service images and import into K3s containerd.
+# Usage:
+#   sudo bash scripts/k3s-build-images.sh            # build all
+#   sudo bash scripts/k3s-build-images.sh data-ingestion ml-detection  # build specific
+#
+# NOTE: Run with sudo so k3s ctr / nerdctl / crictl work without pipe issues.
+
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-JAVA_SERVICES=(
+ALL_JAVA_SERVICES=(
   data-ingestion
   stream-processing
   threat-assessment
@@ -15,7 +22,7 @@ JAVA_SERVICES=(
   config-server
 )
 
-PYTHON_SERVICES=(
+ALL_PYTHON_SERVICES=(
   ml-detection
 )
 
@@ -30,6 +37,10 @@ info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; }
 
+FAILED_SERVICES=()
+SUCCESS_SERVICES=()
+
+# ── runtime detection ──────────────────────────────────────────────
 BUILD_CMD=""
 IMPORT_CMD=""
 
@@ -53,6 +64,7 @@ detect_runtime() {
   fi
 }
 
+# ── build + import one image ──────────────────────────────────────
 build_image() {
   local service="$1"
   local context="$2"
@@ -63,64 +75,133 @@ build_image() {
   info "Building ${full_tag} ..."
 
   if [[ "$BUILD_CMD" == "nerdctl" ]]; then
-    sudo nerdctl --namespace k8s.io build \
-      --no-cache \
-      -t "$full_tag" \
-      -f "$dockerfile" \
-      "$context"
+    if ! nerdctl --namespace k8s.io build \
+        --no-cache \
+        -t "$full_tag" \
+        -f "$dockerfile" \
+        "$context"; then
+      error "  ✗ BUILD FAILED: ${full_tag}"
+      FAILED_SERVICES+=("$service")
+      return 1
+    fi
   else
-    docker build \
-      --no-cache \
-      -t "$full_tag" \
-      -f "$dockerfile" \
-      "$context"
+    if ! docker build \
+        --no-cache \
+        -t "$full_tag" \
+        -f "$dockerfile" \
+        "$context"; then
+      error "  ✗ BUILD FAILED: ${full_tag}"
+      FAILED_SERVICES+=("$service")
+      return 1
+    fi
 
     if [[ "$IMPORT_CMD" == "k3s-import" ]]; then
       info "  Importing ${full_tag} into K3s containerd ..."
-      docker save "$full_tag" | sudo k3s ctr images import -
+      # Save to temp file first to avoid pipe + sudo issues
+      local tmptar="/tmp/${service}-image.tar"
+      docker save "$full_tag" -o "$tmptar"
+      if ! k3s ctr images import "$tmptar"; then
+        error "  ✗ IMPORT FAILED: ${full_tag}"
+        rm -f "$tmptar"
+        FAILED_SERVICES+=("$service")
+        return 1
+      fi
+      rm -f "$tmptar"
     fi
   fi
 
   info "  ✓ ${full_tag}"
+  SUCCESS_SERVICES+=("$service")
 }
 
+# ── determine which services to build ─────────────────────────────
+resolve_services() {
+  local requested=("$@")
+
+  # If no args, build everything
+  if [[ ${#requested[@]} -eq 0 ]]; then
+    JAVA_TO_BUILD=("${ALL_JAVA_SERVICES[@]}")
+    PYTHON_TO_BUILD=("${ALL_PYTHON_SERVICES[@]}")
+    return
+  fi
+
+  JAVA_TO_BUILD=()
+  PYTHON_TO_BUILD=()
+
+  for svc in "${requested[@]}"; do
+    local found=false
+    for j in "${ALL_JAVA_SERVICES[@]}"; do
+      if [[ "$svc" == "$j" ]]; then
+        JAVA_TO_BUILD+=("$svc")
+        found=true
+        break
+      fi
+    done
+    if ! $found; then
+      for p in "${ALL_PYTHON_SERVICES[@]}"; do
+        if [[ "$svc" == "$p" ]]; then
+          PYTHON_TO_BUILD+=("$svc")
+          found=true
+          break
+        fi
+      done
+    fi
+    if ! $found; then
+      warn "Unknown service: $svc (skipped)"
+    fi
+  done
+}
+
+# ── main ──────────────────────────────────────────────────────────
 main() {
   detect_runtime
   cd "$PROJECT_ROOT"
 
-  info "=== Building Java services (context: project root) ==="
-  for svc in "${JAVA_SERVICES[@]}"; do
+  JAVA_TO_BUILD=()
+  PYTHON_TO_BUILD=()
+  resolve_services "$@"
+
+  local total=$(( ${#JAVA_TO_BUILD[@]} + ${#PYTHON_TO_BUILD[@]} ))
+  info "=== Building ${total} service(s) ==="
+
+  for svc in "${JAVA_TO_BUILD[@]}"; do
     local tag="latest"
     if [[ "$svc" == "stream-processing" ]]; then
       tag="$STREAM_PROCESSING_TAG"
     fi
-    build_image "$svc" "$PROJECT_ROOT" "services/${svc}/Dockerfile" "$tag"
+    build_image "$svc" "$PROJECT_ROOT" "services/${svc}/Dockerfile" "$tag" || true
   done
 
-  info "=== Building Python services ==="
-  for svc in "${PYTHON_SERVICES[@]}"; do
-    build_image "$svc" "services/${svc}" "services/${svc}/Dockerfile" "latest"
+  for svc in "${PYTHON_TO_BUILD[@]}"; do
+    build_image "$svc" "services/${svc}" "services/${svc}/Dockerfile" "latest" || true
   done
 
+  # ── summary ───────────────────────────────────────────────────
   echo ""
-  info "=== All images built ==="
-
-  if [[ "$BUILD_CMD" == "nerdctl" ]]; then
-    info "Listing images in k8s.io namespace:"
-    sudo nerdctl --namespace k8s.io images | grep "threat-detection/" || true
-  elif [[ "$IMPORT_CMD" == "k3s-import" ]]; then
-    info "Listing images in K3s containerd:"
-    sudo k3s crictl images | grep "threat-detection/" || true
-  else
-    info "Listing images:"
-    docker images | grep "threat-detection/" || true
+  info "=== Build Summary ==="
+  if [[ ${#SUCCESS_SERVICES[@]} -gt 0 ]]; then
+    info "  ✓ Succeeded (${#SUCCESS_SERVICES[@]}): ${SUCCESS_SERVICES[*]}"
+  fi
+  if [[ ${#FAILED_SERVICES[@]} -gt 0 ]]; then
+    error "  ✗ Failed (${#FAILED_SERVICES[@]}): ${FAILED_SERVICES[*]}"
   fi
 
   echo ""
-  info "Next steps:"
-  info "  kubectl delete -k k8s/base  (if previously applied)"
-  info "  kubectl apply -k k8s/base"
-  info "  kubectl get pods -n threat-detection -w"
+  info "Images in K3s containerd:"
+  if command -v nerdctl &>/dev/null; then
+    nerdctl --namespace k8s.io images | grep "threat-detection/" || true
+  elif command -v k3s &>/dev/null; then
+    k3s crictl images | grep "threat-detection/" || true
+  else
+    docker images | grep "threat-detection/" || true
+  fi
+
+  if [[ ${#FAILED_SERVICES[@]} -gt 0 ]]; then
+    echo ""
+    error "Some builds failed. Re-run with specific services:"
+    error "  sudo bash scripts/k3s-build-images.sh ${FAILED_SERVICES[*]}"
+    exit 1
+  fi
 }
 
 main "$@"
