@@ -201,6 +201,19 @@ public class NetWeightServiceClient {
         return weightCache.size();
     }
 
-    private record CidrWeight(String cidr, double weight, int prefixLength) {
+    private static final class CidrWeight {
+        private final String cidr;
+        private final double weight;
+        private final int prefixLength;
+
+        CidrWeight(String cidr, double weight, int prefixLength) {
+            this.cidr = cidr;
+            this.weight = weight;
+            this.prefixLength = prefixLength;
+        }
+
+        String cidr() { return cidr; }
+        double weight() { return weight; }
+        int prefixLength() { return prefixLength; }
     }
 }

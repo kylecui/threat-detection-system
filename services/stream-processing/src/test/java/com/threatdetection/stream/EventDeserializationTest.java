@@ -31,25 +31,23 @@ class EventDeserializationTest {
         StreamProcessingJob.AttackEventDeserializer deserializer = new StreamProcessingJob.AttackEventDeserializer();
         ListCollector<AttackEvent> collector = new ListCollector<>();
 
-        String json = """
-            {
-              "id":"evt-1",
-              "devSerial":"DEV-001",
-              "logType":1,
-              "subType":2,
-              "attackMac":"00:11:22:33:44:55",
-              "attackIp":"192.168.1.10",
-              "responseIp":"10.0.0.5",
-              "responsePort":445,
-              "lineId":10,
-              "ifaceType":1,
-              "vlanId":2,
-              "logTime":1710000000,
-              "ethType":2048,
-              "ipType":4,
-              "customerId":"cust-a"
-            }
-            """;
+        String json = "{"
+            + "\"id\":\"evt-1\","
+            + "\"devSerial\":\"DEV-001\","
+            + "\"logType\":1,"
+            + "\"subType\":2,"
+            + "\"attackMac\":\"00:11:22:33:44:55\","
+            + "\"attackIp\":\"192.168.1.10\","
+            + "\"responseIp\":\"10.0.0.5\","
+            + "\"responsePort\":445,"
+            + "\"lineId\":10,"
+            + "\"ifaceType\":1,"
+            + "\"vlanId\":2,"
+            + "\"logTime\":1710000000,"
+            + "\"ethType\":2048,"
+            + "\"ipType\":4,"
+            + "\"customerId\":\"cust-a\""
+            + "}";
 
         deserializer.flatMap(json, collector);
 
@@ -75,13 +73,11 @@ class EventDeserializationTest {
         StreamProcessingJob.AttackEventDeserializer deserializer = new StreamProcessingJob.AttackEventDeserializer();
         ListCollector<AttackEvent> collector = new ListCollector<>();
 
-        String jsonWithMissingFields = """
-            {
-              "attackMac":"AA:BB:CC:DD:EE:FF",
-              "responsePort":0,
-              "logTime":1710000001
-            }
-            """;
+        String jsonWithMissingFields = "{"
+            + "\"attackMac\":\"AA:BB:CC:DD:EE:FF\","
+            + "\"responsePort\":0,"
+            + "\"logTime\":1710000001"
+            + "}";
 
         deserializer.flatMap(jsonWithMissingFields, collector);
 
