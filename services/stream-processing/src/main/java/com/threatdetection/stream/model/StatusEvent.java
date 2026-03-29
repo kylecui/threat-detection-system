@@ -1,10 +1,12 @@
 package com.threatdetection.stream.model;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class StatusEvent {
     private String id;
     private String devSerial;

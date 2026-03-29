@@ -1,14 +1,22 @@
 package com.threatdetection.stream.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class AttackEvent {
     private String id;
+
+    @JsonAlias("deviceSerial")
     private String devSerial;
+
+    @JsonAlias("log_type")
     private int logType;
+
     private int subType;
     private String attackMac;
     private String attackIp;
@@ -23,6 +31,8 @@ public class AttackEvent {
     private String severity;
     private String description;
     private String rawLog;
+
+    @JsonAlias("company_obj_id")
     private String customerId;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'", timezone = "UTC")

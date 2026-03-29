@@ -1,6 +1,10 @@
 package com.threatdetection.stream;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.cfg.CoercionAction;
+import com.fasterxml.jackson.databind.cfg.CoercionInputShape;
+import com.fasterxml.jackson.databind.type.LogicalType;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.threatdetection.stream.model.AttackEvent;
 import com.threatdetection.stream.model.StatusEvent;
@@ -58,7 +62,17 @@ import java.util.stream.Collectors;
 public class StreamProcessingJob {
 
     private static final Logger logger = LoggerFactory.getLogger(StreamProcessingJob.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    private static final ObjectMapper objectMapper = createObjectMapper();
+
+    private static ObjectMapper createObjectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        // Allow Logstash string values like "1" to be coerced into int/long fields
+        mapper.coercionConfigFor(LogicalType.Integer)
+              .setCoercion(CoercionInputShape.String, CoercionAction.TryConvert);
+        mapper.configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, false);
+        return mapper;
+    }
 
     // 可配置的窗口大小参数
     private static final int AGGREGATION_WINDOW_SECONDS = Integer.parseInt(

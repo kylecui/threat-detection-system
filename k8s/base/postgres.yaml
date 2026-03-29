@@ -1424,7 +1424,7 @@ type: Opaque
 stringData:
   POSTGRES_DB: threat_detection
   POSTGRES_USER: threat_user
-  POSTGRES_PASSWORD: threat_password_k8s_change_me
+  POSTGRES_PASSWORD: threat_password
 
 ---
 apiVersion: v1
