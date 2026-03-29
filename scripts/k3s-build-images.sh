@@ -64,11 +64,13 @@ build_image() {
 
   if [[ "$BUILD_CMD" == "nerdctl" ]]; then
     sudo nerdctl --namespace k8s.io build \
+      --no-cache \
       -t "$full_tag" \
       -f "$dockerfile" \
       "$context"
   else
     docker build \
+      --no-cache \
       -t "$full_tag" \
       -f "$dockerfile" \
       "$context"
