@@ -10,7 +10,8 @@ COPY package.json ./
 
 # 使用国内镜像加速 + 安装依赖
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm install --legacy-peer-deps
+    npm install --legacy-peer-deps && \
+    npm install terser --legacy-peer-deps
 
 # ===========================
 # 阶段2: 开发环境
