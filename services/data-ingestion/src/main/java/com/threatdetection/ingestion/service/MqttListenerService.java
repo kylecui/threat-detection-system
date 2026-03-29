@@ -11,11 +11,13 @@ import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @ConditionalOnProperty(name = "mqtt.enabled", havingValue = "true")
@@ -30,6 +32,9 @@ public class MqttListenerService {
 
     private volatile Mqtt3AsyncClient mqttClient;
     private final AtomicBoolean connected = new AtomicBoolean(false);
+    private final AtomicBoolean connecting = new AtomicBoolean(false);
+    private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
+    private static final int MAX_RECONNECT_LOG_INTERVAL = 10;
 
     public MqttListenerService(
             MqttProperties mqttProperties,
@@ -45,6 +50,23 @@ public class MqttListenerService {
 
     @PostConstruct
     public void init() {
+        buildClient();
+        attemptConnect();
+    }
+
+    @Scheduled(fixedDelay = 30000, initialDelay = 30000)
+    public void reconnectIfNeeded() {
+        if (connected.get() || connecting.get()) {
+            return;
+        }
+        int attempt = reconnectAttempts.incrementAndGet();
+        if (attempt % MAX_RECONNECT_LOG_INTERVAL == 1 || attempt <= 3) {
+            logger.info("MQTT reconnect attempt #{}: broker={}", attempt, mqttProperties.getBrokerUrl());
+        }
+        attemptConnect();
+    }
+
+    private void buildClient() {
         try {
             URI brokerUri = URI.create(mqttProperties.getBrokerUrl());
             int port = brokerUri.getPort() > 0 ? brokerUri.getPort() : 1883;
@@ -56,8 +78,18 @@ public class MqttListenerService {
                     .serverHost(brokerUri.getHost())
                     .serverPort(port)
                     .buildAsync();
+        } catch (Exception e) {
+            logger.error("Failed to build MQTT client", e);
+        }
+    }
 
-            logger.info("Connecting MQTT client: broker={}, clientId={}", mqttProperties.getBrokerUrl(), clientId);
+    private void attemptConnect() {
+        if (mqttClient == null || connected.get() || !connecting.compareAndSet(false, true)) {
+            return;
+        }
+
+        try {
+            logger.info("Connecting MQTT client: broker={}, clientId={}", mqttProperties.getBrokerUrl(), mqttClient.getConfig().getClientIdentifier().orElse(null));
 
             var connectBuilder = mqttClient.connectWith()
                     .cleanSession(mqttProperties.isCleanStart())
@@ -75,6 +107,7 @@ public class MqttListenerService {
 
             connectBuilder.send()
                     .whenComplete((connAck, connectEx) -> {
+                        connecting.set(false);
                         if (connectEx != null) {
                             connected.set(false);
                             logger.error("MQTT connection failed: broker={}", mqttProperties.getBrokerUrl(), connectEx);
@@ -82,11 +115,13 @@ public class MqttListenerService {
                         }
 
                         connected.set(true);
+                        reconnectAttempts.set(0);
                         logger.info("MQTT connected successfully: broker={}", mqttProperties.getBrokerUrl());
                         subscribeToLogs();
                     });
 
         } catch (Exception e) {
+            connecting.set(false);
             connected.set(false);
             logger.error("Failed to initialize MQTT listener", e);
         }
