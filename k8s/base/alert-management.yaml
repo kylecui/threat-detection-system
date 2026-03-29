@@ -34,6 +34,7 @@ spec:
       labels:
         app: alert-management
     spec:
+      enableServiceLinks: false
       initContainers:
       - name: wait-for-postgres
         image: busybox:1.35

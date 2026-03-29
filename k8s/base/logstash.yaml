@@ -189,7 +189,7 @@ metadata:
   labels:
     app: logstash
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: logstash
@@ -198,6 +198,7 @@ spec:
       labels:
         app: logstash
     spec:
+      enableServiceLinks: false
       containers:
       - name: logstash
         image: docker.elastic.co/logstash/logstash:8.11.0

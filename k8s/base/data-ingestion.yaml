@@ -13,6 +13,7 @@ spec:
       labels:
         app: data-ingestion
     spec:
+      enableServiceLinks: false
       containers:
       - name: data-ingestion
         image: threat-detection/data-ingestion:latest

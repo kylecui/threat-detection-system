@@ -34,6 +34,7 @@ spec:
       labels:
         app: ml-detection
     spec:
+      enableServiceLinks: false
       initContainers:
       - name: wait-for-kafka
         image: busybox:1.35

@@ -31,10 +31,6 @@ resources:
   # - kafka-mirrormaker.yaml
   # - postgres-replication.yaml
 
-commonLabels:
-  app.kubernetes.io/name: threat-detection-system
-  app.kubernetes.io/component: base
-
 images:
   - name: threat-detection/data-ingestion
     newTag: latest

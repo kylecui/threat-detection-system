@@ -15,6 +15,20 @@ spec:
         app: stream-processing
         component: jobmanager
     spec:
+      enableServiceLinks: false
+      initContainers:
+      - name: wait-for-kafka
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for Kafka to be ready..."
+          until nc -z kafka 9092; do
+            echo "Kafka not ready, retrying in 3s..."
+            sleep 3
+          done
+          echo "Kafka is ready!"
       containers:
       - name: flink-jobmanager
         image: threat-detection/stream-processing:1.0
@@ -31,7 +45,7 @@ spec:
             jobmanager.rpc.port: 6123
             jobmanager.bind-host: 0.0.0.0
             parallelism.default: 1
-            taskmanager.numberOfTaskSlots: 1
+            taskmanager.numberOfTaskSlots: 4
             rest.port: 8081
             rest.bind-address: 0.0.0.0
         - name: KAFKA_BOOTSTRAP_SERVERS
@@ -57,14 +71,15 @@ spec:
           httpGet:
             path: /overview
             port: 8081
-          initialDelaySeconds: 60
+          initialDelaySeconds: 180
           periodSeconds: 30
           timeoutSeconds: 10
+          failureThreshold: 5
         readinessProbe:
           httpGet:
             path: /overview
             port: 8081
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 10
 ---
 apiVersion: apps/v1
@@ -84,6 +99,20 @@ spec:
         app: stream-processing
         component: taskmanager
     spec:
+      enableServiceLinks: false
+      initContainers:
+      - name: wait-for-jobmanager
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for JobManager RPC to be ready..."
+          until nc -z stream-processing-jobmanager 6123; do
+            echo "JobManager not ready, retrying in 3s..."
+            sleep 3
+          done
+          echo "JobManager is ready!"
       containers:
       - name: flink-taskmanager
         image: threat-detection/stream-processing:1.0
@@ -96,10 +125,11 @@ spec:
           value: |
             jobmanager.rpc.address: stream-processing-jobmanager
             jobmanager.rpc.port: 6123
-            taskmanager.numberOfTaskSlots: 2
+            taskmanager.numberOfTaskSlots: 4
             taskmanager.memory.process.size: 1728m
             taskmanager.bind-host: 0.0.0.0
-            taskmanager.host: 0.0.0.0
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka:29092"
         resources:
           requests:
             memory: "1Gi"
