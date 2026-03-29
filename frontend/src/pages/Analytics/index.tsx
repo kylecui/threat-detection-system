@@ -20,7 +20,7 @@ import {
   AlertOutlined,
 } from '@ant-design/icons';
 import { Line, Pie, Column } from '@ant-design/charts';
-import type { Statistics, ChartDataPoint } from '@/types';
+import type { Statistics, ChartDataPoint, ThreatAssessment } from '@/types';
 import threatService from '@/services/threat';
 import dayjs from 'dayjs';
 
@@ -32,6 +32,34 @@ type TopAttacker = {
   uniquePorts: number;
   uniqueIps: number;
 };
+
+/** Derive top attackers from assessments data (client-side aggregation) */
+function deriveTopAttackers(assessments: ThreatAssessment[], limit: number): TopAttacker[] {
+  const map = new Map<string, TopAttacker>();
+  for (const a of assessments) {
+    const key = a.attackMac;
+    const existing = map.get(key);
+    if (existing) {
+      existing.attackCount += a.attackCount;
+      existing.threatScore = Math.max(existing.threatScore, a.threatScore);
+      existing.uniquePorts = Math.max(existing.uniquePorts, a.uniquePorts);
+      existing.uniqueIps = Math.max(existing.uniqueIps, a.uniqueIps);
+      if (!existing.attackIp && a.attackIp) existing.attackIp = a.attackIp;
+    } else {
+      map.set(key, {
+        attackMac: a.attackMac,
+        attackIp: a.attackIp,
+        attackCount: a.attackCount,
+        threatScore: a.threatScore,
+        uniquePorts: a.uniquePorts,
+        uniqueIps: a.uniqueIps,
+      });
+    }
+  }
+  return Array.from(map.values())
+    .sort((a, b) => b.threatScore - a.threatScore)
+    .slice(0, limit);
+}
 
 type PortDatum = { port: string; count: number };
 
@@ -66,16 +94,17 @@ const Analytics = () => {
         '30d': 720,
       };
 
-      const [stats, trend, ports, attackers] = await Promise.all([
+      const [stats, trend, ports, assessments] = await Promise.all([
         threatService.getStatistics(customerId),
         threatService.getThreatTrend(customerId).catch(() => []),
         threatService.getPortDistribution(customerId).catch(() => []),
-        threatService.getTopAttackers(customerId, 20).catch(() => []),
+        threatService.getThreatList({ customer_id: customerId, page: 0, page_size: 200 })
+          .then((res) => res.content || [])
+          .catch(() => []),
       ]);
 
       setStatistics(stats);
 
-      // 趋势数据格式化
       const formattedTrend = (trend || []).map((item: any) => ({
         time:
           hoursMap[trendRange] > 48
@@ -86,23 +115,13 @@ const Analytics = () => {
       }));
       setTrendData(formattedTrend);
 
-      // 端口分布格式化
       const formattedPorts = (ports || []).map((item: any) => ({
         port: item.port ? `Port ${item.port}` : item.portName || 'Unknown',
         count: item.count ?? item.value ?? 0,
       }));
       setPortData(formattedPorts.slice(0, 15));
 
-      // Top 攻击者格式化
-      const formattedAttackers = (attackers || []).map((item: any) => ({
-        attackMac: item.attackMac || item.attack_mac || 'N/A',
-        attackIp: item.attackIp || item.attack_ip,
-        attackCount: item.attackCount || item.attack_count || 0,
-        threatScore: item.threatScore || item.threat_score || 0,
-        uniquePorts: item.uniquePorts || item.unique_ports || 0,
-        uniqueIps: item.uniqueIps || item.unique_ips || 0,
-      }));
-      setTopAttackers(formattedAttackers);
+      setTopAttackers(deriveTopAttackers(assessments as ThreatAssessment[], 20));
     } catch (error) {
       console.error('Failed to load analytics data:', error);
       message.error('加载分析数据失败');

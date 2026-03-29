@@ -4,7 +4,6 @@ import type {
   Statistics,
   PaginatedResponse,
   ThreatQueryFilter,
-  ApiResponse,
   ChartDataPoint,
 } from '@/types';
 
@@ -62,22 +61,6 @@ class ThreatService {
       }
     );
     return response.data;
-  }
-
-  /**
-   * 获取Top攻击者
-   */
-  async getTopAttackers(customerId: string, limit: number = 10): Promise<any[]> {
-    const response = await apiClient.get<ApiResponse<any[]>>(
-      '/api/v1/assessment/top-attackers',
-      {
-        params: {
-          customer_id: customerId,
-          limit,
-        },
-      }
-    );
-    return response.data.data;
   }
 
   /**
