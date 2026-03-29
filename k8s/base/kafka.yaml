@@ -13,6 +13,7 @@ spec:
       labels:
         app: kafka
     spec:
+      enableServiceLinks: false
       containers:
       - name: kafka
         image: confluentinc/cp-kafka:7.4.0
