@@ -28,9 +28,12 @@ spec:
         - name: FLINK_PROPERTIES
           value: |
             jobmanager.rpc.address: stream-processing-jobmanager
+            jobmanager.rpc.port: 6123
+            jobmanager.bind-host: 0.0.0.0
             parallelism.default: 1
             taskmanager.numberOfTaskSlots: 1
             rest.port: 8081
+            rest.bind-address: 0.0.0.0
         - name: KAFKA_BOOTSTRAP_SERVERS
           value: "kafka:29092"
         - name: INPUT_TOPIC
@@ -85,12 +88,18 @@ spec:
       - name: flink-taskmanager
         image: threat-detection/stream-processing:1.0
         imagePullPolicy: Never
+        ports:
+        - containerPort: 6122
+          name: rpc
         env:
         - name: FLINK_PROPERTIES
           value: |
             jobmanager.rpc.address: stream-processing-jobmanager
+            jobmanager.rpc.port: 6123
             taskmanager.numberOfTaskSlots: 2
             taskmanager.memory.process.size: 1728m
+            taskmanager.bind-host: 0.0.0.0
+            taskmanager.host: 0.0.0.0
         resources:
           requests:
             memory: "1Gi"
@@ -100,6 +109,24 @@ spec:
             cpu: "1000m"
         command: ["/docker-entrypoint.sh"]
         args: ["taskmanager"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stream-processing-jobmanager
+  namespace: threat-detection
+spec:
+  selector:
+    app: stream-processing
+    component: jobmanager
+  ports:
+  - port: 6123
+    targetPort: 6123
+    name: rpc
+  - port: 8081
+    targetPort: 8081
+    name: webui
+  type: ClusterIP
 ---
 apiVersion: v1
 kind: Service
