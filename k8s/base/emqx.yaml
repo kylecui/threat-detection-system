@@ -60,13 +60,17 @@ spec:
           readinessProbe:
             exec:
               command: ["emqx", "ctl", "status"]
-            initialDelaySeconds: 15
+            initialDelaySeconds: 30
             periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 6
           livenessProbe:
             exec:
               command: ["emqx", "ctl", "status"]
-            initialDelaySeconds: 30
+            initialDelaySeconds: 90
             periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
           volumeMounts:
             - name: emqx-data
               mountPath: /opt/emqx/data
