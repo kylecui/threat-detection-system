@@ -2,6 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: emqx
+  namespace: threat-detection
   labels:
     app: emqx
 spec:
@@ -25,6 +26,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: emqx
+  namespace: threat-detection
   labels:
     app: emqx
 spec:
