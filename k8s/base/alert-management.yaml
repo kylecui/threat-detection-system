@@ -60,7 +60,7 @@ spec:
       containers:
       - name: alert-management
         image: threat-detection/alert-management:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Never
         ports:
         - containerPort: 8082
           name: http

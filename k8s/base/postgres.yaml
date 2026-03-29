@@ -32,6 +32,1108 @@ data:
     CREATE INDEX idx_device_serial ON device_customer_mapping(dev_serial);
     CREATE INDEX idx_customer_id ON device_customer_mapping(customer_id);
 
+  02-attack-events-storage.sql: |
+    -- ============================================================================
+    -- 原始攻击事件存储表 (用于追溯和审计)
+    -- ============================================================================
+    CREATE TABLE IF NOT EXISTS attack_events (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        customer_id VARCHAR(100) NOT NULL,
+        dev_serial VARCHAR(50) NOT NULL,
+        attack_mac VARCHAR(17) NOT NULL,
+        attack_ip VARCHAR(45),
+        response_ip VARCHAR(45) NOT NULL,
+        response_port INTEGER NOT NULL,
+        event_timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+        log_time BIGINT,
+        received_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        raw_log_data JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_attack_events_customer ON attack_events(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_attack_events_attack_mac ON attack_events(attack_mac);
+    CREATE INDEX IF NOT EXISTS idx_attack_events_timestamp ON attack_events(event_timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_attack_events_customer_mac ON attack_events(customer_id, attack_mac);
+    CREATE INDEX IF NOT EXISTS idx_attack_events_customer_time ON attack_events(customer_id, event_timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_attack_events_response_port ON attack_events(response_port);
+    CREATE INDEX IF NOT EXISTS idx_attack_events_raw_log ON attack_events USING GIN (raw_log_data);
+
+    COMMENT ON TABLE attack_events IS '原始攻击事件存储 - 所有蜜罐检测到的探测行为';
+
+    CREATE TABLE IF NOT EXISTS threat_alerts (
+        id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+        customer_id VARCHAR(100) NOT NULL,
+        attack_mac VARCHAR(17) NOT NULL,
+        threat_score DECIMAL(12,2) NOT NULL,
+        threat_level VARCHAR(20) NOT NULL CHECK (threat_level IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO')),
+        attack_count INTEGER NOT NULL,
+        unique_ips INTEGER NOT NULL,
+        unique_ports INTEGER NOT NULL,
+        unique_devices INTEGER NOT NULL,
+        mixed_port_weight DECIMAL(10,2),
+        tier INTEGER NOT NULL CHECK (tier IN (1, 2, 3)),
+        window_type VARCHAR(50),
+        window_start TIMESTAMP WITH TIME ZONE NOT NULL,
+        window_end TIMESTAMP WITH TIME ZONE NOT NULL,
+        alert_timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(20) DEFAULT 'NEW' CHECK (status IN ('NEW', 'REVIEWED', 'RESOLVED', 'FALSE_POSITIVE')),
+        reviewed_by VARCHAR(100),
+        reviewed_at TIMESTAMP WITH TIME ZONE,
+        notes TEXT,
+        raw_alert_data JSONB
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_threat_alerts_customer ON threat_alerts(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_threat_alerts_mac ON threat_alerts(attack_mac);
+    CREATE INDEX IF NOT EXISTS idx_threat_alerts_level ON threat_alerts(threat_level);
+    CREATE INDEX IF NOT EXISTS idx_threat_alerts_tier ON threat_alerts(tier);
+    CREATE INDEX IF NOT EXISTS idx_threat_alerts_timestamp ON threat_alerts(alert_timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_threat_alerts_status ON threat_alerts(status);
+    CREATE INDEX IF NOT EXISTS idx_threat_alerts_customer_time ON threat_alerts(customer_id, alert_timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_threat_alerts_customer_mac_time ON threat_alerts(customer_id, attack_mac, alert_timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_threat_alerts_raw_data ON threat_alerts USING GIN (raw_alert_data);
+
+    GRANT SELECT, INSERT, UPDATE ON attack_events TO threat_user;
+    GRANT USAGE, SELECT ON SEQUENCE attack_events_id_seq TO threat_user;
+    GRANT SELECT, INSERT, UPDATE ON threat_alerts TO threat_user;
+    GRANT USAGE, SELECT ON SEQUENCE threat_alerts_id_seq TO threat_user;
+
+    CREATE OR REPLACE VIEW v_recent_alerts AS
+    SELECT
+        ta.id, ta.customer_id, ta.attack_mac, ta.threat_score, ta.threat_level,
+        ta.attack_count, ta.unique_ips, ta.unique_ports, ta.tier, ta.window_type,
+        ta.alert_timestamp, ta.status,
+        (SELECT MIN(event_timestamp) FROM attack_events ae
+         WHERE ae.customer_id = ta.customer_id AND ae.attack_mac = ta.attack_mac
+           AND ae.event_timestamp >= ta.window_start AND ae.event_timestamp < ta.window_end
+        ) as first_attack_time,
+        (SELECT COUNT(*) FROM attack_events ae
+         WHERE ae.customer_id = ta.customer_id AND ae.attack_mac = ta.attack_mac
+           AND ae.event_timestamp >= ta.window_start AND ae.event_timestamp < ta.window_end
+        ) as total_events
+    FROM threat_alerts ta
+    WHERE ta.alert_timestamp >= NOW() - INTERVAL '7 days'
+    ORDER BY ta.alert_timestamp DESC;
+
+    CREATE OR REPLACE VIEW v_customer_alert_summary AS
+    SELECT
+        customer_id,
+        COUNT(*) as total_alerts,
+        COUNT(DISTINCT attack_mac) as unique_attackers,
+        SUM(CASE WHEN threat_level = 'CRITICAL' THEN 1 ELSE 0 END) as critical_alerts,
+        SUM(CASE WHEN threat_level = 'HIGH' THEN 1 ELSE 0 END) as high_alerts,
+        SUM(CASE WHEN threat_level = 'MEDIUM' THEN 1 ELSE 0 END) as medium_alerts,
+        SUM(CASE WHEN threat_level = 'LOW' THEN 1 ELSE 0 END) as low_alerts,
+        MAX(alert_timestamp) as last_alert_time,
+        COUNT(CASE WHEN status = 'NEW' THEN 1 END) as pending_review
+    FROM threat_alerts
+    WHERE alert_timestamp >= NOW() - INTERVAL '30 days'
+    GROUP BY customer_id;
+
+    GRANT SELECT ON v_recent_alerts TO threat_user;
+    GRANT SELECT ON v_customer_alert_summary TO threat_user;
+
+  03-port-weights.sql: |
+    -- 端口权重配置
+    CREATE TABLE IF NOT EXISTS port_risk_configs (
+        id SERIAL PRIMARY KEY,
+        port_number INTEGER NOT NULL,
+        port_name VARCHAR(100) NOT NULL,
+        risk_level VARCHAR(20) NOT NULL DEFAULT 'MEDIUM',
+        risk_weight DECIMAL(4,2) NOT NULL DEFAULT 1.0,
+        attack_intent VARCHAR(200),
+        config_source VARCHAR(20) DEFAULT 'LEGACY',
+        enabled BOOLEAN DEFAULT TRUE,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(port_number),
+        CHECK (port_number >= 1 AND port_number <= 65535),
+        CHECK (risk_weight >= 1.0 AND risk_weight <= 10.0),
+        CHECK (risk_level IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
+        CHECK (config_source IN ('CVSS', 'LEGACY', 'CUSTOM'))
+    );
+
+    CREATE INDEX idx_port_risk_configs_port ON port_risk_configs(port_number);
+    CREATE INDEX idx_port_risk_configs_risk_level ON port_risk_configs(risk_level);
+    CREATE INDEX idx_port_risk_configs_enabled ON port_risk_configs(enabled);
+
+    INSERT INTO port_risk_configs (port_number, port_name, risk_level, risk_weight, attack_intent, config_source, description) VALUES
+    (22, 'SSH', 'CRITICAL', 10.0, 'SSH远程控制', 'CVSS', 'SSH远程登录服务'),
+    (23, 'Telnet', 'CRITICAL', 10.0, 'Telnet远程控制', 'CVSS', 'Telnet远程登录服务'),
+    (3389, 'RDP', 'CRITICAL', 10.0, 'RDP远程桌面', 'CVSS', 'Windows远程桌面协议'),
+    (5900, 'VNC', 'CRITICAL', 9.5, 'VNC远程控制', 'CVSS', 'VNC远程桌面服务'),
+    (5901, 'VNC', 'CRITICAL', 9.5, 'VNC远程控制', 'CVSS', 'VNC远程桌面服务端口2'),
+    (5902, 'VNC', 'CRITICAL', 9.5, 'VNC远程控制', 'CVSS', 'VNC远程桌面服务端口3')
+    ON CONFLICT (port_number) DO NOTHING;
+
+    INSERT INTO port_risk_configs (port_number, port_name, risk_level, risk_weight, attack_intent, config_source, description) VALUES
+    (445, 'SMB', 'CRITICAL', 9.5, 'SMB横向移动', 'CVSS', 'Windows文件共享SMB协议'),
+    (139, 'NetBIOS', 'HIGH', 8.5, 'NetBIOS文件共享', 'CVSS', 'NetBIOS会话服务'),
+    (389, 'LDAP', 'HIGH', 8.5, 'LDAP目录服务', 'CVSS', '轻量目录访问协议'),
+    (636, 'LDAPS', 'HIGH', 8.0, 'LDAPS目录服务', 'CVSS', '安全LDAP协议')
+    ON CONFLICT (port_number) DO NOTHING;
+
+    INSERT INTO port_risk_configs (port_number, port_name, risk_level, risk_weight, attack_intent, config_source, description) VALUES
+    (3306, 'MySQL', 'HIGH', 9.0, 'MySQL数据库攻击', 'CVSS', 'MySQL数据库服务'),
+    (1433, 'SQL Server', 'HIGH', 9.0, 'SQL Server数据库攻击', 'CVSS', 'Microsoft SQL Server数据库'),
+    (5432, 'PostgreSQL', 'HIGH', 8.5, 'PostgreSQL数据库攻击', 'CVSS', 'PostgreSQL数据库服务'),
+    (1521, 'Oracle', 'HIGH', 8.5, 'Oracle数据库攻击', 'CVSS', 'Oracle数据库监听器'),
+    (6379, 'Redis', 'HIGH', 8.5, 'Redis数据库攻击', 'CVSS', 'Redis内存数据库'),
+    (27017, 'MongoDB', 'HIGH', 8.0, 'MongoDB数据库攻击', 'CVSS', 'MongoDB文档数据库')
+    ON CONFLICT (port_number) DO NOTHING;
+
+    INSERT INTO port_risk_configs (port_number, port_name, risk_level, risk_weight, attack_intent, config_source, description) VALUES
+    (80, 'HTTP', 'MEDIUM', 6.0, 'HTTP Web应用攻击', 'LEGACY', 'HTTP超文本传输协议'),
+    (443, 'HTTPS', 'MEDIUM', 6.0, 'HTTPS Web应用攻击', 'LEGACY', 'HTTPS安全超文本传输协议'),
+    (8080, 'HTTP-Alt', 'MEDIUM', 6.5, 'HTTP代理服务', 'LEGACY', 'HTTP备用端口'),
+    (8443, 'HTTPS-Alt', 'MEDIUM', 6.5, 'HTTPS代理服务', 'LEGACY', 'HTTPS备用端口'),
+    (8000, 'HTTP-Alt2', 'MEDIUM', 6.0, 'HTTP备用端口', 'LEGACY', 'HTTP开发测试端口'),
+    (9090, 'HTTP-Alt3', 'MEDIUM', 6.0, 'HTTP管理端口', 'LEGACY', 'HTTP管理服务端口')
+    ON CONFLICT (port_number) DO NOTHING;
+
+    INSERT INTO port_risk_configs (port_number, port_name, risk_level, risk_weight, attack_intent, config_source, description) VALUES
+    (21, 'FTP', 'MEDIUM', 6.5, 'FTP文件传输', 'LEGACY', 'FTP文件传输协议'),
+    (20, 'FTP-Data', 'MEDIUM', 6.0, 'FTP数据传输', 'LEGACY', 'FTP数据传输通道'),
+    (69, 'TFTP', 'MEDIUM', 5.5, 'TFTP简单文件传输', 'LEGACY', '简单文件传输协议'),
+    (990, 'FTPS', 'MEDIUM', 6.0, 'FTPS安全文件传输', 'LEGACY', 'FTP over SSL/TLS')
+    ON CONFLICT (port_number) DO NOTHING;
+
+    INSERT INTO port_risk_configs (port_number, port_name, risk_level, risk_weight, attack_intent, config_source, description) VALUES
+    (25, 'SMTP', 'MEDIUM', 6.0, 'SMTP邮件服务', 'LEGACY', '简单邮件传输协议'),
+    (110, 'POP3', 'MEDIUM', 5.5, 'POP3邮件服务', 'LEGACY', 'POP3邮件接收协议'),
+    (143, 'IMAP', 'MEDIUM', 5.5, 'IMAP邮件服务', 'LEGACY', 'IMAP邮件访问协议'),
+    (993, 'IMAPS', 'MEDIUM', 5.0, 'IMAPS邮件服务', 'LEGACY', 'IMAP over SSL/TLS'),
+    (995, 'POP3S', 'MEDIUM', 5.0, 'POP3S邮件服务', 'LEGACY', 'POP3 over SSL/TLS')
+    ON CONFLICT (port_number) DO NOTHING;
+
+    INSERT INTO port_risk_configs (port_number, port_name, risk_level, risk_weight, attack_intent, config_source, description) VALUES
+    (161, 'SNMP', 'HIGH', 7.5, 'SNMP网络管理', 'LEGACY', '简单网络管理协议'),
+    (162, 'SNMP-Trap', 'HIGH', 7.0, 'SNMP陷阱', 'LEGACY', 'SNMP陷阱接收'),
+    (623, 'IPMI', 'HIGH', 8.0, 'IPMI硬件管理', 'LEGACY', '智能平台管理接口')
+    ON CONFLICT (port_number) DO NOTHING;
+
+    INSERT INTO port_risk_configs (port_number, port_name, risk_level, risk_weight, attack_intent, config_source, description) VALUES
+    (502, 'Modbus', 'CRITICAL', 8.5, 'Modbus工控协议', 'LEGACY', 'Modbus工业控制协议'),
+    (102, 'S7', 'CRITICAL', 8.5, 'S7工控通信', 'LEGACY', '西门子S7通信协议'),
+    (44818, 'EtherNet/IP', 'HIGH', 8.0, '工控以太网', 'LEGACY', '工业以太网协议'),
+    (2404, 'IEC 61850', 'HIGH', 7.5, 'IEC61850电力协议', 'LEGACY', '电力系统通信协议')
+    ON CONFLICT (port_number) DO NOTHING;
+
+    INSERT INTO port_risk_configs (port_number, port_name, risk_level, risk_weight, attack_intent, config_source, description) VALUES
+    (4444, 'MetaSploit', 'CRITICAL', 9.5, '勒索软件通信', 'LEGACY', 'MetaSploit默认端口'),
+    (6666, 'Trojan', 'CRITICAL', 9.0, '勒索软件通信', 'LEGACY', '常见木马通信端口'),
+    (7777, 'Trojan', 'CRITICAL', 9.0, '勒索软件通信', 'LEGACY', '常见木马通信端口'),
+    (8888, 'Trojan', 'CRITICAL', 9.0, '勒索软件通信', 'LEGACY', '常见木马通信端口'),
+    (9999, 'Trojan', 'CRITICAL', 9.0, '勒索软件通信', 'LEGACY', '常见木马通信端口')
+    ON CONFLICT (port_number) DO NOTHING;
+
+    INSERT INTO port_risk_configs (port_number, port_name, risk_level, risk_weight, attack_intent, config_source, description) VALUES
+    (53, 'DNS', 'MEDIUM', 5.5, 'DNS域名服务', 'LEGACY', '域名系统协议'),
+    (123, 'NTP', 'LOW', 3.0, 'NTP时间同步', 'LEGACY', '网络时间协议'),
+    (135, 'RPC', 'HIGH', 7.0, 'Windows RPC', 'LEGACY', 'Windows远程过程调用'),
+    (1194, 'OpenVPN', 'MEDIUM', 5.0, 'OpenVPN服务', 'LEGACY', 'OpenVPN隧道协议'),
+    (1723, 'PPTP', 'MEDIUM', 5.5, 'PPTP VPN', 'LEGACY', '点对点隧道协议')
+    ON CONFLICT (port_number) DO NOTHING;
+
+    INSERT INTO port_risk_configs (port_number, port_name, risk_level, risk_weight, attack_intent, config_source, description) VALUES
+    (79, 'Finger', 'MEDIUM', 5.0, '用户信息查询', 'LEGACY', 'Finger用户信息服务'),
+    (111, 'RPC', 'HIGH', 7.0, 'Unix RPC', 'LEGACY', 'Unix远程过程调用'),
+    (113, 'Ident', 'LOW', 3.0, '身份识别服务', 'LEGACY', '身份识别协议'),
+    (119, 'NNTP', 'LOW', 4.0, '网络新闻传输', 'LEGACY', '网络新闻传输协议'),
+    (137, 'NetBIOS-NS', 'MEDIUM', 6.0, 'NetBIOS名称服务', 'LEGACY', 'NetBIOS名称解析'),
+    (138, 'NetBIOS-DGM', 'MEDIUM', 5.5, 'NetBIOS数据报', 'LEGACY', 'NetBIOS数据报服务'),
+    (199, 'SMUX', 'MEDIUM', 5.0, 'SNMP Unix', 'LEGACY', 'SNMP Unix多路复用'),
+    (513, 'Rlogin', 'HIGH', 8.0, '远程登录', 'LEGACY', 'Berkeley远程登录'),
+    (514, 'RSH', 'HIGH', 8.0, '远程Shell', 'LEGACY', 'Berkeley远程Shell'),
+    (515, 'LPR', 'MEDIUM', 5.0, '行式打印机', 'LEGACY', '行式打印机协议'),
+    (2049, 'NFS', 'HIGH', 7.5, '网络文件系统', 'LEGACY', '网络文件系统协议'),
+    (5060, 'SIP', 'MEDIUM', 6.0, 'SIP语音协议', 'LEGACY', '会话发起协议'),
+    (5061, 'SIP-TLS', 'MEDIUM', 5.5, 'SIP安全协议', 'LEGACY', 'SIP over TLS'),
+    (8081, 'HTTP-Alt4', 'MEDIUM', 6.0, 'HTTP备用端口', 'LEGACY', 'HTTP备用服务端口'),
+    (10000, 'Webmin', 'HIGH', 7.0, 'Webmin管理', 'LEGACY', 'Webmin Web管理')
+    ON CONFLICT (port_number) DO NOTHING;
+
+    DO $$
+    BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'threat_assessments') THEN
+            ALTER TABLE threat_assessments
+            ADD COLUMN IF NOT EXISTS port_list TEXT,
+            ADD COLUMN IF NOT EXISTS port_risk_score DECIMAL(10,2) DEFAULT 0.0,
+            ADD COLUMN IF NOT EXISTS detection_tier INTEGER DEFAULT 2;
+        END IF;
+    END $$;
+
+    DO $$
+    BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'threat_assessments') THEN
+            CREATE INDEX IF NOT EXISTS idx_threat_assessments_composite
+            ON threat_assessments(customer_id, attack_mac, assessment_time DESC);
+            CREATE INDEX IF NOT EXISTS idx_threat_assessments_tier_level
+            ON threat_assessments(detection_tier, threat_level);
+        END IF;
+    END $$;
+
+    CREATE OR REPLACE VIEW v_port_risk_statistics AS
+    SELECT
+        risk_level, config_source,
+        COUNT(*) as port_count,
+        AVG(risk_weight) as avg_weight,
+        MIN(risk_weight) as min_weight,
+        MAX(risk_weight) as max_weight
+    FROM port_risk_configs WHERE enabled = TRUE
+    GROUP BY risk_level, config_source
+    ORDER BY
+        CASE risk_level WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 WHEN 'LOW' THEN 4 END,
+        config_source;
+
+  04-threat-assessment-tables.sql: |
+    CREATE TABLE IF NOT EXISTS threat_assessments (
+        id BIGSERIAL PRIMARY KEY,
+        customer_id VARCHAR(100) NOT NULL,
+        attack_mac VARCHAR(17) NOT NULL,
+        threat_score DECIMAL(10,2) NOT NULL,
+        threat_level VARCHAR(20) NOT NULL,
+        attack_count INTEGER NOT NULL,
+        unique_ips INTEGER NOT NULL,
+        unique_ports INTEGER NOT NULL,
+        unique_devices INTEGER NOT NULL,
+        assessment_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        port_list TEXT,
+        port_risk_score DECIMAL(5,2) DEFAULT 0.0,
+        detection_tier INTEGER DEFAULT 2,
+        time_weight DECIMAL(5,2),
+        ip_weight DECIMAL(5,2),
+        port_weight DECIMAL(5,2),
+        device_weight DECIMAL(5,2),
+        attack_ip VARCHAR(45),
+        mitigation_recommendations TEXT,
+        mitigation_status VARCHAR(50),
+        updated_at TIMESTAMP WITH TIME ZONE,
+        CONSTRAINT chk_threat_level CHECK (threat_level IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO')),
+        CONSTRAINT chk_detection_tier CHECK (detection_tier IN (1, 2, 3)),
+        CONSTRAINT chk_mitigation_status CHECK (mitigation_status IN ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_threat_assessments_customer ON threat_assessments(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_threat_assessments_attack_mac ON threat_assessments(attack_mac);
+    CREATE INDEX IF NOT EXISTS idx_threat_assessments_customer_mac ON threat_assessments(customer_id, attack_mac);
+    CREATE INDEX IF NOT EXISTS idx_threat_assessments_assessment_time ON threat_assessments(assessment_time);
+    CREATE INDEX IF NOT EXISTS idx_threat_assessments_threat_level ON threat_assessments(threat_level);
+    CREATE INDEX IF NOT EXISTS idx_threat_assessments_attack_ip ON threat_assessments(attack_ip);
+    CREATE INDEX IF NOT EXISTS idx_threat_assessments_mitigation_status ON threat_assessments(mitigation_status);
+
+    GRANT SELECT, INSERT, UPDATE ON threat_assessments TO threat_user;
+    GRANT USAGE, SELECT ON SEQUENCE threat_assessments_id_seq TO threat_user;
+
+  05-alert-management-tables.sql: |
+    CREATE TABLE IF NOT EXISTS alerts (
+        id BIGSERIAL PRIMARY KEY,
+        title VARCHAR(500) NOT NULL,
+        description VARCHAR(2000),
+        status VARCHAR(20) NOT NULL DEFAULT 'NEW',
+        severity VARCHAR(20) NOT NULL,
+        source VARCHAR(100) DEFAULT 'threat-detection-system',
+        event_type VARCHAR(100),
+        metadata TEXT,
+        attack_mac VARCHAR(17),
+        threat_score DOUBLE PRECISION,
+        assigned_to VARCHAR(100),
+        resolution VARCHAR(1000),
+        resolved_by VARCHAR(100),
+        resolved_at TIMESTAMP,
+        last_notified_at TIMESTAMP,
+        escalation_level INTEGER DEFAULT 0,
+        escalation_reason VARCHAR(500),
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT chk_status CHECK (status IN ('NEW', 'ACKNOWLEDGED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'SUPPRESSED')),
+        CONSTRAINT chk_severity CHECK (severity IN ('INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);
+    CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity);
+    CREATE INDEX IF NOT EXISTS idx_alerts_attack_mac ON alerts(attack_mac);
+    CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts(created_at);
+    CREATE INDEX IF NOT EXISTS idx_alerts_source ON alerts(source);
+
+    CREATE TABLE IF NOT EXISTS alert_affected_assets (
+        alert_id BIGINT NOT NULL REFERENCES alerts(id) ON DELETE CASCADE,
+        asset VARCHAR(255) NOT NULL,
+        PRIMARY KEY (alert_id, asset)
+    );
+    CREATE INDEX IF NOT EXISTS idx_alert_affected_assets_alert_id ON alert_affected_assets(alert_id);
+
+    CREATE TABLE IF NOT EXISTS alert_recommendations (
+        alert_id BIGINT NOT NULL REFERENCES alerts(id) ON DELETE CASCADE,
+        recommendation VARCHAR(1000) NOT NULL,
+        PRIMARY KEY (alert_id, recommendation)
+    );
+    CREATE INDEX IF NOT EXISTS idx_alert_recommendations_alert_id ON alert_recommendations(alert_id);
+
+    CREATE TABLE IF NOT EXISTS notifications (
+        id BIGSERIAL PRIMARY KEY,
+        alert_id BIGINT REFERENCES alerts(id) ON DELETE CASCADE,
+        channel VARCHAR(50) NOT NULL,
+        recipient VARCHAR(255) NOT NULL,
+        subject VARCHAR(1000),
+        content TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+        error_message VARCHAR(500),
+        retry_count INTEGER DEFAULT 0,
+        max_retries INTEGER DEFAULT 3,
+        sent_at TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT chk_notification_channel CHECK (channel IN ('EMAIL', 'SMS', 'SLACK', 'WEBHOOK', 'TEAMS')),
+        CONSTRAINT chk_notification_status CHECK (status IN ('PENDING', 'SENT', 'FAILED', 'RETRYING'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notifications_alert_id ON notifications(alert_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_channel ON notifications(channel);
+    CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status);
+    CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
+
+  06-notification-config-tables.sql: |
+    CREATE TABLE IF NOT EXISTS smtp_configs (
+        id BIGSERIAL PRIMARY KEY,
+        config_name VARCHAR(100) NOT NULL UNIQUE,
+        host VARCHAR(255) NOT NULL,
+        port INTEGER NOT NULL,
+        username VARCHAR(255) NOT NULL,
+        password VARCHAR(500) NOT NULL,
+        from_address VARCHAR(255) NOT NULL,
+        from_name VARCHAR(255) DEFAULT 'Threat Detection System',
+        enable_tls BOOLEAN DEFAULT false,
+        enable_ssl BOOLEAN DEFAULT false,
+        enable_starttls BOOLEAN DEFAULT false,
+        connection_timeout INTEGER DEFAULT 5000,
+        timeout INTEGER DEFAULT 5000,
+        write_timeout INTEGER DEFAULT 5000,
+        is_active BOOLEAN DEFAULT true,
+        is_default BOOLEAN DEFAULT false,
+        description VARCHAR(500),
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_by VARCHAR(100) DEFAULT 'system',
+        updated_by VARCHAR(100) DEFAULT 'system',
+        CONSTRAINT chk_smtp_port CHECK (port > 0 AND port <= 65535)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_smtp_configs_active ON smtp_configs(is_active);
+    CREATE INDEX IF NOT EXISTS idx_smtp_configs_default ON smtp_configs(is_default);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_smtp_configs_unique_default ON smtp_configs(is_default) WHERE is_default = true;
+
+    CREATE TABLE IF NOT EXISTS customer_notification_configs (
+        id BIGSERIAL PRIMARY KEY,
+        customer_id VARCHAR(100) NOT NULL UNIQUE,
+        email_enabled BOOLEAN DEFAULT true,
+        email_recipients TEXT NOT NULL,
+        sms_enabled BOOLEAN DEFAULT false,
+        sms_recipients TEXT,
+        slack_enabled BOOLEAN DEFAULT false,
+        slack_webhook_url VARCHAR(500),
+        slack_channel VARCHAR(100),
+        webhook_enabled BOOLEAN DEFAULT false,
+        webhook_url VARCHAR(500),
+        webhook_headers TEXT,
+        min_severity_level VARCHAR(20) DEFAULT 'MEDIUM',
+        notify_on_severities TEXT DEFAULT '["MEDIUM","HIGH","CRITICAL"]',
+        max_notifications_per_hour INTEGER DEFAULT 100,
+        enable_rate_limiting BOOLEAN DEFAULT true,
+        quiet_hours_enabled BOOLEAN DEFAULT false,
+        quiet_hours_start TIME,
+        quiet_hours_end TIME,
+        quiet_hours_timezone VARCHAR(50) DEFAULT 'Asia/Shanghai',
+        is_active BOOLEAN DEFAULT true,
+        description VARCHAR(500),
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_by VARCHAR(100) DEFAULT 'system',
+        updated_by VARCHAR(100) DEFAULT 'system',
+        CONSTRAINT chk_min_severity CHECK (min_severity_level IN ('INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_customer_notification_configs_customer ON customer_notification_configs(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_customer_notification_configs_active ON customer_notification_configs(is_active);
+
+    CREATE TABLE IF NOT EXISTS notification_rate_limits (
+        id BIGSERIAL PRIMARY KEY,
+        customer_id VARCHAR(100) NOT NULL,
+        notification_hour TIMESTAMP NOT NULL,
+        notification_count INTEGER DEFAULT 0,
+        CONSTRAINT unique_customer_hour UNIQUE (customer_id, notification_hour)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notification_rate_limits_customer ON notification_rate_limits(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_notification_rate_limits_hour ON notification_rate_limits(notification_hour);
+
+    INSERT INTO smtp_configs (config_name, host, port, username, password, from_address, from_name, enable_tls, enable_ssl, enable_starttls, is_active, is_default, description)
+    VALUES ('default-smtp-163', 'smtp.163.com', 25, 'threat_detection@163.com', 'CHANGEME_SET_VIA_ENV', 'threat_detection@163.com', '威胁检测系统', false, false, false, true, true, '默认SMTP配置')
+    ON CONFLICT (config_name) DO NOTHING;
+
+    INSERT INTO customer_notification_configs (customer_id, email_enabled, email_recipients, sms_enabled, slack_enabled, webhook_enabled, min_severity_level, notify_on_severities, max_notifications_per_hour, enable_rate_limiting, is_active, description) VALUES
+    ('customer_a', true, '["kylecui@outlook.com"]', false, false, false, 'CRITICAL', '["CRITICAL"]', 50, true, true, '客户A'),
+    ('customer_b', true, '["kylecui@outlook.com"]', false, false, false, 'HIGH', '["HIGH","CRITICAL"]', 50, true, true, '客户B'),
+    ('customer_c', true, '["kylecui@outlook.com"]', false, false, false, 'CRITICAL', '["CRITICAL"]', 50, true, true, '客户C')
+    ON CONFLICT (customer_id) DO NOTHING;
+
+  07-whitelist-config.sql: |
+    CREATE TABLE IF NOT EXISTS whitelist_config (
+        id SERIAL PRIMARY KEY,
+        customer_id VARCHAR(50) NOT NULL,
+        ip_address VARCHAR(15),
+        mac_address VARCHAR(17),
+        description TEXT,
+        category VARCHAR(50) NOT NULL,
+        priority INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT unique_ip_per_customer UNIQUE(customer_id, ip_address),
+        CONSTRAINT unique_mac_per_customer UNIQUE(customer_id, mac_address)
+    );
+
+    CREATE INDEX idx_whitelist_customer ON whitelist_config(customer_id);
+    CREATE INDEX idx_whitelist_ip ON whitelist_config(ip_address);
+    CREATE INDEX idx_whitelist_mac ON whitelist_config(mac_address);
+    CREATE INDEX idx_whitelist_active ON whitelist_config(is_active);
+
+  08-threat-labels.sql: |
+    CREATE TABLE IF NOT EXISTS threat_labels (
+        id SERIAL PRIMARY KEY,
+        label_code VARCHAR(50) NOT NULL UNIQUE,
+        label_name VARCHAR(100) NOT NULL,
+        category VARCHAR(50) NOT NULL,
+        severity VARCHAR(20) NOT NULL,
+        description TEXT,
+        auto_tag_rules TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX idx_label_code ON threat_labels(label_code);
+    CREATE INDEX idx_label_category ON threat_labels(category);
+    CREATE INDEX idx_label_severity ON threat_labels(severity);
+
+    INSERT INTO threat_labels (label_code, label_name, category, severity, description) VALUES
+        ('APT_LATERAL_MOVE', 'APT Lateral Movement', 'APT', 'CRITICAL', 'APT attacker attempting lateral movement'),
+        ('APT_RECONNAISSANCE', 'APT Reconnaissance Scanning', 'APT', 'HIGH', 'APT attacker conducting network reconnaissance'),
+        ('APT_C2_COMMUNICATION', 'APT C2 Communication', 'APT', 'CRITICAL', 'Communication with command and control server'),
+        ('APT_DATA_EXFIL', 'APT Data Exfiltration', 'APT', 'CRITICAL', 'APT attacker exfiltrating sensitive data'),
+        ('RANSOMWARE_SMB_SPREAD', 'Ransomware SMB Propagation', 'RANSOMWARE', 'CRITICAL', 'Ransomware spreading via SMB protocol'),
+        ('RANSOMWARE_RDP_EXPLOIT', 'Ransomware RDP Exploitation', 'RANSOMWARE', 'CRITICAL', 'Ransomware exploiting RDP'),
+        ('RANSOMWARE_ENCRYPTION', 'Ransomware File Encryption', 'RANSOMWARE', 'CRITICAL', 'Ransomware encrypting files'),
+        ('RANSOMWARE_PROPAGATION', 'Ransomware Propagation', 'RANSOMWARE', 'HIGH', 'Ransomware propagating to multiple systems'),
+        ('SCAN_PORT_FULL', 'Full Port Scan', 'SCANNING', 'MEDIUM', 'Attacker scanning all ports'),
+        ('SCAN_SERVICE_ENUM', 'Service Enumeration', 'SCANNING', 'MEDIUM', 'Attacker enumerating services'),
+        ('SCAN_VULNERABILITY', 'Vulnerability Scanning', 'SCANNING', 'HIGH', 'Attacker scanning for vulnerabilities'),
+        ('SCAN_NETWORK_SWEEP', 'Network Sweep Scan', 'SCANNING', 'LOW', 'Attacker performing network sweep'),
+        ('MOVE_RDP_ATTEMPT', 'RDP Lateral Movement', 'LATERAL_MOVEMENT', 'HIGH', 'Attacker attempting RDP lateral movement'),
+        ('MOVE_SMB_ATTEMPT', 'SMB Lateral Movement', 'LATERAL_MOVEMENT', 'HIGH', 'Attacker attempting SMB lateral movement'),
+        ('MOVE_SSH_ATTEMPT', 'SSH Lateral Movement', 'LATERAL_MOVEMENT', 'HIGH', 'Attacker attempting SSH lateral movement'),
+        ('MOVE_WMI_ATTEMPT', 'WMI Lateral Movement', 'LATERAL_MOVEMENT', 'HIGH', 'Attacker attempting WMI lateral movement'),
+        ('BRUTE_RDP', 'RDP Brute Force', 'BRUTE_FORCE', 'HIGH', 'Brute force on RDP'),
+        ('BRUTE_SSH', 'SSH Brute Force', 'BRUTE_FORCE', 'HIGH', 'Brute force on SSH'),
+        ('BRUTE_DB', 'Database Brute Force', 'BRUTE_FORCE', 'HIGH', 'Brute force on database'),
+        ('BRUTE_HTTP', 'HTTP Auth Brute Force', 'BRUTE_FORCE', 'MEDIUM', 'Brute force on HTTP auth'),
+        ('EXFIL_DATABASE', 'Database Exfiltration', 'DATA_EXFILTRATION', 'CRITICAL', 'Database content exfiltration'),
+        ('EXFIL_FILE_TRANSFER', 'File Transfer Exfiltration', 'DATA_EXFILTRATION', 'HIGH', 'Large file transfer exfiltration'),
+        ('EXFIL_EMAIL', 'Email Exfiltration', 'DATA_EXFILTRATION', 'HIGH', 'Email exfiltration'),
+        ('EXFIL_CLOUD', 'Cloud Storage Exfiltration', 'DATA_EXFILTRATION', 'MEDIUM', 'Data uploaded to cloud storage'),
+        ('MALWARE_BOTNET', 'Botnet Infection', 'MALWARE', 'CRITICAL', 'Botnet malware infection'),
+        ('MALWARE_TROJAN', 'Trojan Infection', 'MALWARE', 'HIGH', 'Trojan malware infection'),
+        ('MALWARE_WORM', 'Worm Infection', 'MALWARE', 'HIGH', 'Worm malware infection'),
+        ('MALWARE_DROPPER', 'Malware Dropper', 'MALWARE', 'HIGH', 'Malware dropper detected'),
+        ('ANOMALY_TRAFFIC', 'Abnormal Network Traffic', 'NETWORK_ANOMALY', 'MEDIUM', 'Unusual traffic patterns'),
+        ('ANOMALY_CONN_SPIKE', 'Connection Count Spike', 'NETWORK_ANOMALY', 'MEDIUM', 'Abnormal connection spike'),
+        ('ANOMALY_BANDWIDTH', 'Abnormal Bandwidth Usage', 'NETWORK_ANOMALY', 'HIGH', 'Abnormal bandwidth consumption'),
+        ('ANOMALY_TIMING', 'Abnormal Timing Pattern', 'NETWORK_ANOMALY', 'LOW', 'Activity at unusual times'),
+        ('INSIDER_DATA_COPY', 'Insider Data Copy', 'INSIDER_THREAT', 'HIGH', 'Employee copying large data'),
+        ('INSIDER_PRIV_ESCALATE', 'Insider Privilege Escalation', 'INSIDER_THREAT', 'HIGH', 'Employee escalating privileges'),
+        ('INSIDER_CONFIG_CHANGE', 'Insider Config Change', 'INSIDER_THREAT', 'MEDIUM', 'Unauthorized config changes'),
+        ('INSIDER_BACKUP_ATTEMPT', 'Insider Backup Attempt', 'INSIDER_THREAT', 'MEDIUM', 'Attempting to access sensitive backups'),
+        ('EXPLOIT_CVE_ATTACK', 'CVE Exploitation', 'EXPLOITATION', 'CRITICAL', 'Exploitation of known CVE'),
+        ('EXPLOIT_ZERO_DAY', 'Zero-Day Exploitation', 'EXPLOITATION', 'CRITICAL', 'Potential zero-day exploitation'),
+        ('EXPLOIT_PRIVILEGE', 'Privilege Escalation', 'EXPLOITATION', 'HIGH', 'Privilege escalation attack'),
+        ('EXPLOIT_SQL_INJECT', 'SQL Injection', 'EXPLOITATION', 'HIGH', 'SQL injection attack'),
+        ('DOS_DDOS_ATTACK', 'DDoS Attack', 'DOS', 'HIGH', 'Distributed denial of service'),
+        ('DOS_RESOURCE_EXHAUST', 'Resource Exhaustion', 'DOS', 'MEDIUM', 'Resource exhaustion attack'),
+        ('DOS_SLOWLORIS', 'Slowloris Attack', 'DOS', 'MEDIUM', 'Slowloris DoS attack'),
+        ('DOS_BANDWIDTH_FLOOD', 'Bandwidth Flood', 'DOS', 'HIGH', 'Bandwidth flooding'),
+        ('WEB_XSS_ATTACK', 'Cross-Site Scripting', 'WEB', 'MEDIUM', 'XSS attack'),
+        ('WEB_CSRF_ATTACK', 'Cross-Site Request Forgery', 'WEB', 'MEDIUM', 'CSRF attack'),
+        ('WEB_LOGIC_BYPASS', 'Application Logic Bypass', 'WEB', 'MEDIUM', 'Business logic bypass'),
+        ('WEB_PATH_TRAVERSAL', 'Path Traversal', 'WEB', 'HIGH', 'Directory traversal attack');
+
+  12-ip-segment-weights-v4.sql: |
+    -- IP网段权重配置表 V4.0 - 双维度权重设计
+    CREATE TABLE IF NOT EXISTS attack_source_weights (
+        id SERIAL PRIMARY KEY,
+        customer_id VARCHAR(50) NOT NULL,
+        segment_name VARCHAR(255) NOT NULL,
+        ip_range_start VARCHAR(15) NOT NULL,
+        ip_range_end VARCHAR(15) NOT NULL,
+        segment_type VARCHAR(50) NOT NULL,
+        risk_level VARCHAR(20) NOT NULL,
+        weight DECIMAL(3,2) NOT NULL DEFAULT 1.00,
+        description TEXT,
+        is_active BOOLEAN DEFAULT TRUE,
+        priority INTEGER DEFAULT 50,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT uk_customer_source_segment UNIQUE (customer_id, segment_name)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_attack_source_customer_active ON attack_source_weights(customer_id, is_active) WHERE is_active = TRUE;
+    CREATE INDEX IF NOT EXISTS idx_attack_source_ip_range ON attack_source_weights(customer_id, ip_range_start, ip_range_end);
+    CREATE INDEX IF NOT EXISTS idx_attack_source_risk_level ON attack_source_weights(risk_level);
+
+    CREATE TABLE IF NOT EXISTS honeypot_sensitivity_weights (
+        id SERIAL PRIMARY KEY,
+        customer_id VARCHAR(50) NOT NULL,
+        honeypot_name VARCHAR(255) NOT NULL,
+        ip_range_start VARCHAR(15) NOT NULL,
+        ip_range_end VARCHAR(15) NOT NULL,
+        honeypot_tier VARCHAR(50) NOT NULL,
+        deployment_zone VARCHAR(50) NOT NULL,
+        sensitivity_level VARCHAR(20) NOT NULL,
+        weight DECIMAL(3,2) NOT NULL DEFAULT 1.00,
+        simulated_service VARCHAR(100),
+        attack_intent VARCHAR(100),
+        description TEXT,
+        is_active BOOLEAN DEFAULT TRUE,
+        priority INTEGER DEFAULT 50,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT uk_customer_honeypot UNIQUE (customer_id, honeypot_name)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_honeypot_customer_active ON honeypot_sensitivity_weights(customer_id, is_active) WHERE is_active = TRUE;
+    CREATE INDEX IF NOT EXISTS idx_honeypot_ip_range ON honeypot_sensitivity_weights(customer_id, ip_range_start, ip_range_end);
+    CREATE INDEX IF NOT EXISTS idx_honeypot_sensitivity_level ON honeypot_sensitivity_weights(sensitivity_level);
+    CREATE INDEX IF NOT EXISTS idx_honeypot_deployment_zone ON honeypot_sensitivity_weights(deployment_zone);
+
+    INSERT INTO attack_source_weights (customer_id, segment_name, ip_range_start, ip_range_end, segment_type, risk_level, weight, description, priority)
+    SELECT 'default', 'Database-Servers-10.0.3.0/24', '10.0.3.0', '10.0.3.255', 'DATABASE', 'CRITICAL', 3.00, '数据库服务器区', 100
+    WHERE NOT EXISTS (SELECT 1 FROM attack_source_weights WHERE customer_id = 'default' AND segment_name = 'Database-Servers-10.0.3.0/24')
+    UNION ALL SELECT 'default', 'Management-OPS-10.0.100.0/24', '10.0.100.0', '10.0.100.255', 'MANAGEMENT', 'CRITICAL', 3.00, '运维管理网段', 100
+    WHERE NOT EXISTS (SELECT 1 FROM attack_source_weights WHERE customer_id = 'default' AND segment_name = 'Management-OPS-10.0.100.0/24')
+    UNION ALL SELECT 'default', 'Server-App-10.0.2.0/24', '10.0.2.0', '10.0.2.255', 'SERVER', 'CRITICAL', 2.50, '应用服务器区', 90
+    WHERE NOT EXISTS (SELECT 1 FROM attack_source_weights WHERE customer_id = 'default' AND segment_name = 'Server-App-10.0.2.0/24')
+    UNION ALL SELECT 'default', 'Server-FileShare-10.0.4.0/24', '10.0.4.0', '10.0.4.255', 'SERVER', 'HIGH', 2.20, '文件服务器区', 85
+    WHERE NOT EXISTS (SELECT 1 FROM attack_source_weights WHERE customer_id = 'default' AND segment_name = 'Server-FileShare-10.0.4.0/24')
+    UNION ALL SELECT 'default', 'Server-Web-10.0.1.0/24', '10.0.1.0', '10.0.1.255', 'SERVER', 'HIGH', 2.00, 'Web服务器区', 80
+    WHERE NOT EXISTS (SELECT 1 FROM attack_source_weights WHERE customer_id = 'default' AND segment_name = 'Server-Web-10.0.1.0/24')
+    UNION ALL SELECT 'default', 'DMZ-Public-172.16.1.0/24', '172.16.1.0', '172.16.1.255', 'DMZ', 'HIGH', 2.00, 'DMZ区域', 80
+    WHERE NOT EXISTS (SELECT 1 FROM attack_source_weights WHERE customer_id = 'default' AND segment_name = 'DMZ-Public-172.16.1.0/24')
+    UNION ALL SELECT 'default', 'Office-Executive-192.168.20.0/24', '192.168.20.0', '192.168.20.255', 'OFFICE', 'HIGH', 1.80, '高管办公区', 70
+    WHERE NOT EXISTS (SELECT 1 FROM attack_source_weights WHERE customer_id = 'default' AND segment_name = 'Office-Executive-192.168.20.0/24')
+    UNION ALL SELECT 'default', 'Office-Dev-192.168.30.0/24', '192.168.30.0', '192.168.30.255', 'OFFICE', 'MEDIUM', 1.30, '开发人员办公区', 60
+    WHERE NOT EXISTS (SELECT 1 FROM attack_source_weights WHERE customer_id = 'default' AND segment_name = 'Office-Dev-192.168.30.0/24')
+    UNION ALL SELECT 'default', 'IoT-Industrial-192.168.51.0/24', '192.168.51.0', '192.168.51.255', 'IOT', 'MEDIUM', 1.20, '工控设备网段', 65
+    WHERE NOT EXISTS (SELECT 1 FROM attack_source_weights WHERE customer_id = 'default' AND segment_name = 'IoT-Industrial-192.168.51.0/24')
+    UNION ALL SELECT 'default', 'Office-General-192.168.10.0/24', '192.168.10.0', '192.168.10.255', 'OFFICE', 'LOW', 1.00, '普通办公区', 50
+    WHERE NOT EXISTS (SELECT 1 FROM attack_source_weights WHERE customer_id = 'default' AND segment_name = 'Office-General-192.168.10.0/24')
+    UNION ALL SELECT 'default', 'IoT-Devices-192.168.50.0/24', '192.168.50.0', '192.168.50.255', 'IOT', 'LOW', 0.90, 'IoT设备网段', 40
+    WHERE NOT EXISTS (SELECT 1 FROM attack_source_weights WHERE customer_id = 'default' AND segment_name = 'IoT-Devices-192.168.50.0/24')
+    UNION ALL SELECT 'default', 'Office-Guest-192.168.100.0/24', '192.168.100.0', '192.168.100.255', 'GUEST', 'VERY_LOW', 0.60, '访客网络', 30
+    WHERE NOT EXISTS (SELECT 1 FROM attack_source_weights WHERE customer_id = 'default' AND segment_name = 'Office-Guest-192.168.100.0/24')
+    UNION ALL SELECT 'default', 'Default-Source-Catch-All', '0.0.0.0', '255.255.255.255', 'OFFICE', 'MEDIUM', 1.00, '默认兜底规则', 10
+    WHERE NOT EXISTS (SELECT 1 FROM attack_source_weights WHERE customer_id = 'default' AND segment_name = 'Default-Source-Catch-All');
+
+    INSERT INTO honeypot_sensitivity_weights (customer_id, honeypot_name, ip_range_start, ip_range_end, honeypot_tier, deployment_zone, sensitivity_level, weight, simulated_service, attack_intent, description, priority)
+    SELECT 'default', 'Honeypot-Management-Bastion', '10.0.100.50', '10.0.100.59', 'CRITICAL_ASSET', 'MANAGEMENT', 'CRITICAL', 3.50, 'SSH跳板机/堡垒机', '全网控制', '管理区蜜罐', 100
+    WHERE NOT EXISTS (SELECT 1 FROM honeypot_sensitivity_weights WHERE customer_id = 'default' AND honeypot_name = 'Honeypot-Management-Bastion')
+    UNION ALL SELECT 'default', 'Honeypot-Database-ProdDB', '10.0.3.50', '10.0.3.59', 'CRITICAL_ASSET', 'DATABASE', 'CRITICAL', 3.50, 'MySQL/PostgreSQL', '数据窃取', '数据库区蜜罐', 100
+    WHERE NOT EXISTS (SELECT 1 FROM honeypot_sensitivity_weights WHERE customer_id = 'default' AND honeypot_name = 'Honeypot-Database-ProdDB')
+    UNION ALL SELECT 'default', 'Honeypot-CoreServer-AppMaster', '10.0.2.50', '10.0.2.59', 'HIGH_VALUE', 'CORE_SERVER', 'CRITICAL', 3.00, '核心业务应用', '业务破坏', '核心服务器蜜罐', 95
+    WHERE NOT EXISTS (SELECT 1 FROM honeypot_sensitivity_weights WHERE customer_id = 'default' AND honeypot_name = 'Honeypot-CoreServer-AppMaster')
+    UNION ALL SELECT 'default', 'Honeypot-FileServer-NAS', '10.0.4.50', '10.0.4.59', 'HIGH_VALUE', 'CORE_SERVER', 'HIGH', 2.50, 'SMB/NFS文件共享', '勒索软件目标', '文件服务器蜜罐', 85
+    WHERE NOT EXISTS (SELECT 1 FROM honeypot_sensitivity_weights WHERE customer_id = 'default' AND honeypot_name = 'Honeypot-FileServer-NAS')
+    UNION ALL SELECT 'default', 'Honeypot-AppServer-Business', '10.0.2.100', '10.0.2.109', 'MEDIUM_VALUE', 'APP_SERVER', 'HIGH', 2.20, '业务应用服务器', '业务访问', '应用服务器蜜罐', 80
+    WHERE NOT EXISTS (SELECT 1 FROM honeypot_sensitivity_weights WHERE customer_id = 'default' AND honeypot_name = 'Honeypot-AppServer-Business')
+    UNION ALL SELECT 'default', 'Honeypot-WebServer-Public', '10.0.1.50', '10.0.1.59', 'MEDIUM_VALUE', 'APP_SERVER', 'HIGH', 2.00, 'Web应用服务器', '跳板攻击', 'Web服务器蜜罐', 80
+    WHERE NOT EXISTS (SELECT 1 FROM honeypot_sensitivity_weights WHERE customer_id = 'default' AND honeypot_name = 'Honeypot-WebServer-Public')
+    UNION ALL SELECT 'default', 'Honeypot-DMZ-External', '172.16.1.50', '172.16.1.59', 'MEDIUM_VALUE', 'DMZ', 'MEDIUM', 1.80, 'DMZ对外服务', '内网渗透', 'DMZ蜜罐', 70
+    WHERE NOT EXISTS (SELECT 1 FROM honeypot_sensitivity_weights WHERE customer_id = 'default' AND honeypot_name = 'Honeypot-DMZ-External')
+    UNION ALL SELECT 'default', 'Honeypot-Office-Executive', '192.168.20.50', '192.168.20.59', 'MEDIUM_VALUE', 'OFFICE', 'MEDIUM', 1.50, '高管办公区工作站', '高价值目标', '高管办公区蜜罐', 70
+    WHERE NOT EXISTS (SELECT 1 FROM honeypot_sensitivity_weights WHERE customer_id = 'default' AND honeypot_name = 'Honeypot-Office-Executive')
+    UNION ALL SELECT 'default', 'Honeypot-Office-General', '192.168.10.50', '192.168.10.59', 'LOW_VALUE', 'OFFICE', 'MEDIUM', 1.30, '普通办公区工作站', '横向移动探测', '办公区蜜罐', 60
+    WHERE NOT EXISTS (SELECT 1 FROM honeypot_sensitivity_weights WHERE customer_id = 'default' AND honeypot_name = 'Honeypot-Office-General')
+    UNION ALL SELECT 'default', 'Honeypot-Office-Dev', '192.168.30.50', '192.168.30.59', 'MEDIUM_VALUE', 'OFFICE', 'MEDIUM', 1.40, '开发人员工作站', '开发环境渗透', '开发区蜜罐', 65
+    WHERE NOT EXISTS (SELECT 1 FROM honeypot_sensitivity_weights WHERE customer_id = 'default' AND honeypot_name = 'Honeypot-Office-Dev')
+    UNION ALL SELECT 'default', 'Default-Honeypot-Catch-All', '0.0.0.0', '255.255.255.255', 'DECOY', 'OFFICE', 'LOW', 1.00, '通用诱饵', '未分类探测', '默认兜底规则', 10
+    WHERE NOT EXISTS (SELECT 1 FROM honeypot_sensitivity_weights WHERE customer_id = 'default' AND honeypot_name = 'Default-Honeypot-Catch-All');
+
+    CREATE OR REPLACE FUNCTION get_attack_source_weight(p_customer_id VARCHAR(50), p_attack_ip VARCHAR(15))
+    RETURNS DECIMAL(3,2) AS $fn$
+    DECLARE v_weight DECIMAL(3,2);
+    BEGIN
+        SELECT weight INTO v_weight FROM attack_source_weights
+        WHERE customer_id = p_customer_id AND is_active = TRUE
+          AND CAST(p_attack_ip AS inet) BETWEEN CAST(ip_range_start AS inet) AND CAST(ip_range_end AS inet)
+        ORDER BY priority DESC, id DESC LIMIT 1;
+        RETURN COALESCE(v_weight, 1.00);
+    END;
+    $fn$ LANGUAGE plpgsql;
+
+    CREATE OR REPLACE FUNCTION get_honeypot_sensitivity_weight(p_customer_id VARCHAR(50), p_honeypot_ip VARCHAR(15))
+    RETURNS DECIMAL(3,2) AS $fn$
+    DECLARE v_weight DECIMAL(3,2);
+    BEGIN
+        SELECT weight INTO v_weight FROM honeypot_sensitivity_weights
+        WHERE customer_id = p_customer_id AND is_active = TRUE
+          AND CAST(p_honeypot_ip AS inet) BETWEEN CAST(ip_range_start AS inet) AND CAST(ip_range_end AS inet)
+        ORDER BY priority DESC, id DESC LIMIT 1;
+        RETURN COALESCE(v_weight, 1.00);
+    END;
+    $fn$ LANGUAGE plpgsql;
+
+    CREATE OR REPLACE FUNCTION get_combined_segment_weight(p_customer_id VARCHAR(50), p_attack_ip VARCHAR(15), p_honeypot_ip VARCHAR(15))
+    RETURNS TABLE(attack_source_weight DECIMAL(3,2), honeypot_sensitivity_weight DECIMAL(3,2), combined_weight DECIMAL(6,4)) AS $fn$
+    DECLARE v_src DECIMAL(3,2); v_hp DECIMAL(3,2);
+    BEGIN
+        v_src := get_attack_source_weight(p_customer_id, p_attack_ip);
+        v_hp := get_honeypot_sensitivity_weight(p_customer_id, p_honeypot_ip);
+        RETURN QUERY SELECT v_src, v_hp, (v_src * v_hp)::DECIMAL(6,4);
+    END;
+    $fn$ LANGUAGE plpgsql;
+
+  13-customer-port-weights.sql: |
+    CREATE TABLE IF NOT EXISTS customer_port_weights (
+        id SERIAL PRIMARY KEY,
+        customer_id VARCHAR(50) NOT NULL,
+        port_number INTEGER NOT NULL,
+        port_name VARCHAR(100),
+        weight DECIMAL(4,2) NOT NULL DEFAULT 1.0,
+        risk_level VARCHAR(20) DEFAULT 'MEDIUM',
+        attack_intent VARCHAR(200),
+        description TEXT,
+        priority INTEGER DEFAULT 0,
+        enabled BOOLEAN DEFAULT TRUE,
+        created_by VARCHAR(100),
+        updated_by VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT uk_customer_port UNIQUE(customer_id, port_number),
+        CONSTRAINT ck_port_number CHECK (port_number >= 1 AND port_number <= 65535),
+        CONSTRAINT ck_weight CHECK (weight >= 0.5 AND weight <= 10.0),
+        CONSTRAINT ck_priority CHECK (priority >= 0 AND priority <= 100),
+        CONSTRAINT ck_risk_level CHECK (risk_level IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL'))
+    );
+
+    CREATE INDEX idx_customer_port_weights_customer ON customer_port_weights(customer_id);
+    CREATE INDEX idx_customer_port_weights_port ON customer_port_weights(port_number);
+    CREATE INDEX idx_customer_port_weights_enabled ON customer_port_weights(enabled);
+    CREATE INDEX idx_customer_port_weights_composite ON customer_port_weights(customer_id, enabled, priority DESC);
+    CREATE INDEX idx_customer_port_weights_risk ON customer_port_weights(risk_level);
+
+    CREATE OR REPLACE FUNCTION update_customer_port_weights_timestamp() RETURNS TRIGGER AS $fn$
+    BEGIN NEW.updated_at = CURRENT_TIMESTAMP; RETURN NEW; END;
+    $fn$ LANGUAGE plpgsql;
+
+    CREATE TRIGGER trg_customer_port_weights_updated BEFORE UPDATE ON customer_port_weights
+    FOR EACH ROW EXECUTE FUNCTION update_customer_port_weights_timestamp();
+
+    INSERT INTO customer_port_weights (customer_id, port_number, port_name, weight, risk_level, attack_intent, description, priority) VALUES
+    ('test', 22, 'SSH', 10.0, 'CRITICAL', 'SSH远程控制', '测试客户SSH权重', 100),
+    ('test', 3389, 'RDP', 10.0, 'CRITICAL', 'RDP远程桌面', '测试客户RDP权重', 100),
+    ('test', 445, 'SMB', 9.5, 'CRITICAL', 'SMB横向移动', '测试客户SMB权重', 90),
+    ('test', 3306, 'MySQL', 9.0, 'HIGH', 'MySQL数据库攻击', '测试客户MySQL权重', 85),
+    ('test', 1433, 'SQL Server', 9.0, 'HIGH', 'SQL Server攻击', '测试客户SQL Server权重', 85),
+    ('test', 80, 'HTTP', 6.0, 'MEDIUM', 'HTTP Web应用攻击', '测试客户HTTP权重', 60),
+    ('test', 443, 'HTTPS', 6.0, 'MEDIUM', 'HTTPS Web应用攻击', '测试客户HTTPS权重', 60)
+    ON CONFLICT (customer_id, port_number) DO NOTHING;
+
+    CREATE OR REPLACE FUNCTION get_port_weight(p_customer_id VARCHAR(50), p_port_number INTEGER)
+    RETURNS DECIMAL(4,2) AS $fn$
+    DECLARE v_weight DECIMAL(4,2);
+    BEGIN
+        SELECT weight INTO v_weight FROM customer_port_weights WHERE customer_id = p_customer_id AND port_number = p_port_number AND enabled = TRUE LIMIT 1;
+        IF v_weight IS NULL THEN
+            SELECT risk_weight INTO v_weight FROM port_risk_configs WHERE port_number = p_port_number AND enabled = TRUE LIMIT 1;
+        END IF;
+        RETURN COALESCE(v_weight, 1.0);
+    END;
+    $fn$ LANGUAGE plpgsql;
+
+    CREATE OR REPLACE FUNCTION get_port_weights_batch(p_customer_id VARCHAR(50), p_port_numbers INTEGER[])
+    RETURNS TABLE(port_number INTEGER, weight DECIMAL(4,2), source TEXT) AS $fn$
+    BEGIN
+        RETURN QUERY
+        WITH port_list AS (SELECT unnest(p_port_numbers) as port_num),
+        customer_config AS (SELECT cpw.port_number, cpw.weight, 'CUSTOM'::TEXT as source FROM customer_port_weights cpw INNER JOIN port_list pl ON cpw.port_number = pl.port_num WHERE cpw.customer_id = p_customer_id AND cpw.enabled = TRUE),
+        global_config AS (SELECT prc.port_number, prc.risk_weight as weight, COALESCE(prc.config_source, 'GLOBAL')::TEXT as source FROM port_risk_configs prc INNER JOIN port_list pl ON prc.port_number = pl.port_num LEFT JOIN customer_config cc ON prc.port_number = cc.port_number WHERE prc.enabled = TRUE AND cc.port_number IS NULL),
+        default_config AS (SELECT pl.port_num as port_number, 1.0::DECIMAL(4,2) as weight, 'DEFAULT'::TEXT as source FROM port_list pl LEFT JOIN customer_config cc ON pl.port_num = cc.port_number LEFT JOIN global_config gc ON pl.port_num = gc.port_number WHERE cc.port_number IS NULL AND gc.port_number IS NULL)
+        SELECT * FROM customer_config UNION ALL SELECT * FROM global_config UNION ALL SELECT * FROM default_config ORDER BY port_number;
+    END;
+    $fn$ LANGUAGE plpgsql;
+
+  14-apt-temporal-accumulations.sql: |
+    CREATE TABLE IF NOT EXISTS apt_temporal_accumulations (
+        id BIGSERIAL PRIMARY KEY,
+        customer_id VARCHAR(100) NOT NULL,
+        attack_mac VARCHAR(17) NOT NULL,
+        attack_ip VARCHAR(45),
+        total_attack_count BIGINT NOT NULL DEFAULT 0,
+        unique_ips_count INTEGER NOT NULL DEFAULT 0,
+        unique_ports_count INTEGER NOT NULL DEFAULT 0,
+        unique_devices_count INTEGER NOT NULL DEFAULT 0,
+        decay_accumulated_score DECIMAL(12,4) NOT NULL DEFAULT 0.0,
+        half_life_days INTEGER NOT NULL DEFAULT 30,
+        inferred_attack_phase VARCHAR(30),
+        phase_confidence DECIMAL(3,2),
+        window_start TIMESTAMP WITH TIME ZONE NOT NULL,
+        window_end TIMESTAMP WITH TIME ZONE NOT NULL,
+        last_updated TIMESTAMP WITH TIME ZONE NOT NULL,
+        cache_key VARCHAR(255),
+        cache_expiry TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT chk_attack_phase CHECK (inferred_attack_phase IN ('RECON', 'EXPLOITATION', 'PERSISTENCE', 'UNKNOWN')),
+        CONSTRAINT chk_phase_confidence CHECK (phase_confidence >= 0.0 AND phase_confidence <= 1.0),
+        CONSTRAINT chk_half_life CHECK (half_life_days > 0),
+        CONSTRAINT chk_window_order CHECK (window_start <= window_end),
+        CONSTRAINT uk_apt_temporal_customer_mac_window UNIQUE (customer_id, attack_mac, window_start)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_apt_temporal_customer_mac ON apt_temporal_accumulations(customer_id, attack_mac);
+    CREATE INDEX IF NOT EXISTS idx_apt_temporal_attack_ip ON apt_temporal_accumulations(attack_ip) WHERE attack_ip IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_apt_temporal_window ON apt_temporal_accumulations(window_start, window_end);
+    CREATE INDEX IF NOT EXISTS idx_apt_temporal_phase ON apt_temporal_accumulations(inferred_attack_phase);
+    CREATE INDEX IF NOT EXISTS idx_apt_temporal_updated ON apt_temporal_accumulations(last_updated DESC);
+    CREATE INDEX IF NOT EXISTS idx_apt_temporal_cache ON apt_temporal_accumulations(cache_key) WHERE cache_key IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_apt_temporal_customer_phase_time ON apt_temporal_accumulations(customer_id, inferred_attack_phase, last_updated DESC);
+    CREATE INDEX IF NOT EXISTS idx_apt_temporal_score_threshold ON apt_temporal_accumulations(decay_accumulated_score DESC) WHERE decay_accumulated_score > 0;
+
+    GRANT SELECT, INSERT, UPDATE, DELETE ON apt_temporal_accumulations TO threat_user;
+    GRANT USAGE, SELECT ON SEQUENCE apt_temporal_accumulations_id_seq TO threat_user;
+
+    CREATE OR REPLACE FUNCTION update_apt_temporal_updated_at() RETURNS TRIGGER AS $fn$
+    BEGIN NEW.updated_at = CURRENT_TIMESTAMP; NEW.last_updated = CURRENT_TIMESTAMP; RETURN NEW; END;
+    $fn$ LANGUAGE plpgsql;
+
+    CREATE TRIGGER trigger_update_apt_temporal_updated_at BEFORE UPDATE ON apt_temporal_accumulations
+    FOR EACH ROW EXECUTE FUNCTION update_apt_temporal_updated_at();
+
+  15-attack-phase-port-configs.sql: |
+    CREATE TABLE IF NOT EXISTS attack_phase_port_configs (
+        id SERIAL PRIMARY KEY,
+        customer_id VARCHAR(50),
+        phase VARCHAR(20) NOT NULL,
+        port_number INTEGER NOT NULL,
+        port_name VARCHAR(100) NOT NULL,
+        priority INTEGER DEFAULT 0,
+        enabled BOOLEAN DEFAULT TRUE,
+        description TEXT,
+        created_by VARCHAR(100),
+        updated_by VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT uk_customer_phase_port UNIQUE(customer_id, phase, port_number),
+        CONSTRAINT ck_phase CHECK (phase IN ('RECON', 'EXPLOITATION', 'PERSISTENCE')),
+        CONSTRAINT ck_port_number CHECK (port_number >= 1 AND port_number <= 65535),
+        CONSTRAINT ck_priority CHECK (priority >= 0 AND priority <= 100)
+    );
+
+    CREATE INDEX idx_attack_phase_port_configs_customer ON attack_phase_port_configs(customer_id);
+    CREATE INDEX idx_attack_phase_port_configs_phase ON attack_phase_port_configs(phase);
+    CREATE INDEX idx_attack_phase_port_configs_port ON attack_phase_port_configs(port_number);
+    CREATE INDEX idx_attack_phase_port_configs_enabled ON attack_phase_port_configs(enabled);
+    CREATE INDEX idx_attack_phase_port_configs_composite ON attack_phase_port_configs(customer_id, phase, enabled, priority DESC);
+
+    CREATE OR REPLACE FUNCTION update_attack_phase_port_configs_timestamp() RETURNS TRIGGER AS $fn$
+    BEGIN NEW.updated_at = CURRENT_TIMESTAMP; RETURN NEW; END;
+    $fn$ LANGUAGE plpgsql;
+
+    CREATE TRIGGER trg_attack_phase_port_configs_updated BEFORE UPDATE ON attack_phase_port_configs
+    FOR EACH ROW EXECUTE FUNCTION update_attack_phase_port_configs_timestamp();
+
+    INSERT INTO attack_phase_port_configs (customer_id, phase, port_number, port_name, priority, description) VALUES
+    (NULL, 'RECON', 21, 'FTP', 90, 'FTP文件传输协议'),
+    (NULL, 'RECON', 22, 'SSH', 95, 'SSH远程登录服务'),
+    (NULL, 'RECON', 23, 'Telnet', 90, 'Telnet远程登录服务'),
+    (NULL, 'RECON', 25, 'SMTP', 80, 'SMTP邮件服务'),
+    (NULL, 'RECON', 53, 'DNS', 85, 'DNS域名服务'),
+    (NULL, 'RECON', 80, 'HTTP', 100, 'HTTP超文本传输协议'),
+    (NULL, 'RECON', 110, 'POP3', 75, 'POP3邮件接收协议'),
+    (NULL, 'RECON', 143, 'IMAP', 75, 'IMAP邮件访问协议'),
+    (NULL, 'RECON', 443, 'HTTPS', 100, 'HTTPS安全超文本传输协议'),
+    (NULL, 'RECON', 993, 'IMAPS', 70, 'IMAPS安全邮件协议'),
+    (NULL, 'RECON', 995, 'POP3S', 70, 'POP3S安全邮件协议')
+    ON CONFLICT (customer_id, phase, port_number) DO NOTHING;
+
+    INSERT INTO attack_phase_port_configs (customer_id, phase, port_number, port_name, priority, description) VALUES
+    (NULL, 'EXPLOITATION', 135, 'RPC', 90, 'Windows远程过程调用'),
+    (NULL, 'EXPLOITATION', 139, 'NetBIOS', 85, 'NetBIOS会话服务'),
+    (NULL, 'EXPLOITATION', 445, 'SMB', 95, 'SMB文件共享协议'),
+    (NULL, 'EXPLOITATION', 3389, 'RDP', 100, 'RDP远程桌面协议'),
+    (NULL, 'EXPLOITATION', 5985, 'WinRM-HTTP', 80, 'Windows远程管理HTTP'),
+    (NULL, 'EXPLOITATION', 5986, 'WinRM-HTTPS', 85, 'Windows远程管理HTTPS')
+    ON CONFLICT (customer_id, phase, port_number) DO NOTHING;
+
+    INSERT INTO attack_phase_port_configs (customer_id, phase, port_number, port_name, priority, description) VALUES
+    (NULL, 'PERSISTENCE', 3306, 'MySQL', 95, 'MySQL数据库服务'),
+    (NULL, 'PERSISTENCE', 5432, 'PostgreSQL', 90, 'PostgreSQL数据库服务'),
+    (NULL, 'PERSISTENCE', 6379, 'Redis', 85, 'Redis内存数据库'),
+    (NULL, 'PERSISTENCE', 27017, 'MongoDB', 85, 'MongoDB文档数据库'),
+    (NULL, 'PERSISTENCE', 1433, 'SQL Server', 90, 'Microsoft SQL Server')
+    ON CONFLICT (customer_id, phase, port_number) DO NOTHING;
+
+    CREATE OR REPLACE FUNCTION get_customer_phase_ports(p_customer_id VARCHAR(50), p_phase VARCHAR(20))
+    RETURNS TABLE(port_number INTEGER, port_name VARCHAR(100), priority INTEGER, description TEXT, source TEXT) AS $fn$
+    BEGIN
+        RETURN QUERY
+        SELECT apc.port_number, apc.port_name, apc.priority, apc.description, 'CUSTOM'::TEXT as source
+        FROM attack_phase_port_configs apc WHERE apc.customer_id = p_customer_id AND apc.phase = p_phase AND apc.enabled = TRUE
+        UNION ALL
+        SELECT apc.port_number, apc.port_name, apc.priority, apc.description, 'GLOBAL'::TEXT as source
+        FROM attack_phase_port_configs apc WHERE apc.customer_id IS NULL AND apc.phase = p_phase AND apc.enabled = TRUE
+          AND NOT EXISTS (SELECT 1 FROM attack_phase_port_configs custom WHERE custom.customer_id = p_customer_id AND custom.phase = p_phase AND custom.port_number = apc.port_number AND custom.enabled = TRUE)
+        ORDER BY priority DESC, port_number;
+    END;
+    $fn$ LANGUAGE plpgsql;
+
+    CREATE OR REPLACE FUNCTION is_port_in_customer_phase(p_customer_id VARCHAR(50), p_port_number INTEGER, p_phase VARCHAR(20))
+    RETURNS BOOLEAN AS $fn$
+    DECLARE v_count INTEGER;
+    BEGIN
+        SELECT COUNT(*) INTO v_count FROM attack_phase_port_configs WHERE customer_id = p_customer_id AND port_number = p_port_number AND phase = p_phase AND enabled = TRUE;
+        IF v_count > 0 THEN RETURN TRUE; END IF;
+        SELECT COUNT(*) INTO v_count FROM attack_phase_port_configs WHERE customer_id IS NULL AND port_number = p_port_number AND phase = p_phase AND enabled = TRUE;
+        RETURN v_count > 0;
+    END;
+    $fn$ LANGUAGE plpgsql;
+
+  17-customer-time-weights.sql: |
+    CREATE TABLE IF NOT EXISTS customer_time_weights (
+        id SERIAL PRIMARY KEY,
+        customer_id VARCHAR(50) NOT NULL,
+        start_hour INTEGER NOT NULL CHECK (start_hour >= 0 AND start_hour <= 23),
+        end_hour INTEGER NOT NULL CHECK (end_hour >= 1 AND end_hour <= 24),
+        time_range_name VARCHAR(100),
+        weight DECIMAL(5,2) NOT NULL DEFAULT 1.0 CHECK (weight >= 0.5 AND weight <= 2.0),
+        risk_description VARCHAR(50),
+        attack_intent TEXT,
+        description TEXT,
+        priority INTEGER DEFAULT 0 CHECK (priority >= 0 AND priority <= 100),
+        enabled BOOLEAN DEFAULT TRUE,
+        created_by VARCHAR(100),
+        updated_by VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX idx_customer_time_weights_customer ON customer_time_weights (customer_id);
+    CREATE INDEX idx_customer_time_weights_range ON customer_time_weights (start_hour, end_hour);
+    CREATE INDEX idx_customer_time_weights_enabled ON customer_time_weights (enabled);
+    CREATE INDEX idx_customer_time_weights_composite ON customer_time_weights (customer_id, enabled, priority);
+    ALTER TABLE customer_time_weights ADD CONSTRAINT uk_customer_time_range UNIQUE (customer_id, start_hour, end_hour);
+
+    INSERT INTO customer_time_weights (customer_id, start_hour, end_hour, time_range_name, weight, risk_description, attack_intent, description, priority, enabled, created_by) VALUES
+    ('default', 0, 6, '深夜时段', 1.2, '高风险', 'APT行为', '深夜异常行为', 90, true, 'system'),
+    ('default', 6, 9, '早晨时段', 1.1, '中等风险', '常规活动', '早晨时段', 80, true, 'system'),
+    ('default', 9, 17, '工作时段', 1.0, '正常风险', '工作时间', '工作时间基准', 50, true, 'system'),
+    ('default', 17, 21, '傍晚时段', 0.9, '低风险', '下班时间', '傍晚时段', 40, true, 'system'),
+    ('default', 21, 24, '夜间时段', 0.8, '低风险', '休息时间', '夜间时段', 30, true, 'system');
+
+    CREATE OR REPLACE FUNCTION update_customer_time_weights_timestamp() RETURNS TRIGGER AS $fn$
+    BEGIN NEW.updated_at = CURRENT_TIMESTAMP; RETURN NEW; END;
+    $fn$ LANGUAGE plpgsql;
+
+    CREATE TRIGGER update_customer_time_weights_timestamp_trigger BEFORE UPDATE ON customer_time_weights
+    FOR EACH ROW EXECUTE FUNCTION update_customer_time_weights_timestamp();
+
+  18-net-segment-weights.sql: |
+    CREATE TABLE IF NOT EXISTS net_segment_weights (
+        id          BIGSERIAL       PRIMARY KEY,
+        customer_id VARCHAR(100)    NOT NULL,
+        cidr        VARCHAR(43)     NOT NULL,
+        weight      DECIMAL(4,2)   NOT NULL DEFAULT 1.0,
+        description VARCHAR(255),
+        created_at  TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
+        updated_at  TIMESTAMP       DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(customer_id, cidr)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_nsw_customer_id   ON net_segment_weights(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_nsw_customer_cidr ON net_segment_weights(customer_id, cidr);
+
+    INSERT INTO net_segment_weights (customer_id, cidr, weight, description) VALUES
+        ('__template__', '10.0.0.0/8',       1.5, 'Internal private network (Class A)'),
+        ('__template__', '172.16.0.0/12',     1.5, 'Internal private network (Class B)'),
+        ('__template__', '192.168.0.0/16',    1.2, 'Internal private network (Class C)'),
+        ('__template__', '192.168.1.0/24',    1.8, 'Server subnet (common)'),
+        ('__template__', '192.168.10.0/24',   2.0, 'Management VLAN (critical)'),
+        ('__template__', '192.168.100.0/24',  1.8, 'Database subnet'),
+        ('__template__', '10.10.0.0/16',      1.6, 'Core infrastructure'),
+        ('__template__', '10.20.0.0/16',      1.4, 'Development network'),
+        ('__template__', '172.16.10.0/24',    2.0, 'Domain controller subnet'),
+        ('__template__', '172.16.20.0/24',    1.8, 'Financial systems subnet')
+    ON CONFLICT (customer_id, cidr) DO NOTHING;
+
+  22-threat-indicators.sql: |
+    CREATE TABLE IF NOT EXISTS threat_indicators (
+        id                  BIGSERIAL PRIMARY KEY,
+        ioc_value           TEXT NOT NULL,
+        ioc_type            VARCHAR(20) NOT NULL,
+        ioc_inet            VARCHAR(50),
+        indicator_type      VARCHAR(50) DEFAULT 'malicious-activity',
+        pattern             TEXT,
+        pattern_type        VARCHAR(20) DEFAULT 'stix',
+        confidence          SMALLINT DEFAULT 50 CHECK (confidence BETWEEN 0 AND 100),
+        valid_from          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        valid_until         TIMESTAMPTZ,
+        severity            VARCHAR(20) NOT NULL DEFAULT 'MEDIUM',
+        source_name         VARCHAR(100) NOT NULL,
+        description         TEXT,
+        tags                TEXT,
+        sighting_count      INTEGER DEFAULT 1,
+        first_seen_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_seen_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT chk_indicator_ioc_type CHECK (ioc_type IN ('IP_V4', 'IP_V6', 'CIDR', 'DOMAIN', 'FILE_HASH')),
+        CONSTRAINT chk_indicator_severity CHECK (severity IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO')),
+        CONSTRAINT chk_indicator_inet_for_ip CHECK (ioc_type NOT IN ('IP_V4', 'IP_V6', 'CIDR') OR ioc_inet IS NOT NULL),
+        CONSTRAINT uq_indicator_ioc_source UNIQUE (ioc_value, source_name)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_indicator_ioc_value ON threat_indicators USING HASH (ioc_value);
+    CREATE INDEX IF NOT EXISTS idx_active_indicators ON threat_indicators (ioc_value, severity, confidence) WHERE (valid_until IS NULL OR valid_until > NOW());
+    CREATE INDEX IF NOT EXISTS idx_indicator_source ON threat_indicators (source_name, ioc_type, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_indicator_tags ON threat_indicators (tags);
+    CREATE INDEX IF NOT EXISTS idx_indicator_valid_range ON threat_indicators (valid_from, valid_until);
+
+  23-threat-intel-feeds.sql: |
+    CREATE TABLE IF NOT EXISTS threat_intel_feeds (
+        id                      BIGSERIAL PRIMARY KEY,
+        feed_name               VARCHAR(100) NOT NULL UNIQUE,
+        feed_url                TEXT,
+        feed_type               VARCHAR(50) NOT NULL,
+        enabled                 BOOLEAN DEFAULT true,
+        poll_interval_hours     INTEGER DEFAULT 6,
+        api_key_env_var         VARCHAR(100),
+        source_weight           DOUBLE PRECISION DEFAULT 0.5,
+        last_poll_at            TIMESTAMPTZ,
+        last_poll_status        VARCHAR(20),
+        last_poll_error         TEXT,
+        indicator_count         INTEGER DEFAULT 0,
+        created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT chk_feed_type CHECK (feed_type IN ('REST_API', 'TAXII', 'CSV', 'INTERNAL')),
+        CONSTRAINT chk_poll_status CHECK (last_poll_status IS NULL OR last_poll_status IN ('SUCCESS', 'FAILED', 'TIMEOUT', 'RATE_LIMITED'))
+    );
+
+    INSERT INTO threat_intel_feeds (feed_name, feed_type, enabled, poll_interval_hours, source_weight)
+    VALUES ('internal', 'INTERNAL', true, 0, 0.95)
+    ON CONFLICT (feed_name) DO NOTHING;
+
+  26-ml-detection-tables.sql: |
+    CREATE TABLE IF NOT EXISTS ml_predictions (
+        id BIGSERIAL PRIMARY KEY,
+        customer_id VARCHAR(50) NOT NULL,
+        attack_mac VARCHAR(17) NOT NULL,
+        attack_ip VARCHAR(45),
+        tier SMALLINT NOT NULL CHECK (tier IN (1, 2, 3)),
+        window_start TIMESTAMPTZ NOT NULL,
+        window_end TIMESTAMPTZ NOT NULL,
+        ml_score DOUBLE PRECISION NOT NULL,
+        ml_weight DOUBLE PRECISION NOT NULL,
+        ml_confidence DOUBLE PRECISION NOT NULL,
+        anomaly_type VARCHAR(50) NOT NULL,
+        reconstruction_error DOUBLE PRECISION,
+        threshold DOUBLE PRECISION,
+        model_version VARCHAR(100) NOT NULL,
+        pre_ml_threat_score DOUBLE PRECISION,
+        pre_ml_threat_level VARCHAR(20),
+        feature_vector DOUBLE PRECISION[],
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT idx_ml_pred_unique UNIQUE (customer_id, attack_mac, tier, window_start)
+    );
+
+    CREATE INDEX idx_ml_pred_customer_time ON ml_predictions (customer_id, created_at DESC);
+    CREATE INDEX idx_ml_pred_anomaly ON ml_predictions (anomaly_type, ml_score DESC) WHERE anomaly_type != 'normal';
+    CREATE INDEX idx_ml_pred_tier ON ml_predictions (tier, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS ml_customer_stats (
+        id BIGSERIAL PRIMARY KEY,
+        customer_id VARCHAR(50) NOT NULL,
+        tier SMALLINT NOT NULL CHECK (tier IN (1, 2, 3)),
+        feature_name VARCHAR(50) NOT NULL,
+        rolling_mean DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+        rolling_std DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+        sample_count BIGINT NOT NULL DEFAULT 0,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT uq_customer_tier_feature UNIQUE (customer_id, tier, feature_name)
+    );
+
+    CREATE INDEX idx_ml_stats_customer ON ml_customer_stats (customer_id, tier);
+
+  27-ml-weight-columns.sql: |
+    ALTER TABLE threat_assessments
+        ADD COLUMN IF NOT EXISTS ml_weight DOUBLE PRECISION DEFAULT 1.0,
+        ADD COLUMN IF NOT EXISTS pre_ml_score DOUBLE PRECISION;
+
+    CREATE INDEX IF NOT EXISTS idx_threat_assessments_ml_weight
+        ON threat_assessments (ml_weight)
+        WHERE ml_weight != 1.0;
+
+  28-region-support.sql: |
+    ALTER TABLE threat_assessments ADD COLUMN IF NOT EXISTS region VARCHAR(20) DEFAULT 'east';
+    CREATE INDEX IF NOT EXISTS idx_threat_assessments_region ON threat_assessments(region);
+
+    DO $fn$
+    BEGIN
+      IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'attack_events_raw') THEN
+        ALTER TABLE attack_events_raw ADD COLUMN IF NOT EXISTS region VARCHAR(20) DEFAULT 'east';
+        CREATE INDEX IF NOT EXISTS idx_attack_events_raw_region ON attack_events_raw(region);
+      END IF;
+    END $fn$;
+
+    DO $fn$
+    BEGIN
+      IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'alerts') THEN
+        ALTER TABLE alerts ADD COLUMN IF NOT EXISTS region VARCHAR(20) DEFAULT 'east';
+        CREATE INDEX IF NOT EXISTS idx_alerts_region ON alerts(region);
+      END IF;
+    END $fn$;
+
+    DO $fn$
+    BEGIN
+      IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'ml_detections') THEN
+        ALTER TABLE ml_detections ADD COLUMN IF NOT EXISTS region VARCHAR(20) DEFAULT 'east';
+        CREATE INDEX IF NOT EXISTS idx_ml_detections_region ON ml_detections(region);
+      END IF;
+    END $fn$;
+
+    DO $fn$
+    BEGIN
+      IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'threat_indicators') THEN
+        ALTER TABLE threat_indicators ADD COLUMN IF NOT EXISTS region VARCHAR(20) DEFAULT 'east';
+      END IF;
+    END $fn$;
+
+    CREATE TABLE IF NOT EXISTS regions (
+        region_id VARCHAR(20) PRIMARY KEY,
+        region_label VARCHAR(100) NOT NULL,
+        api_endpoint VARCHAR(255),
+        kafka_bootstrap VARCHAR(255),
+        postgres_role VARCHAR(20) DEFAULT 'standby',
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    INSERT INTO regions (region_id, region_label, api_endpoint, kafka_bootstrap, postgres_role) VALUES
+      ('east', 'US East', 'https://east.threat-detection.io', 'kafka.threat-detection-east:29092', 'primary'),
+      ('west', 'US West', 'https://west.threat-detection.io', 'kafka.threat-detection-west:29092', 'standby'),
+      ('cn', 'China', 'https://cn.threat-detection.io', 'kafka.threat-detection-cn:29092', 'primary')
+    ON CONFLICT (region_id) DO NOTHING;
+
 ---
 apiVersion: v1
 kind: Secret

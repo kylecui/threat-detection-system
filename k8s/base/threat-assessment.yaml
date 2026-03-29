@@ -60,7 +60,7 @@ spec:
       containers:
       - name: threat-assessment
         image: threat-detection/threat-assessment:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Never
         ports:
         - containerPort: 8083
           name: http

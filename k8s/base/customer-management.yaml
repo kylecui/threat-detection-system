@@ -49,7 +49,7 @@ spec:
       containers:
       - name: customer-management
         image: threat-detection/customer-management:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Never
         ports:
         - containerPort: 8084
           name: http

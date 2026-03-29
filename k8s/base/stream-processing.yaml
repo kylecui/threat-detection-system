@@ -16,8 +16,9 @@ spec:
         component: jobmanager
     spec:
       containers:
-      - name: flink-jobmanager
+       - name: flink-jobmanager
         image: threat-detection/stream-processing:1.0
+        imagePullPolicy: Never
         ports:
         - containerPort: 8081
           name: webui
@@ -81,8 +82,9 @@ spec:
         component: taskmanager
     spec:
       containers:
-      - name: flink-taskmanager
+       - name: flink-taskmanager
         image: threat-detection/stream-processing:1.0
+        imagePullPolicy: Never
         env:
         - name: FLINK_PROPERTIES
           value: |
