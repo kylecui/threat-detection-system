@@ -67,7 +67,7 @@ spec:
           protocol: TCP
         env:
         - name: SPRING_PROFILES_ACTIVE
-          value: "kubernetes"
+          value: "docker"
         - name: SERVER_PORT
           value: "8083"
         - name: SPRING_DATASOURCE_URL

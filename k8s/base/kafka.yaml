@@ -32,7 +32,7 @@ spec:
         - name: KAFKA_LISTENERS
           value: "PLAINTEXT://0.0.0.0:9092"
         - name: KAFKA_ADVERTISED_LISTENERS
-          value: "PLAINTEXT://localhost:9092"
+          value: "PLAINTEXT://kafka:9092"
         - name: KAFKA_INTER_BROKER_LISTENER_NAME
           value: "PLAINTEXT"
         - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
@@ -69,17 +69,14 @@ spec:
             - kafka-broker-api-versions
             - --bootstrap-server
             - localhost:9092
-          initialDelaySeconds: 60
+          initialDelaySeconds: 90
           periodSeconds: 30
           timeoutSeconds: 10
         readinessProbe:
-          exec:
-            command:
-            - kafka-broker-api-versions
-            - --bootstrap-server
-            - localhost:9092
-          initialDelaySeconds: 30
-          periodSeconds: 10
+          tcpSocket:
+            port: 9092
+          initialDelaySeconds: 20
+          periodSeconds: 5
           timeoutSeconds: 5
       volumes:
       - name: kafka-data
