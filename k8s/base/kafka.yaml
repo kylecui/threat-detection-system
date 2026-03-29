@@ -19,7 +19,9 @@ spec:
         image: confluentinc/cp-kafka:7.4.0
         ports:
         - containerPort: 9092
-          name: kafka
+          name: client
+        - containerPort: 29092
+          name: internal
         - containerPort: 9101
           name: jmx
         env:
@@ -28,13 +30,13 @@ spec:
         - name: KAFKA_ZOOKEEPER_CONNECT
           value: "zookeeper:2181"
         - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
-          value: "PLAINTEXT:PLAINTEXT"
+          value: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
         - name: KAFKA_LISTENERS
-          value: "PLAINTEXT://0.0.0.0:9092"
+          value: "INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092"
         - name: KAFKA_ADVERTISED_LISTENERS
-          value: "PLAINTEXT://kafka:9092"
+          value: "INTERNAL://localhost:29092,EXTERNAL://kafka:9092"
         - name: KAFKA_INTER_BROKER_LISTENER_NAME
-          value: "PLAINTEXT"
+          value: "INTERNAL"
         - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
           value: "1"
         - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
