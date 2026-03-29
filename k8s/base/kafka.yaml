@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: kafka
-        image: confluentinc/cp-kafka:7.4.0
+        image: confluentinc/cp-kafka:7.5.0
         ports:
         - containerPort: 9092
           name: external
@@ -50,6 +50,8 @@ spec:
           value: "9101"
         - name: KAFKA_JMX_HOSTNAME
           value: "localhost"
+        - name: KAFKA_CONFLUENT_SUPPORT_METRICS_ENABLE
+          value: "false"
         resources:
           requests:
             memory: "1Gi"

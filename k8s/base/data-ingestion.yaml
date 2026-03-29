@@ -25,9 +25,15 @@ spec:
         - name: SPRING_DATASOURCE_URL
           value: "jdbc:postgresql://postgres:5432/threat_detection"
         - name: SPRING_DATASOURCE_USERNAME
-          value: "threat_user"
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_USER
         - name: SPRING_DATASOURCE_PASSWORD
-          value: "threat_password"
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
         - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
           value: "org.postgresql.Driver"
         - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
