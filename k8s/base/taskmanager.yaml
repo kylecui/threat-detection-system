@@ -102,7 +102,7 @@ spec:
         
         # Kafka配置
         - name: KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:9092"
+          value: "kafka:29092"
         
         # 并行度
         - name: PARALLELISM_DEFAULT

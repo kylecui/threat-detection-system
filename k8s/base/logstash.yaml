@@ -211,7 +211,7 @@ spec:
           protocol: TCP
         env:
         - name: KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:9092"
+          value: "kafka:29092"
         - name: LS_JAVA_OPTS
           value: "-Xmx512m -Xms512m"
         volumeMounts:

@@ -1,0 +1,93 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-schema-apply
+  namespace: threat-detection
+  labels:
+    app: postgres-schema-apply
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: schema-apply
+        image: postgres:15-alpine
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: PGHOST
+          value: "postgres"
+        - name: PGPORT
+          value: "5432"
+        - name: PGDATABASE
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_DB
+        - name: PGUSER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_USER
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== PostgreSQL Schema Apply Job ==="
+          echo "Waiting for PostgreSQL to be ready..."
+          for i in $(seq 1 60); do
+            if pg_isready -h postgres -U "$PGUSER" -d "$PGDATABASE" > /dev/null 2>&1; then
+              echo "PostgreSQL is ready after ${i}s"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "ERROR: PostgreSQL not ready after 60s"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          echo "Applying SQL schemas from /schemas/ ..."
+          ERRORS=0
+          for f in $(ls /schemas/*.sql 2>/dev/null | sort); do
+            echo "--- Running: $(basename $f) ---"
+            if psql -v ON_ERROR_STOP=0 -f "$f"; then
+              echo "    OK: $(basename $f)"
+            else
+              echo "    WARN: $(basename $f) had errors (non-fatal, may be pre-existing)"
+              ERRORS=$((ERRORS + 1))
+            fi
+          done
+
+          echo ""
+          echo "=== Schema apply complete. Files with warnings: $ERRORS ==="
+          echo "Verifying key tables exist..."
+          TABLES="customers device_customer_mapping attack_events threat_alerts threat_assessments alerts port_risk_configs ip_segment_weight_config threat_labels whitelist_config threat_intel_feeds discovered_hosts device_inventory topology_snapshots"
+          MISSING=0
+          for t in $TABLES; do
+            if psql -tAc "SELECT 1 FROM information_schema.tables WHERE table_name='$t'" | grep -q 1; then
+              echo "  ✓ $t"
+            else
+              echo "  ✗ $t MISSING"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+
+          if [ "$MISSING" -gt 0 ]; then
+            echo "WARNING: $MISSING table(s) still missing"
+            exit 1
+          fi
+          echo "All key tables verified. Schema apply successful."
+        volumeMounts:
+        - name: schemas
+          mountPath: /schemas
+      volumes:
+      - name: schemas
+        configMap:
+          name: postgres-init-scripts

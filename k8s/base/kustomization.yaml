@@ -26,6 +26,7 @@ resources:
   - threat-intelligence.yaml
   - ml-detection.yaml
   - api-gateway.yaml
+  - postgres-schema-apply.yaml
   # Multi-region resources (enable in region overlays):
   # - kafka-mirrormaker.yaml
   # - postgres-replication.yaml
