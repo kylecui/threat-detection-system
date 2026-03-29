@@ -1,7 +1,7 @@
 ############################
 # Build stage
 ############################
-FROM maven:3.9-eclipse-temurin-11 AS build
+FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /workspace
 
 COPY maven-settings.xml /root/.m2/settings.xml
@@ -29,7 +29,7 @@ RUN mvn clean package -pl services/stream-processing -am -DskipTests -B -q
 ############################
 # Runtime stage
 ############################
-FROM flink:1.17.1-scala_2.12-java11
+FROM flink:1.18.1-scala_2.12-java17
 
 WORKDIR /opt/flink
 
