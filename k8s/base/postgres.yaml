@@ -7,21 +7,39 @@ metadata:
 data:
   01-init-db.sql: |
     -- 数据库初始化脚本
+    -- customers schema must match Customer.java JPA entity (id BIGSERIAL PK, customer_id UNIQUE)
     CREATE TABLE IF NOT EXISTS customers (
-        customer_id VARCHAR(50) PRIMARY KEY,
-        company_name VARCHAR(200) NOT NULL,
-        contact_email VARCHAR(100) NOT NULL,
+        id BIGSERIAL PRIMARY KEY,
+        customer_id VARCHAR(100) NOT NULL UNIQUE,
+        name VARCHAR(200) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        phone VARCHAR(50),
+        address VARCHAR(500),
+        status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
         subscription_tier VARCHAR(20) NOT NULL DEFAULT 'BASIC',
         max_devices INTEGER NOT NULL DEFAULT 10,
-        is_active BOOLEAN NOT NULL DEFAULT true,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        current_devices INTEGER NOT NULL DEFAULT 0,
+        description VARCHAR(1000),
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_by VARCHAR(100) DEFAULT 'system',
+        updated_by VARCHAR(100) DEFAULT 'system',
+        subscription_start_date TIMESTAMP WITH TIME ZONE,
+        subscription_end_date TIMESTAMP WITH TIME ZONE,
+        alert_enabled BOOLEAN DEFAULT TRUE
     );
+
+    CREATE INDEX IF NOT EXISTS idx_customer_id ON customers(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_customer_email ON customers(email);
+    CREATE INDEX IF NOT EXISTS idx_customer_status ON customers(status);
+
+    GRANT SELECT, INSERT, UPDATE, DELETE ON customers TO threat_user;
+    GRANT USAGE, SELECT ON SEQUENCE customers_id_seq TO threat_user;
 
     CREATE TABLE IF NOT EXISTS device_customer_mapping (
         id SERIAL PRIMARY KEY,
         dev_serial VARCHAR(100) NOT NULL UNIQUE,
-        customer_id VARCHAR(50) NOT NULL,
+        customer_id VARCHAR(100) NOT NULL,
         device_name VARCHAR(200),
         is_active BOOLEAN NOT NULL DEFAULT true,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -29,8 +47,8 @@ data:
         FOREIGN KEY (customer_id) REFERENCES customers(customer_id) ON DELETE CASCADE
     );
 
-    CREATE INDEX idx_device_serial ON device_customer_mapping(dev_serial);
-    CREATE INDEX idx_customer_id ON device_customer_mapping(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_device_serial ON device_customer_mapping(dev_serial);
+    CREATE INDEX IF NOT EXISTS idx_device_customer_id ON device_customer_mapping(customer_id);
 
   02-attack-events-storage.sql: |
     -- ============================================================================
@@ -396,6 +414,58 @@ data:
     CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status);
     CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
 
+  06-ip-segment-weights.sql: |
+    -- IP Segment Weight Configuration Table
+    CREATE TABLE IF NOT EXISTS ip_segment_weight_config (
+        id SERIAL PRIMARY KEY,
+        segment_name VARCHAR(255) NOT NULL UNIQUE,
+        ip_range_start VARCHAR(15) NOT NULL,
+        ip_range_end VARCHAR(15) NOT NULL,
+        weight DECIMAL(3,2) NOT NULL DEFAULT 1.00,
+        category VARCHAR(50) NOT NULL,
+        description TEXT,
+        priority INTEGER DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_ip_seg_category ON ip_segment_weight_config(category);
+    CREATE INDEX IF NOT EXISTS idx_ip_seg_priority ON ip_segment_weight_config(priority);
+    CREATE INDEX IF NOT EXISTS idx_ip_seg_weight ON ip_segment_weight_config(weight);
+
+    INSERT INTO ip_segment_weight_config (segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+        ('Private-192.168.0.0/16', '192.168.0.0', '192.168.255.255', 0.80, 'PRIVATE', 'Internal private network', 10),
+        ('Private-10.0.0.0/8', '10.0.0.0', '10.255.255.255', 0.80, 'PRIVATE', 'Internal private network', 10),
+        ('Private-172.16.0.0/12', '172.16.0.0', '172.31.255.255', 0.80, 'PRIVATE', 'Internal private network', 10),
+        ('Loopback', '127.0.0.1', '127.255.255.255', 0.50, 'LOOPBACK', 'Loopback address', 5),
+        ('Link-Local', '169.254.0.0', '169.254.255.255', 0.60, 'LINK_LOCAL', 'Link-local address', 5),
+        ('Multicast', '224.0.0.0', '239.255.255.255', 0.40, 'MULTICAST', 'Multicast address', 5),
+        ('Reserved', '240.0.0.0', '255.255.255.255', 0.30, 'RESERVED', 'Reserved address', 5)
+    ON CONFLICT (segment_name) DO NOTHING;
+
+    INSERT INTO ip_segment_weight_config (segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+        ('Cloud-AWS-1', '54.0.0.0', '54.255.255.255', 1.20, 'CLOUD_AWS', 'AWS US region', 40),
+        ('Cloud-AWS-2', '52.0.0.0', '52.255.255.255', 1.20, 'CLOUD_AWS', 'AWS US region', 40),
+        ('Cloud-GCP-1', '35.184.0.0', '35.191.255.255', 1.15, 'CLOUD_GCP', 'Google Cloud Platform', 40),
+        ('Cloud-Azure-1', '13.64.0.0', '13.107.255.255', 1.15, 'CLOUD_AZURE', 'Microsoft Azure', 40)
+    ON CONFLICT (segment_name) DO NOTHING;
+
+    INSERT INTO ip_segment_weight_config (segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+        ('Russia-Moscow', '5.3.0.0', '5.3.255.255', 1.80, 'HIGH_RISK_REGION', 'Russia Moscow region', 80),
+        ('China-Beijing', '1.0.0.0', '1.9.255.255', 1.70, 'HIGH_RISK_REGION', 'China Beijing region', 75),
+        ('Iran-Tehran', '5.54.0.0', '5.59.255.255', 1.85, 'HIGH_RISK_REGION', 'Iran Tehran region', 85),
+        ('North-Korea', '175.45.176.0', '175.45.179.255', 1.95, 'HIGH_RISK_REGION', 'North Korea', 95)
+    ON CONFLICT (segment_name) DO NOTHING;
+
+    INSERT INTO ip_segment_weight_config (segment_name, ip_range_start, ip_range_end, weight, category, description, priority) VALUES
+        ('Malicious-Botnet-1', '45.142.120.0', '45.142.123.255', 2.00, 'MALICIOUS', 'Known botnet C2 servers', 100),
+        ('Malicious-Botnet-2', '103.145.45.0', '103.145.45.255', 2.00, 'MALICIOUS', 'Known botnet C2 servers', 100),
+        ('Malicious-Ransomware-1', '185.220.100.0', '185.220.100.255', 1.95, 'MALICIOUS', 'Ransomware distribution network', 98),
+        ('Malicious-Phishing-1', '62.4.6.0', '62.4.6.255', 1.90, 'MALICIOUS', 'Phishing infrastructure', 95)
+    ON CONFLICT (segment_name) DO NOTHING;
+
+    CREATE INDEX IF NOT EXISTS idx_ip_seg_range ON ip_segment_weight_config(ip_range_start, ip_range_end);
+
   06-notification-config-tables.sql: |
     CREATE TABLE IF NOT EXISTS smtp_configs (
         id BIGSERIAL PRIMARY KEY,
@@ -567,6 +637,79 @@ data:
         ('WEB_CSRF_ATTACK', 'Cross-Site Request Forgery', 'WEB', 'MEDIUM', 'CSRF attack'),
         ('WEB_LOGIC_BYPASS', 'Application Logic Bypass', 'WEB', 'MEDIUM', 'Business logic bypass'),
         ('WEB_PATH_TRAVERSAL', 'Path Traversal', 'WEB', 'HIGH', 'Directory traversal attack');
+
+  09-add-missing-fields.sql: |
+    -- 添加缺失的字段到 threat_assessments 表 (安全版本)
+    DO $fn$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'threat_assessments') THEN
+            RAISE EXCEPTION 'Table threat_assessments does not exist.';
+        END IF;
+    END $fn$;
+
+    DO $fn$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'threat_assessments' AND column_name = 'attack_ip') THEN
+            ALTER TABLE threat_assessments ADD COLUMN attack_ip VARCHAR(45);
+        END IF;
+    END $fn$;
+
+    DO $fn$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'threat_assessments' AND column_name = 'time_weight') THEN
+            ALTER TABLE threat_assessments ADD COLUMN time_weight DECIMAL(5,2);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'threat_assessments' AND column_name = 'ip_weight') THEN
+            ALTER TABLE threat_assessments ADD COLUMN ip_weight DECIMAL(5,2);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'threat_assessments' AND column_name = 'port_weight') THEN
+            ALTER TABLE threat_assessments ADD COLUMN port_weight DECIMAL(5,2);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'threat_assessments' AND column_name = 'device_weight') THEN
+            ALTER TABLE threat_assessments ADD COLUMN device_weight DECIMAL(5,2);
+        END IF;
+    END $fn$;
+
+    DO $fn$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'threat_assessments' AND column_name = 'mitigation_recommendations') THEN
+            ALTER TABLE threat_assessments ADD COLUMN mitigation_recommendations TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'threat_assessments' AND column_name = 'mitigation_status') THEN
+            ALTER TABLE threat_assessments ADD COLUMN mitigation_status VARCHAR(50);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'threat_assessments' AND column_name = 'updated_at') THEN
+            ALTER TABLE threat_assessments ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE;
+        END IF;
+    END $fn$;
+
+    DO $fn$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_threat_assessments_attack_ip') THEN
+            CREATE INDEX idx_threat_assessments_attack_ip ON threat_assessments(attack_ip);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_threat_assessments_mitigation_status') THEN
+            CREATE INDEX idx_threat_assessments_mitigation_status ON threat_assessments(mitigation_status);
+        END IF;
+    END $fn$;
+
+    DO $fn$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.check_constraints
+                       WHERE constraint_name = 'chk_mitigation_status') THEN
+            ALTER TABLE threat_assessments
+            ADD CONSTRAINT chk_mitigation_status
+            CHECK (mitigation_status IN ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED'));
+        END IF;
+    END $fn$;
 
   12-ip-segment-weights-v4.sql: |
     -- IP网段权重配置表 V4.0 - 双维度权重设计
@@ -908,6 +1051,52 @@ data:
     END;
     $fn$ LANGUAGE plpgsql;
 
+  16-temporal-device-mapping.sql: |
+    -- Add temporal fields to device_customer_mapping for device circulation
+    DO $fn$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'device_customer_mapping' AND column_name = 'bind_time') THEN
+            ALTER TABLE device_customer_mapping
+            ADD COLUMN bind_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'device_customer_mapping' AND column_name = 'unbind_time') THEN
+            ALTER TABLE device_customer_mapping
+            ADD COLUMN unbind_time TIMESTAMP WITH TIME ZONE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'device_customer_mapping' AND column_name = 'bind_reason') THEN
+            ALTER TABLE device_customer_mapping
+            ADD COLUMN bind_reason TEXT;
+        END IF;
+    END $fn$;
+
+    DO $fn$
+    BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.table_constraints
+                   WHERE table_name = 'device_customer_mapping'
+                   AND constraint_name = 'device_customer_mapping_dev_serial_key') THEN
+            ALTER TABLE device_customer_mapping
+            DROP CONSTRAINT device_customer_mapping_dev_serial_key;
+        END IF;
+    END $fn$;
+
+    DO $fn$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_device_customer_mapping_bind_time') THEN
+            CREATE INDEX idx_device_customer_mapping_bind_time ON device_customer_mapping(bind_time);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_device_customer_mapping_unbind_time') THEN
+            CREATE INDEX idx_device_customer_mapping_unbind_time ON device_customer_mapping(unbind_time);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_device_customer_mapping_temporal_range') THEN
+            CREATE INDEX idx_device_customer_mapping_temporal_range ON device_customer_mapping(dev_serial, bind_time, unbind_time);
+        END IF;
+    END $fn$;
+
+    UPDATE device_customer_mapping SET bind_time = created_at WHERE bind_time IS NULL AND created_at IS NOT NULL;
+
   17-customer-time-weights.sql: |
     CREATE TABLE IF NOT EXISTS customer_time_weights (
         id SERIAL PRIMARY KEY,
@@ -947,6 +1136,19 @@ data:
     CREATE TRIGGER update_customer_time_weights_timestamp_trigger BEFORE UPDATE ON customer_time_weights
     FOR EACH ROW EXECUTE FUNCTION update_customer_time_weights_timestamp();
 
+  17-customers-init.sql: |
+    -- Customer seed data (table already created by 01-init-db.sql)
+    INSERT INTO customers (customer_id, name, email, phone, address, status, subscription_tier, max_devices, description)
+    VALUES
+    ('customer_a', 'Acme Corporation', 'admin@acme.com', '+1-555-0001', '123 Main St, New York, NY', 'ACTIVE', 'PROFESSIONAL', 100, 'Enterprise customer - IT Security Division'),
+    ('customer_b', 'Beta Industries', 'contact@beta.com', '+1-555-0002', '456 Oak Ave, San Francisco, CA', 'ACTIVE', 'BASIC', 20, 'SMB customer - Manufacturing'),
+    ('customer_c', 'Gamma Tech', 'info@gamma.tech', '+1-555-0003', '789 Pine Rd, Austin, TX', 'ACTIVE', 'ENTERPRISE', 10000, 'Large enterprise - Tech company'),
+    ('customer_d', 'Delta Solutions', 'support@delta.com', '+1-555-0004', '321 Elm St, Seattle, WA', 'SUSPENDED', 'BASIC', 20, 'Customer suspended for payment issues'),
+    ('customer_test', 'Test Customer', 'test@example.com', '+1-555-9999', 'Test Address', 'ACTIVE', 'FREE', 5, 'Test customer for development')
+    ON CONFLICT (customer_id) DO NOTHING;
+
+    COMMENT ON TABLE customers IS '客户/租户信息表';
+
   18-net-segment-weights.sql: |
     CREATE TABLE IF NOT EXISTS net_segment_weights (
         id          BIGSERIAL       PRIMARY KEY,
@@ -974,6 +1176,67 @@ data:
         ('__template__', '172.16.10.0/24',    2.0, 'Domain controller subnet'),
         ('__template__', '172.16.20.0/24',    1.8, 'Financial systems subnet')
     ON CONFLICT (customer_id, cidr) DO NOTHING;
+
+  19-device-inventory.sql: |
+    -- V2 sentinel device registry
+    CREATE TABLE IF NOT EXISTS device_inventory (
+        device_id         VARCHAR(64)   PRIMARY KEY,
+        customer_id       VARCHAR(64)   NOT NULL,
+        firmware_version  VARCHAR(32),
+        uptime            BIGINT,
+        last_seen         TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        created_at        TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at        TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_device_inventory_customer_id
+        ON device_inventory(customer_id);
+
+    GRANT SELECT, INSERT, UPDATE, DELETE ON device_inventory TO threat_user;
+
+  20-topology-snapshots.sql: |
+    -- Time-series network topology snapshots
+    CREATE TABLE IF NOT EXISTS topology_snapshots (
+        snapshot_id          BIGSERIAL    PRIMARY KEY,
+        device_id            VARCHAR(64)  NOT NULL REFERENCES device_inventory(device_id),
+        customer_id          VARCHAR(64)  NOT NULL,
+        snapshot_time        TIMESTAMP WITH TIME ZONE NOT NULL,
+        total_ips_monitored  INTEGER      NOT NULL,
+        active_decoy_count   INTEGER      NOT NULL,
+        network_interfaces   JSONB        NOT NULL,
+        raw_topology         JSONB        NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_topology_snapshots_device_time
+        ON topology_snapshots(device_id, snapshot_time DESC);
+    CREATE INDEX IF NOT EXISTS idx_topology_snapshots_customer_time
+        ON topology_snapshots(customer_id, snapshot_time DESC);
+
+    GRANT SELECT, INSERT, UPDATE, DELETE ON topology_snapshots TO threat_user;
+    GRANT USAGE, SELECT ON SEQUENCE topology_snapshots_snapshot_id_seq TO threat_user;
+
+  21-discovered-hosts.sql: |
+    -- Hosts discovered by V2 sentinels
+    CREATE TABLE IF NOT EXISTS discovered_hosts (
+        host_id     BIGSERIAL         PRIMARY KEY,
+        device_id   VARCHAR(64)       NOT NULL REFERENCES device_inventory(device_id),
+        customer_id VARCHAR(64)       NOT NULL,
+        mac_address MACADDR           NOT NULL,
+        ip_address  INET              NOT NULL,
+        vlan_id     INTEGER           DEFAULT 0,
+        is_decoy    BOOLEAN           DEFAULT FALSE,
+        first_seen  TIMESTAMP WITH TIME ZONE NOT NULL,
+        last_seen   TIMESTAMP WITH TIME ZONE NOT NULL,
+        UNIQUE (device_id, mac_address)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_discovered_hosts_customer_id
+        ON discovered_hosts(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_discovered_hosts_customer_decoy
+        ON discovered_hosts(customer_id, is_decoy);
+
+    GRANT SELECT, INSERT, UPDATE, DELETE ON discovered_hosts TO threat_user;
+    GRANT USAGE, SELECT ON SEQUENCE discovered_hosts_host_id_seq TO threat_user;
 
   22-threat-indicators.sql: |
     CREATE TABLE IF NOT EXISTS threat_indicators (
@@ -1031,6 +1294,23 @@ data:
     INSERT INTO threat_intel_feeds (feed_name, feed_type, enabled, poll_interval_hours, source_weight)
     VALUES ('internal', 'INTERNAL', true, 0, 0.95)
     ON CONFLICT (feed_name) DO NOTHING;
+
+  24-threat-intel-feed-seeds.sql: |
+    -- Seed external threat intelligence feed configurations
+    INSERT INTO threat_intel_feeds (feed_name, feed_url, feed_type, enabled, poll_interval_hours, api_key_env_var, source_weight)
+    VALUES
+        ('abuseipdb', 'https://api.abuseipdb.com/api/v2/blacklist', 'REST_API', false, 6, 'ABUSEIPDB_API_KEY', 0.85),
+        ('alienvault_otx', 'https://otx.alienvault.com/api/v1/indicators/export', 'REST_API', false, 4, 'OTX_API_KEY', 0.75),
+        ('virustotal', 'https://www.virustotal.com/api/v3/ip_addresses', 'REST_API', false, 12, 'VIRUSTOTAL_API_KEY', 0.80),
+        ('greynoise', 'https://api.greynoise.io/v3/community', 'REST_API', false, 8, 'GREYNOISE_API_KEY', 0.70)
+    ON CONFLICT (feed_name) DO NOTHING;
+
+  25-threat-indicators-phase2-upgrade.sql: |
+    -- Phase 2 schema upgrade: INET type for IP containment queries
+    ALTER TABLE threat_indicators ALTER COLUMN ioc_inet TYPE INET USING ioc_inet::INET;
+
+    CREATE INDEX IF NOT EXISTS idx_indicator_inet_gist ON threat_indicators USING GIST (ioc_inet inet_ops)
+        WHERE ioc_inet IS NOT NULL;
 
   26-ml-detection-tables.sql: |
     CREATE TABLE IF NOT EXISTS ml_predictions (
