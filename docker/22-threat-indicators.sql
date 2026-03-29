@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS threat_indicators (
     indicator_type      VARCHAR(50) DEFAULT 'malicious-activity',
     pattern             TEXT,
     pattern_type        VARCHAR(20) DEFAULT 'stix',
-    confidence          SMALLINT DEFAULT 50 CHECK (confidence BETWEEN 0 AND 100),
+    confidence          INTEGER DEFAULT 50 CHECK (confidence BETWEEN 0 AND 100),
     valid_from          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     valid_until         TIMESTAMPTZ,
     

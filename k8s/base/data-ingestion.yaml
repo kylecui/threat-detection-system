@@ -21,11 +21,25 @@ spec:
         - containerPort: 8080
         env:
         - name: SPRING_PROFILES_ACTIVE
-          value: "k8s"
+          value: "docker"
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres:5432/threat_detection"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "threat_user"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "threat_password"
+        - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+          value: "org.postgresql.Driver"
         - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
           value: "kafka:29092"
-        - name: KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:29092"
+        - name: SPRING_DATA_REDIS_HOST
+          value: "redis"
+        - name: SPRING_DATA_REDIS_PORT
+          value: "6379"
+        - name: MQTT_BROKER_URL
+          value: "tcp://emqx:1883"
+        - name: MQTT_ENABLED
+          value: "true"
         resources:
           requests:
             memory: "256Mi"
