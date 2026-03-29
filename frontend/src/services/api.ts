@@ -11,7 +11,8 @@ function getRegionBaseURL(): string {
 
   // 'auto' 或空 apiBase → 回退到环境变量或默认值
   if (!regionConfig || !regionConfig.apiBase) {
-    return import.meta.env.VITE_API_BASE_URL || '/api';
+    const envBase = import.meta.env.VITE_API_BASE_URL;
+    return envBase !== undefined && envBase !== null ? envBase : '/api';
   }
   return regionConfig.apiBase;
 }
