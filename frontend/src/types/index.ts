@@ -468,6 +468,25 @@ export interface ChartDataPoint {
 }
 
 // ============================================================
+// 系统配置 (System Config) — TIRE / LLM / 通用
+// ============================================================
+
+/** 系统配置项 */
+export interface SystemConfig {
+  id: number;
+  key: string;
+  value: string;
+  category: string;
+  description: string;
+  isSecret: boolean;
+  hasValue: boolean;
+  updatedAt: string;
+}
+
+/** 系统配置分类 */
+export type SystemConfigCategory = 'tire_api_keys' | 'llm' | 'tire_general';
+
+// ============================================================
 // SMTP配置 (Alert Management)
 // ============================================================
 

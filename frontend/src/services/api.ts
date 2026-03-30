@@ -48,9 +48,9 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // Skip customer_id injection for auth endpoints
+    // Skip customer_id injection for auth and system-config endpoints
     const url = config.url || '';
-    if (!url.includes('/api/v1/auth/')) {
+    if (!url.includes('/api/v1/auth/') && !url.includes('/api/v1/system-config')) {
       const customerId = localStorage.getItem('customer_id') || 'demo-customer';
       if (config.params) {
         config.params.customer_id = customerId;
