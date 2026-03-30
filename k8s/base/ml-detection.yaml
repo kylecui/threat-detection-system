@@ -74,7 +74,7 @@ spec:
         - name: KAFKA_BOOTSTRAP_SERVERS
           value: "kafka:29092"
         - name: KAFKA_CONSUMER_GROUP
-          value: "ml-detection-group-v2"
+          value: "ml-detection-group-v3"
         - name: KAFKA_INPUT_TOPIC
           value: "threat-alerts"
         - name: KAFKA_OUTPUT_TOPIC

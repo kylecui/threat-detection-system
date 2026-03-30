@@ -23,6 +23,7 @@ from app.models.schemas import (
     ShadowComparisonStats,
 )
 from app.monitoring.drift import DriftMonitor
+from app.persistence.db_writer import MlPredictionWriter
 from app.serving.engine import InferenceEngine, get_engine
 from app.serving.scorer import anomaly_type, reconstruction_to_anomaly_score, score_to_weight
 
@@ -39,6 +40,7 @@ class AppState:
         self.consumer: MlDetectionConsumer | None = None
         self.sequence_buffer: SequenceBuffer | None = None
         self.drift_monitor: DriftMonitor | None = None
+        self.db_writer: MlPredictionWriter | None = None
         self._watch_task: Optional[asyncio.Task[None]] = None
 
 
@@ -77,6 +79,9 @@ async def lifespan(_: FastAPI):
     if settings.shadow_scoring_enabled and state.engine:
         state.engine.load_challenger(settings.challenger_model_dir)
 
+    state.db_writer = MlPredictionWriter(settings.database_url)
+    state.db_writer.start()
+
     state.consumer = MlDetectionConsumer(
         bootstrap_servers=settings.kafka_bootstrap_servers,
         topic=settings.kafka_input_topic,
@@ -91,6 +96,7 @@ async def lifespan(_: FastAPI):
         bigru_ensemble_alpha=settings.bigru_ensemble_alpha,
         drift_monitor=state.drift_monitor,
         shadow_scoring_enabled=settings.shadow_scoring_enabled,
+        db_writer=state.db_writer,
     )
     await state.consumer.start()
 
@@ -110,6 +116,8 @@ async def lifespan(_: FastAPI):
             await state.consumer.stop()
         if state.producer:
             await state.producer.stop()
+        if state.db_writer:
+            state.db_writer.stop()
 
 
 async def _model_watch_loop() -> None:

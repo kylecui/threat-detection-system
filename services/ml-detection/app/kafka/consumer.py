@@ -16,6 +16,7 @@ from app.features.extractor import FeatureExtractor
 from app.features.sequence_builder import SequenceBuffer
 from app.models.schemas import AggregatedAttackData, MlDetectionResult
 from app.monitoring.drift import DriftMonitor
+from app.persistence.db_writer import MlPredictionWriter
 from app.serving.engine import InferenceEngine
 from app.serving.ensemble import ensemble_anomaly_score
 from app.serving.scorer import anomaly_type, reconstruction_to_anomaly_score, score_to_weight
@@ -107,6 +108,7 @@ class MlDetectionConsumer:
         bigru_ensemble_alpha: float = 0.6,
         drift_monitor: Optional[DriftMonitor] = None,
         shadow_scoring_enabled: bool = False,
+        db_writer: Optional[MlPredictionWriter] = None,
     ) -> None:
         self.topic = topic
         self.producer = producer
@@ -119,6 +121,7 @@ class MlDetectionConsumer:
         self.bigru_ensemble_alpha = bigru_ensemble_alpha
         self.drift_monitor = drift_monitor
         self.shadow_scoring_enabled = shadow_scoring_enabled
+        self.db_writer = db_writer
         self.shadow_stats = ShadowStats()
         self._last_eviction = time.monotonic()
         self._last_drift_check = time.monotonic()
@@ -150,8 +153,15 @@ class MlDetectionConsumer:
             self._started = False
 
     async def _consume_loop(self) -> None:
+        msg_count = 0
         async for message in self._consumer:
             payload = message.value
+            msg_count += 1
+            if msg_count <= 5 or msg_count % 100 == 0:
+                logger.info(
+                    "Consumed message #%d from %s (offset=%d)",
+                    msg_count, message.topic, message.offset,
+                )
             await self.process_message(payload)
 
     async def process_message(self, payload: dict[str, object]) -> None:
@@ -183,6 +193,8 @@ class MlDetectionConsumer:
             )
 
         await self.producer.publish(result)
+        if self.db_writer is not None:
+            await self.db_writer.write(result)
         self._maybe_evict()
         self._maybe_check_drift()
 
