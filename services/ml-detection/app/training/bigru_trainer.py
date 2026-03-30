@@ -291,12 +291,13 @@ def export_bigru_onnx(
         input_names=["features", "mask"],
         output_names=["prediction", "attention_weights"],
         dynamic_axes={
-            "features": {0: "batch", 1: "seq_len"},
-            "mask": {0: "batch", 1: "seq_len"},
+            "features": {0: "batch"},
+            "mask": {0: "batch"},
             "prediction": {0: "batch"},
-            "attention_weights": {0: "batch", 1: "seq_len"},
+            "attention_weights": {0: "batch"},
         },
         opset_version=17,
+        dynamo=False,
     )
 
     if optimal_alpha is not None:
