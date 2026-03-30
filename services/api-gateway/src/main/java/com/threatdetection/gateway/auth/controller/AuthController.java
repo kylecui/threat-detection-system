@@ -3,8 +3,10 @@ package com.threatdetection.gateway.auth.controller;
 import com.threatdetection.gateway.auth.dto.LoginRequest;
 import com.threatdetection.gateway.auth.dto.LoginResponse;
 import com.threatdetection.gateway.auth.service.AuthService;
+import com.threatdetection.gateway.auth.service.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -30,6 +32,7 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final JwtTokenProvider jwtTokenProvider;
 
     @PostMapping("/login")
     public Mono<ResponseEntity<LoginResponse>> login(@RequestBody LoginRequest request) {
@@ -59,11 +62,15 @@ public class AuthController {
 
     @GetMapping("/me")
     public Mono<ResponseEntity<LoginResponse.UserInfo>> me(ServerWebExchange exchange) {
-        // Username is injected by JwtAuthenticationFilter into header
-        String username = exchange.getRequest().getHeaders().getFirst("X-Auth-Username");
-        if (username == null || username.isBlank()) {
+        String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
         }
+        String token = authHeader.substring(7);
+        if (!jwtTokenProvider.validateToken(token)) {
+            return Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+        }
+        String username = jwtTokenProvider.getUsernameFromToken(token);
         return authService.getUserInfo(username)
                 .map(ResponseEntity::ok)
                 .onErrorResume(e -> {

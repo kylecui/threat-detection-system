@@ -44,9 +44,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private final JwtTokenProvider jwtTokenProvider;
 
-    /** Paths that do NOT require a valid JWT. */
+    private static final Set<String> PUBLIC_PATHS = Set.of(
+            "/api/v1/auth/login",
+            "/api/v1/auth/refresh"
+    );
+
     private static final Set<String> PUBLIC_PREFIXES = Set.of(
-            "/api/v1/auth/",
             "/health",
             "/actuator"
     );
@@ -95,6 +98,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     }
 
     private boolean isPublicPath(String path) {
+        if (PUBLIC_PATHS.contains(path)) {
+            return true;
+        }
         for (String prefix : PUBLIC_PREFIXES) {
             if (path.startsWith(prefix)) {
                 return true;

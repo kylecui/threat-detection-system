@@ -44,9 +44,9 @@ INSERT INTO auth_roles (name, description) VALUES
 ON CONFLICT (name) DO NOTHING;
 
 -- Seed super-admin user (password: admin123 — bcrypt hash)
--- $2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy = admin123
+-- $2a$10$FBnTBCfCguv9TKTt4xoHi.KFNXmxNl1mJ7k0qIi7o0gYcVWIzDNB2 = admin123
 INSERT INTO auth_users (username, password_hash, display_name, email, customer_id, enabled)
-VALUES ('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'System Administrator', 'admin@threat-detection.local', NULL, TRUE)
+VALUES ('admin', '$2a$10$FBnTBCfCguv9TKTt4xoHi.KFNXmxNl1mJ7k0qIi7o0gYcVWIzDNB2', 'System Administrator', 'admin@threat-detection.local', NULL, TRUE)
 ON CONFLICT (username) DO NOTHING;
 
 -- Assign SUPER_ADMIN role to admin user
@@ -57,7 +57,7 @@ ON CONFLICT DO NOTHING;
 
 -- Seed a demo tenant-admin user for demo-customer
 INSERT INTO auth_users (username, password_hash, display_name, email, customer_id, enabled)
-VALUES ('demo_admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'Demo Tenant Admin', 'demo@threat-detection.local', 'demo-customer', TRUE)
+VALUES ('demo_admin', '$2a$10$FBnTBCfCguv9TKTt4xoHi.KFNXmxNl1mJ7k0qIi7o0gYcVWIzDNB2', 'Demo Tenant Admin', 'demo@threat-detection.local', 'demo-customer', TRUE)
 ON CONFLICT (username) DO NOTHING;
 
 INSERT INTO auth_user_roles (user_id, role_id)
