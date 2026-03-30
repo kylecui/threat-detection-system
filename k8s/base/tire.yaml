@@ -63,7 +63,7 @@ spec:
               value: "24"
           volumeMounts:
             - name: tire-cache
-              mountPath: /app/cache
+              mountPath: /app/cache_data
             - name: tire-data
               mountPath: /app/data
           resources:
