@@ -4,7 +4,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.threatdetection.ingestion.model.AttackEvent;
+import com.threatdetection.ingestion.model.AuditEvent;
+import com.threatdetection.ingestion.model.BgTrafficEvent;
 import com.threatdetection.ingestion.model.HeartbeatEvent;
+import com.threatdetection.ingestion.model.PolicyEvent;
+import com.threatdetection.ingestion.model.SnifferEvent;
+import com.threatdetection.ingestion.model.ThreatDetectionEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -16,13 +21,11 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 @Service
 public class V2EventParserService {
 
     private static final Logger logger = LoggerFactory.getLogger(V2EventParserService.class);
-    private static final Set<String> DEFERRED_TYPES = Set.of("sniffer", "threat", "bg", "audit", "policy");
 
     private final ObjectMapper objectMapper;
     private final DevSerialToCustomerMappingService mappingService;
@@ -58,11 +61,17 @@ public class V2EventParserService {
                     return parseAttackEvent(deviceId, ts, payload, data);
                 case "heartbeat":
                     return parseHeartbeatEvent(deviceId, ts, data);
+                case "sniffer":
+                    return parseSnifferEvent(deviceId, ts, payload, data);
+                case "threat":
+                    return parseThreatEvent(deviceId, ts, payload, data);
+                case "policy":
+                    return parsePolicyEvent(deviceId, ts, payload, data);
+                case "bg":
+                    return parseBgEvent(deviceId, ts, payload, data);
+                case "audit":
+                    return parseAuditEvent(deviceId, ts, payload, data);
                 default:
-                    if (DEFERRED_TYPES.contains(type)) {
-                        logger.info("Deferred V2 event type received: device_id={}, type={}", deviceId, type);
-                        return Optional.empty();
-                    }
                     logger.warn("Unknown V2 event type received: device_id={}, type={}", deviceId, type);
                     return Optional.empty();
             }
@@ -133,6 +142,140 @@ public class V2EventParserService {
         heartbeatEvent.setRawTopologyJson(extractRawTopologyJson(data));
         heartbeatEvent.setDevices(parseDiscoveredHosts(data));
         return Optional.of(heartbeatEvent);
+    }
+
+    private Optional<Object> parseSnifferEvent(String deviceId, String ts, String rawPayload, JsonNode data) {
+        String suspectMac = getRequiredText(data, "suspect_mac");
+        String suspectIp = getRequiredText(data, "suspect_ip");
+        String probeIp = getRequiredText(data, "probe_ip");
+        String interfaceName = getOptionalText(data, "interface");
+        Integer ifindex = getRequiredInt(data, "ifindex");
+        Integer responseCount = getRequiredInt(data, "response_count");
+        String firstSeen = getOptionalText(data, "first_seen");
+        String lastSeen = getOptionalText(data, "last_seen");
+        LocalDateTime timestamp = parseLocalDateTime(ts);
+
+        if (suspectMac == null || suspectIp == null || probeIp == null
+                || ifindex == null || responseCount == null || timestamp == null) {
+            logger.warn("V2 sniffer event missing required fields: device_id={}", deviceId);
+            return Optional.empty();
+        }
+
+        String customerId = mappingService.resolveCustomerId(deviceId);
+        SnifferEvent event = new SnifferEvent(deviceId, customerId, timestamp,
+                suspectMac, suspectIp, probeIp, interfaceName,
+                ifindex, responseCount, firstSeen, lastSeen, rawPayload);
+        return Optional.of(event);
+    }
+
+    private Optional<Object> parseThreatEvent(String deviceId, String ts, String rawPayload, JsonNode data) {
+        Integer patternId = getRequiredInt(data, "pattern_id");
+        Integer threatLevel = getRequiredInt(data, "threat_level");
+        String actionTaken = getRequiredText(data, "action_taken");
+        String description = getOptionalText(data, "description");
+        String srcIp = getRequiredText(data, "src_ip");
+        String dstIp = getRequiredText(data, "dst_ip");
+        Integer dstPort = getRequiredInt(data, "dst_port");
+        String protocol = getOptionalText(data, "protocol");
+        String interfaceName = getOptionalText(data, "interface");
+        Integer ifindex = getRequiredInt(data, "ifindex");
+        Integer vlanId = getRequiredInt(data, "vlan_id");
+        LocalDateTime timestamp = parseLocalDateTime(ts);
+
+        if (patternId == null || threatLevel == null || actionTaken == null
+                || srcIp == null || dstIp == null || dstPort == null
+                || ifindex == null || vlanId == null || timestamp == null) {
+            logger.warn("V2 threat event missing required fields: device_id={}", deviceId);
+            return Optional.empty();
+        }
+
+        String customerId = mappingService.resolveCustomerId(deviceId);
+        ThreatDetectionEvent event = new ThreatDetectionEvent(deviceId, customerId, timestamp,
+                patternId, threatLevel, actionTaken, description,
+                srcIp, dstIp, dstPort, protocol != null ? protocol : "unknown",
+                interfaceName, ifindex, vlanId, rawPayload);
+        return Optional.of(event);
+    }
+
+    private Optional<Object> parsePolicyEvent(String deviceId, String ts, String rawPayload, JsonNode data) {
+        Integer policyId = getRequiredInt(data, "policy_id");
+        String action = getRequiredText(data, "action");
+        String srcIp = getRequiredText(data, "src_ip");
+        String dstIp = getRequiredText(data, "dst_ip");
+        Integer srcPort = getRequiredInt(data, "src_port");
+        Integer dstPort = getRequiredInt(data, "dst_port");
+        String protocol = getOptionalText(data, "protocol");
+        String redirectTo = getOptionalText(data, "redirect_to");
+        String mirrorTo = getOptionalText(data, "mirror_to");
+        String trigger = getRequiredText(data, "trigger");
+        String reason = getOptionalText(data, "reason");
+        LocalDateTime timestamp = parseLocalDateTime(ts);
+
+        if (policyId == null || action == null || srcIp == null || dstIp == null
+                || srcPort == null || dstPort == null || trigger == null || timestamp == null) {
+            logger.warn("V2 policy event missing required fields: device_id={}", deviceId);
+            return Optional.empty();
+        }
+
+        String customerId = mappingService.resolveCustomerId(deviceId);
+        PolicyEvent event = new PolicyEvent(deviceId, customerId, timestamp,
+                policyId, action, srcIp, dstIp, srcPort, dstPort,
+                protocol != null ? protocol : "unknown",
+                redirectTo, mirrorTo, trigger, reason, rawPayload);
+        return Optional.of(event);
+    }
+
+    private Optional<Object> parseBgEvent(String deviceId, String ts, String rawPayload, JsonNode data) {
+        String periodStart = getRequiredText(data, "period_start");
+        String periodEnd = getRequiredText(data, "period_end");
+        JsonNode protocolsNode = data.get("protocols");
+        LocalDateTime timestamp = parseLocalDateTime(ts);
+
+        if (periodStart == null || periodEnd == null || protocolsNode == null || timestamp == null) {
+            logger.warn("V2 bg event missing required fields: device_id={}", deviceId);
+            return Optional.empty();
+        }
+
+        String protocolsJson;
+        try {
+            protocolsJson = objectMapper.writeValueAsString(protocolsNode);
+        } catch (JsonProcessingException e) {
+            logger.warn("Failed to serialize bg protocols, device_id={}", deviceId);
+            protocolsJson = "{}";
+        }
+
+        String customerId = mappingService.resolveCustomerId(deviceId);
+        BgTrafficEvent event = new BgTrafficEvent(deviceId, customerId, timestamp,
+                periodStart, periodEnd, protocolsJson, rawPayload);
+        return Optional.of(event);
+    }
+
+    private Optional<Object> parseAuditEvent(String deviceId, String ts, String rawPayload, JsonNode data) {
+        String action = getRequiredText(data, "action");
+        String actor = getRequiredText(data, "actor");
+        String target = getRequiredText(data, "target");
+        String result = getRequiredText(data, "result");
+        JsonNode detailsNode = data.get("details");
+        LocalDateTime timestamp = parseLocalDateTime(ts);
+
+        if (action == null || actor == null || target == null || result == null || timestamp == null) {
+            logger.warn("V2 audit event missing required fields: device_id={}", deviceId);
+            return Optional.empty();
+        }
+
+        String detailsJson = null;
+        if (detailsNode != null && !detailsNode.isNull()) {
+            try {
+                detailsJson = objectMapper.writeValueAsString(detailsNode);
+            } catch (JsonProcessingException e) {
+                logger.warn("Failed to serialize audit details, device_id={}", deviceId);
+            }
+        }
+
+        String customerId = mappingService.resolveCustomerId(deviceId);
+        AuditEvent event = new AuditEvent(deviceId, customerId, timestamp,
+                action, actor, target, result, detailsJson, rawPayload);
+        return Optional.of(event);
     }
 
     private String getOptionalText(JsonNode node, String fieldName) {

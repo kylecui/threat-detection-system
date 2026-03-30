@@ -5,7 +5,12 @@ import com.hivemq.client.mqtt.datatypes.MqttQos;
 import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient;
 import com.threatdetection.ingestion.config.MqttProperties;
 import com.threatdetection.ingestion.model.AttackEvent;
+import com.threatdetection.ingestion.model.AuditEvent;
+import com.threatdetection.ingestion.model.BgTrafficEvent;
 import com.threatdetection.ingestion.model.HeartbeatEvent;
+import com.threatdetection.ingestion.model.PolicyEvent;
+import com.threatdetection.ingestion.model.SnifferEvent;
+import com.threatdetection.ingestion.model.ThreatDetectionEvent;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -155,6 +160,16 @@ public class MqttListenerService {
                             } catch (Exception e) {
                                 logger.error("Failed to persist heartbeat: deviceId={}", heartbeatEvent.getDeviceId(), e);
                             }
+                        } else if (event instanceof SnifferEvent snifferEvent) {
+                            kafkaProducerService.sendSnifferEvent(snifferEvent);
+                        } else if (event instanceof ThreatDetectionEvent threatDetectionEvent) {
+                            kafkaProducerService.sendThreatDetectionEvent(threatDetectionEvent);
+                        } else if (event instanceof PolicyEvent policyEvent) {
+                            kafkaProducerService.sendPolicyEvent(policyEvent);
+                        } else if (event instanceof BgTrafficEvent bgTrafficEvent) {
+                            kafkaProducerService.sendBgTrafficEvent(bgTrafficEvent);
+                        } else if (event instanceof AuditEvent auditEvent) {
+                            kafkaProducerService.sendAuditEvent(auditEvent);
                         } else {
                             logger.debug("Unsupported parsed event type: {}", event.getClass().getName());
                         }
