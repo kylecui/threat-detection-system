@@ -51,7 +51,8 @@ apiClient.interceptors.request.use(
     // Skip customer_id injection for auth, system-config, tenant, and user management endpoints
     const url = config.url || '';
     if (!url.includes('/api/v1/auth/') && !url.includes('/api/v1/system-config')
-        && !url.includes('/api/v1/tenants') && !url.includes('/api/v1/users')) {
+        && !url.includes('/api/v1/tenants') && !url.includes('/api/v1/users')
+        && !url.includes('/tenant')) {
       const customerId = localStorage.getItem('customer_id') || 'demo-customer';
       if (config.params) {
         config.params.customer_id = customerId;

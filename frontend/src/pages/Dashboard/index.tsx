@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Card, Row, Col, Statistic, Table, Tag, Space, Spin, message } from 'antd';
+import { useEffect, useState, useCallback } from 'react';
+import { Card, Row, Col, Statistic, Table, Tag, Space, Spin, message, Select } from 'antd';
 import {
   WarningOutlined,
   FireOutlined,
@@ -7,7 +7,7 @@ import {
   InfoCircleOutlined,
 } from '@ant-design/icons';
 import { Line, Pie } from '@ant-design/charts';
-import type { Statistics, ThreatAssessment, ChartDataPoint } from '@/types';
+import type { Statistics, ThreatAssessment, ChartDataPoint, Customer } from '@/types';
 import { ThreatLevel } from '@/types';
 import threatService from '@/services/threat';
 import dayjs from 'dayjs';
@@ -30,30 +30,82 @@ const Dashboard = () => {
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [recentThreats, setRecentThreats] = useState<ThreatAssessment[]>([]);
   const [trendData, setTrendData] = useState<ChartDataPoint[]>([]);
-  //const [portData, setPortData] = useState<ChartDataPoint[]>([]);
-  // 原来：const [portData, setPortData] = useState<ChartDataPoint[]>([]);
   const [portData, setPortData] = useState<PortDatum[]>([]);
-  const customerId = localStorage.getItem('customer_id') || 'demo-customer';
+  const [tenantCustomers, setTenantCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<string>('__all__');
+
+  const userRaw = localStorage.getItem('user');
+  const user = userRaw
+    ? (JSON.parse(userRaw) as {
+        roles?: string[];
+        customerId?: string;
+        tenantId?: number;
+      })
+    : null;
+  const isTenantAdmin = !!user?.roles?.includes('TENANT_ADMIN');
+  const tenantId = user?.tenantId;
+  const customerId = localStorage.getItem('customer_id') || user?.customerId || 'demo-customer';
 
   /**
    * 加载仪表盘数据
    */
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true);
 
+      const useTenantAll = isTenantAdmin && selectedCustomer === '__all__';
+      const allCustomerIds = tenantCustomers.map((c) => c.customerId).filter(Boolean);
+
+      if (useTenantAll && allCustomerIds.length > 0) {
+        const [stats, threats, trend, ports] = await Promise.all([
+          threatService.getTenantStatistics(allCustomerIds),
+          threatService.getTenantThreatList(allCustomerIds, {
+            page: 0,
+            page_size: 10,
+          }),
+          threatService.getTenantTrend(allCustomerIds),
+          threatService.getTenantPortDistribution(allCustomerIds),
+        ]);
+
+        setStatistics(stats);
+        setRecentThreats(threats.content || []);
+
+        const formattedTrend = trend.map((item: any) => ({
+          time: dayjs(item.timestamp).format('HH:mm'),
+          value: item.count,
+          averageScore: item.averageScore,
+        }));
+        setTrendData(formattedTrend);
+
+        const formattedPorts = ports.map((item: any) => ({
+          category: item.port ? `Port ${item.port}` : item.portName || 'Unknown',
+          value: item.count,
+        }));
+        setPortData(formattedPorts);
+        return;
+      }
+
+      const targetCustomerId = isTenantAdmin ? selectedCustomer : customerId;
+      if (!targetCustomerId || targetCustomerId === '__all__') {
+        setStatistics(null);
+        setRecentThreats([]);
+        setTrendData([]);
+        setPortData([]);
+        return;
+      }
+
       // 并行加载所有数据
       const [stats, threats, trend, ports] = await Promise.all([
-        threatService.getStatistics(customerId),
+        threatService.getStatistics(targetCustomerId),
         threatService.getThreatList({
-          customer_id: customerId,
+          customer_id: targetCustomerId,
           page: 0,
           page_size: 10,
           sort_by: 'assessment_time',
           sort_order: 'desc',
         }),
-        threatService.getThreatTrend(customerId),
-        threatService.getPortDistribution(customerId),
+        threatService.getThreatTrend(targetCustomerId),
+        threatService.getPortDistribution(targetCustomerId),
       ]);
 
       setStatistics(stats);
@@ -79,7 +131,30 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
+  }, [customerId, isTenantAdmin, selectedCustomer, tenantCustomers]);
+
+  const loadTenantCustomers = useCallback(async () => {
+    if (!isTenantAdmin || !tenantId) {
+      return;
+    }
+
+    try {
+      const customers = await threatService.getCustomersByTenant(tenantId);
+      setTenantCustomers(customers || []);
+      setSelectedCustomer('__all__');
+    } catch (error) {
+      console.error('Failed to load tenant customers:', error);
+      message.error('加载租户客户列表失败');
+    }
+  }, [isTenantAdmin, tenantId]);
+
+  const handleCustomerChange = (value: string) => {
+    setSelectedCustomer(value);
   };
+
+  useEffect(() => {
+    loadTenantCustomers();
+  }, [loadTenantCustomers]);
 
   useEffect(() => {
     loadDashboardData();
@@ -87,7 +162,7 @@ const Dashboard = () => {
     // 自动刷新 (每30秒)
     const interval = setInterval(loadDashboardData, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadDashboardData]);
 
   /**
    * 威胁等级标签
@@ -204,6 +279,26 @@ const Dashboard = () => {
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      {isTenantAdmin && (
+        <Card size="small" style={{ marginBottom: 16 }}>
+          <Space>
+            <span>客户筛选:</span>
+            <Select
+              style={{ width: 300 }}
+              value={selectedCustomer}
+              onChange={handleCustomerChange}
+              options={[
+                { label: '全部客户 (All)', value: '__all__' },
+                ...tenantCustomers.map((c) => ({
+                  label: `${c.name} (${c.customerId})`,
+                  value: c.customerId,
+                })),
+              ]}
+            />
+          </Space>
+        </Card>
+      )}
+
       {/* 统计卡片 */}
       <Row gutter={16}>
                 <Col xs={24} sm={12} lg={6}>

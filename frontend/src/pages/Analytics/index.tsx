@@ -11,6 +11,7 @@ import {
   message,
   Button,
   Segmented,
+  Select,
 } from 'antd';
 import {
   ReloadOutlined,
@@ -20,7 +21,7 @@ import {
   AlertOutlined,
 } from '@ant-design/icons';
 import { Line, Pie, Column } from '@ant-design/charts';
-import type { Statistics, ChartDataPoint, ThreatAssessment } from '@/types';
+import type { Statistics, ChartDataPoint, ThreatAssessment, Customer } from '@/types';
 import threatService from '@/services/threat';
 import dayjs from 'dayjs';
 
@@ -80,8 +81,21 @@ const Analytics = () => {
   const [portData, setPortData] = useState<PortDatum[]>([]);
   const [topAttackers, setTopAttackers] = useState<TopAttacker[]>([]);
   const [trendRange, setTrendRange] = useState<string>('24h');
+  const [tenantCustomers, setTenantCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<string>('__all__');
 
-  const customerId = localStorage.getItem('customer_id') || 'demo-customer';
+  const userRaw = localStorage.getItem('user');
+  const user = userRaw
+    ? (JSON.parse(userRaw) as {
+        roles?: string[];
+        customerId?: string;
+        tenantId?: number;
+      })
+    : null;
+  const isTenantAdmin = !!user?.roles?.includes('TENANT_ADMIN');
+  const tenantId = user?.tenantId;
+
+  const customerId = localStorage.getItem('customer_id') || user?.customerId || 'demo-customer';
 
   /** 加载所有分析数据 */
   const loadData = useCallback(async () => {
@@ -94,14 +108,46 @@ const Analytics = () => {
         '30d': 720,
       };
 
-      const [stats, trend, ports, assessments] = await Promise.all([
-        threatService.getStatistics(customerId),
-        threatService.getThreatTrend(customerId).catch(() => []),
-        threatService.getPortDistribution(customerId).catch(() => []),
-        threatService.getThreatList({ customer_id: customerId, page: 0, page_size: 200 })
-          .then((res) => res.content || [])
-          .catch(() => []),
-      ]);
+      const useTenantAll = isTenantAdmin && selectedCustomer === '__all__';
+      const allCustomerIds = tenantCustomers.map((c) => c.customerId).filter(Boolean);
+
+      let stats: Statistics;
+      let trend: ChartDataPoint[];
+      let ports: ChartDataPoint[];
+      let assessments: ThreatAssessment[];
+
+      if (useTenantAll && allCustomerIds.length > 0) {
+        const tenantResults = await Promise.all([
+          threatService.getTenantStatistics(allCustomerIds),
+          threatService.getTenantTrend(allCustomerIds).catch(() => []),
+          threatService.getTenantPortDistribution(allCustomerIds).catch(() => []),
+          threatService
+            .getTenantThreatList(allCustomerIds, { page: 0, page_size: 200 })
+            .then((res) => res.content || [])
+            .catch(() => []),
+        ]);
+        [stats, trend, ports, assessments] = tenantResults;
+      } else {
+        const targetCustomerId = isTenantAdmin ? selectedCustomer : customerId;
+        if (!targetCustomerId || targetCustomerId === '__all__') {
+          setStatistics(null);
+          setTrendData([]);
+          setPortData([]);
+          setTopAttackers([]);
+          return;
+        }
+
+        const customerResults = await Promise.all([
+          threatService.getStatistics(targetCustomerId),
+          threatService.getThreatTrend(targetCustomerId).catch(() => []),
+          threatService.getPortDistribution(targetCustomerId).catch(() => []),
+          threatService
+            .getThreatList({ customer_id: targetCustomerId, page: 0, page_size: 200 })
+            .then((res) => res.content || [])
+            .catch(() => []),
+        ]);
+        [stats, trend, ports, assessments] = customerResults;
+      }
 
       setStatistics(stats);
 
@@ -121,14 +167,37 @@ const Analytics = () => {
       }));
       setPortData(formattedPorts.slice(0, 15));
 
-      setTopAttackers(deriveTopAttackers(assessments as ThreatAssessment[], 20));
+      setTopAttackers(deriveTopAttackers(assessments, 20));
     } catch (error) {
       console.error('Failed to load analytics data:', error);
       message.error('加载分析数据失败');
     } finally {
       setLoading(false);
     }
-  }, [customerId, trendRange]);
+  }, [customerId, isTenantAdmin, selectedCustomer, tenantCustomers, trendRange]);
+
+  const loadTenantCustomers = useCallback(async () => {
+    if (!isTenantAdmin || !tenantId) {
+      return;
+    }
+
+    try {
+      const customers = await threatService.getCustomersByTenant(tenantId);
+      setTenantCustomers(customers || []);
+      setSelectedCustomer('__all__');
+    } catch (error) {
+      console.error('Failed to load tenant customers:', error);
+      message.error('加载租户客户列表失败');
+    }
+  }, [isTenantAdmin, tenantId]);
+
+  const handleCustomerChange = (value: string) => {
+    setSelectedCustomer(value);
+  };
+
+  useEffect(() => {
+    loadTenantCustomers();
+  }, [loadTenantCustomers]);
 
   useEffect(() => {
     loadData();
@@ -259,6 +328,23 @@ const Analytics = () => {
           <Col>
             <Space>
               <span style={{ fontWeight: 600 }}>数据分析</span>
+              {isTenantAdmin && (
+                <>
+                  <span>客户筛选:</span>
+                  <Select
+                    style={{ width: 300 }}
+                    value={selectedCustomer}
+                    onChange={handleCustomerChange}
+                    options={[
+                      { label: '全部客户 (All)', value: '__all__' },
+                      ...tenantCustomers.map((c) => ({
+                        label: `${c.name} (${c.customerId})`,
+                        value: c.customerId,
+                      })),
+                    ]}
+                  />
+                </>
+              )}
               <Segmented
                 value={trendRange}
                 onChange={(v) => setTrendRange(v as string)}

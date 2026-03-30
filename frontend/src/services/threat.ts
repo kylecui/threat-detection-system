@@ -2,6 +2,7 @@ import apiClient from './api';
 import type {
   ThreatAssessment,
   Statistics,
+  Customer,
   PaginatedResponse,
   ThreatQueryFilter,
   ChartDataPoint,
@@ -74,6 +75,48 @@ class ThreatService {
           customer_id: customerId,
         },
       }
+    );
+    return response.data;
+  }
+
+  async getCustomersByTenant(tenantId: number): Promise<Customer[]> {
+    const response = await apiClient.get<Customer[]>(
+      `/api/v1/customers/by-tenant/${tenantId}`
+    );
+    return response.data;
+  }
+
+  async getTenantStatistics(customerIds: string[]): Promise<Statistics> {
+    const response = await apiClient.get<Statistics>(
+      '/api/v1/assessment/statistics/tenant',
+      { params: { customer_ids: customerIds.join(',') } }
+    );
+    return response.data;
+  }
+
+  async getTenantThreatList(
+    customerIds: string[],
+    params: { page: number; page_size: number }
+  ): Promise<PaginatedResponse<ThreatAssessment>> {
+    const response = await apiClient.get<PaginatedResponse<ThreatAssessment>>(
+      '/api/v1/assessment/assessments/tenant',
+      { params: { customer_ids: customerIds.join(','), ...params } }
+    );
+    return response.data;
+  }
+
+  async getTenantTrend(customerIds: string[]): Promise<ChartDataPoint[]> {
+    const response = await apiClient.get<ChartDataPoint[]>(
+      '/api/v1/assessment/trend/tenant',
+      { params: { customer_ids: customerIds.join(',') } }
+    );
+    return response.data;
+  }
+
+  async getTenantPortDistribution(customerIds: string[]): Promise<ChartDataPoint[]> {
+    const response = await apiClient.get<ChartDataPoint[]>(
+      '/api/v1/assessment/port-distribution/tenant',
+      { params: { customer_ids: customerIds.join(',') } }
     );
     return response.data;
   }
