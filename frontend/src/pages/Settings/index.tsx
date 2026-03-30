@@ -18,6 +18,8 @@ import {
   Col,
   Spin,
   Typography,
+  Table,
+  Modal,
 } from 'antd';
 import {
   UserOutlined,
@@ -32,10 +34,35 @@ import {
   RobotOutlined,
   EyeOutlined,
   EyeInvisibleOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  LinkOutlined,
 } from '@ant-design/icons';
 import apiClient, { switchRegion } from '@/services/api';
 import { getConfigsByCategory, batchUpdateConfigs, validateLlmConnection } from '@/services/config';
-import type { LlmValidateResult } from '@/services/config';
+import type { LlmValidateResult as ConfigLlmValidateResult } from '@/services/config';
+import {
+  listTirePlugins,
+  createTirePlugin,
+  updateTirePlugin,
+  deleteTirePlugin,
+  listLlmProviders,
+  createLlmProvider,
+  updateLlmProvider,
+  deleteLlmProvider,
+  validateLlmProvider,
+  listConfigAssignments,
+  assignConfig,
+  unassignConfig,
+} from '@/services/tire';
+import type { ColumnsType } from 'antd/es/table';
+import type {
+  TireCustomPlugin,
+  LlmProvider,
+  ConfigAssignment,
+  LlmValidateResult,
+} from '@/services/tire';
 import type { SmtpConfig, NotificationConfig, RegionId, SystemConfig } from '@/types';
 import { REGION_ENDPOINTS } from '@/types';
 
@@ -48,6 +75,9 @@ const Settings = () => {
   const [tireForm] = Form.useForm();
   const [pluginForm] = Form.useForm();
   const [llmForm] = Form.useForm();
+  const [customPluginForm] = Form.useForm();
+  const [llmProviderForm] = Form.useForm();
+  const [assignmentForm] = Form.useForm();
 
   const [smtpConfig, setSmtpConfig] = useState<SmtpConfig | null>(null);
   const [, setNotifConfig] = useState<NotificationConfig | null>(null);
@@ -67,6 +97,19 @@ const Settings = () => {
   const [llmValidating, setLlmValidating] = useState(false);
   const [llmModels, setLlmModels] = useState<string[]>([]);
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
+  const [customPlugins, setCustomPlugins] = useState<TireCustomPlugin[]>([]);
+  const [customPluginLoading, setCustomPluginLoading] = useState(false);
+  const [customPluginModalOpen, setCustomPluginModalOpen] = useState(false);
+  const [editingPlugin, setEditingPlugin] = useState<TireCustomPlugin | null>(null);
+  const [llmProviders, setLlmProviders] = useState<LlmProvider[]>([]);
+  const [llmProviderLoading, setLlmProviderLoading] = useState(false);
+  const [llmProviderModalOpen, setLlmProviderModalOpen] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<LlmProvider | null>(null);
+  const [validatingProviderId, setValidatingProviderId] = useState<number | null>(null);
+  const [assignments, setAssignments] = useState<ConfigAssignment[]>([]);
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState<ConfigAssignment | null>(null);
 
   const customerId = localStorage.getItem('customer_id') || 'demo-customer';
   const userRoles: string[] = (() => {
@@ -76,6 +119,10 @@ const Settings = () => {
     } catch { return []; }
   })();
   const isSuperAdmin = userRoles.includes('SUPER_ADMIN');
+  const isTenantAdmin = userRoles.includes('TENANT_ADMIN');
+  const isAdmin = isSuperAdmin || isTenantAdmin;
+  const isCustomerUser = userRoles.includes('CUSTOMER_USER');
+  const canAccessLlmTab = isSuperAdmin || isTenantAdmin || isCustomerUser;
 
   // ──────── 加载SMTP配置 ────────
   const loadSmtpConfig = async () => {
@@ -171,12 +218,54 @@ const Settings = () => {
     }
   }, [isSuperAdmin, pluginForm]);
 
+  const loadCustomPlugins = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      setCustomPluginLoading(true);
+      const data = await listTirePlugins();
+      setCustomPlugins(data);
+    } catch {
+      message.error('加载自定义插件失败');
+    } finally {
+      setCustomPluginLoading(false);
+    }
+  }, [isAdmin]);
+
+  const loadLlmProviders = useCallback(async () => {
+    if (!canAccessLlmTab && !isAdmin) return;
+    try {
+      setLlmProviderLoading(true);
+      const data = await listLlmProviders();
+      setLlmProviders(data);
+    } catch {
+      message.error('加载LLM服务商失败');
+    } finally {
+      setLlmProviderLoading(false);
+    }
+  }, [canAccessLlmTab, isAdmin]);
+
+  const loadAssignments = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      setAssignmentLoading(true);
+      const data = await listConfigAssignments();
+      setAssignments(data);
+    } catch {
+      message.error('加载配置分配失败');
+    } finally {
+      setAssignmentLoading(false);
+    }
+  }, [isAdmin]);
+
   useEffect(() => {
     loadSmtpConfig();
     loadNotifConfig();
     loadTireConfigs();
     loadPluginConfigs();
     loadLlmConfigs();
+    loadCustomPlugins();
+    loadLlmProviders();
+    loadAssignments();
   }, []);
 
   // ──────── 保存基础设置 ────────
@@ -314,7 +403,7 @@ const Settings = () => {
     }
     try {
       setLlmValidating(true);
-      const result: LlmValidateResult = await validateLlmConnection(values.LLM_API_KEY, values.LLM_BASE_URL);
+      const result: ConfigLlmValidateResult = await validateLlmConnection(values.LLM_API_KEY, values.LLM_BASE_URL);
       if (result.ok) {
         setLlmModels(result.models || []);
         message.success(`连接测试成功，获取到 ${result.models.length} 个模型`);
@@ -334,6 +423,181 @@ const Settings = () => {
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
+    });
+  };
+
+  const openCustomPluginModal = (plugin?: TireCustomPlugin) => {
+    setEditingPlugin(plugin || null);
+    if (plugin) {
+      customPluginForm.setFieldsValue({
+        name: plugin.name,
+        slug: plugin.slug,
+        description: plugin.description,
+        pluginUrl: plugin.pluginUrl,
+        apiKey: '',
+        authType: plugin.authType || 'bearer',
+        authHeader: plugin.authHeader || 'Authorization',
+        parserType: plugin.parserType || 'json',
+        requestMethod: plugin.requestMethod || 'GET',
+        requestBody: plugin.requestBody,
+        responsePath: plugin.responsePath,
+        enabled: plugin.enabled,
+        priority: plugin.priority,
+        timeout: plugin.timeout,
+      });
+    } else {
+      customPluginForm.setFieldsValue({
+        authType: 'bearer',
+        authHeader: 'Authorization',
+        parserType: 'json',
+        requestMethod: 'GET',
+        enabled: true,
+        priority: 50,
+        timeout: 30,
+      });
+    }
+    setCustomPluginModalOpen(true);
+  };
+
+  const handleCustomPluginSubmit = async () => {
+    try {
+      const values = await customPluginForm.validateFields();
+      if (editingPlugin) {
+        await updateTirePlugin(editingPlugin.id, values as Partial<TireCustomPlugin>);
+        message.success('自定义插件已更新');
+      } else {
+        await createTirePlugin(values as Partial<TireCustomPlugin>);
+        message.success('自定义插件已创建');
+      }
+      setCustomPluginModalOpen(false);
+      customPluginForm.resetFields();
+      setEditingPlugin(null);
+      loadCustomPlugins();
+    } catch {
+    }
+  };
+
+  const handleDeleteCustomPlugin = (plugin: TireCustomPlugin) => {
+    Modal.confirm({
+      title: `确定删除插件「${plugin.name}」吗？`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        await deleteTirePlugin(plugin.id);
+        message.success('自定义插件已删除');
+        loadCustomPlugins();
+      },
+    });
+  };
+
+  const openLlmProviderModal = (provider?: LlmProvider) => {
+    setEditingProvider(provider || null);
+    if (provider) {
+      llmProviderForm.setFieldsValue({
+        name: provider.name,
+        apiKey: '',
+        model: provider.model,
+        baseUrl: provider.baseUrl,
+        isDefault: provider.isDefault,
+        enabled: provider.enabled,
+      });
+    } else {
+      llmProviderForm.setFieldsValue({
+        enabled: true,
+        isDefault: false,
+      });
+    }
+    setLlmProviderModalOpen(true);
+  };
+
+  const handleLlmProviderSubmit = async () => {
+    try {
+      const values = await llmProviderForm.validateFields();
+      if (editingProvider) {
+        await updateLlmProvider(editingProvider.id, values as Partial<LlmProvider>);
+        message.success('LLM服务商已更新');
+      } else {
+        await createLlmProvider(values as Partial<LlmProvider>);
+        message.success('LLM服务商已创建');
+      }
+      setLlmProviderModalOpen(false);
+      llmProviderForm.resetFields();
+      setEditingProvider(null);
+      loadLlmProviders();
+      if (isAdmin) {
+        loadAssignments();
+      }
+    } catch {
+    }
+  };
+
+  const handleDeleteLlmProvider = (provider: LlmProvider) => {
+    Modal.confirm({
+      title: `确定删除LLM服务商「${provider.name}」吗？`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        await deleteLlmProvider(provider.id);
+        message.success('LLM服务商已删除');
+        loadLlmProviders();
+        if (isAdmin) {
+          loadAssignments();
+        }
+      },
+    });
+  };
+
+  const handleValidateProvider = async (providerId: number) => {
+    try {
+      setValidatingProviderId(providerId);
+      const result: LlmValidateResult = await validateLlmProvider(providerId);
+      if (result.ok) {
+        message.success(`连接测试成功，获取到 ${result.models.length} 个模型`);
+      } else {
+        message.error(result.error || '连接测试失败');
+      }
+    } catch {
+      message.error('连接测试失败');
+    } finally {
+      setValidatingProviderId(null);
+    }
+  };
+
+  const openAssignmentModal = (assignment?: ConfigAssignment) => {
+    setEditingAssignment(assignment || null);
+    assignmentForm.setFieldsValue({
+      customerId: assignment?.customerId,
+      llmProviderId: assignment?.llmProviderId,
+    });
+    setAssignmentModalOpen(true);
+  };
+
+  const handleAssignmentSubmit = async () => {
+    try {
+      const values = await assignmentForm.validateFields();
+      await assignConfig(values.customerId, values.llmProviderId);
+      message.success(editingAssignment ? '配置分配已更新' : '配置分配已创建');
+      setAssignmentModalOpen(false);
+      assignmentForm.resetFields();
+      setEditingAssignment(null);
+      loadAssignments();
+    } catch {
+    }
+  };
+
+  const handleRemoveAssignment = (assignment: ConfigAssignment) => {
+    Modal.confirm({
+      title: `确定移除客户「${assignment.customerId}」的分配吗？`,
+      okText: '确定',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        await unassignConfig(assignment.customerId);
+        message.success('配置分配已移除');
+        loadAssignments();
+      },
     });
   };
 
@@ -434,7 +698,182 @@ const Settings = () => {
       timeoutKey: string;
     } => item !== null);
 
-  // ──────── Tab项 ────────
+  const customPluginColumns: ColumnsType<TireCustomPlugin> = [
+    {
+      title: '名称',
+      dataIndex: 'name',
+      key: 'name',
+    },
+    {
+      title: 'Slug',
+      dataIndex: 'slug',
+      key: 'slug',
+    },
+    {
+      title: '插件URL',
+      dataIndex: 'pluginUrl',
+      key: 'pluginUrl',
+      ellipsis: true,
+    },
+    {
+      title: '请求方式',
+      dataIndex: 'requestMethod',
+      key: 'requestMethod',
+    },
+    {
+      title: '启用',
+      dataIndex: 'enabled',
+      key: 'enabled',
+      render: (enabled: boolean) => (enabled ? <Tag color="green">开</Tag> : <Tag color="red">关</Tag>),
+    },
+    {
+      title: '优先级',
+      dataIndex: 'priority',
+      key: 'priority',
+    },
+    {
+      title: '超时(秒)',
+      dataIndex: 'timeout',
+      key: 'timeout',
+    },
+    {
+      title: '归属',
+      dataIndex: 'ownerType',
+      key: 'ownerType',
+      render: (ownerType: TireCustomPlugin['ownerType']) => {
+        if (ownerType === 'SYSTEM') return <Tag color="blue">SYSTEM</Tag>;
+        if (ownerType === 'TENANT') return <Tag color="green">TENANT</Tag>;
+        return <Tag color="orange">USER</Tag>;
+      },
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      render: (_: unknown, record: TireCustomPlugin) => (
+        <Space>
+          <Button icon={<EditOutlined />} onClick={() => openCustomPluginModal(record)}>
+            编辑
+          </Button>
+          <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteCustomPlugin(record)}>
+            删除
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
+  const llmProviderColumns: ColumnsType<LlmProvider> = [
+    {
+      title: '名称',
+      dataIndex: 'name',
+      key: 'name',
+    },
+    {
+      title: '模型',
+      dataIndex: 'model',
+      key: 'model',
+    },
+    {
+      title: 'Base URL',
+      dataIndex: 'baseUrl',
+      key: 'baseUrl',
+      ellipsis: true,
+    },
+    {
+      title: 'API Key',
+      dataIndex: 'hasApiKey',
+      key: 'hasApiKey',
+      render: (hasApiKey: boolean) => (
+        hasApiKey ? <Tag color="green">已配置</Tag> : <Tag color="orange">未配置</Tag>
+      ),
+    },
+    {
+      title: '默认',
+      dataIndex: 'isDefault',
+      key: 'isDefault',
+      render: (isDefault: boolean) => (isDefault ? <Tag color="blue">默认</Tag> : null),
+    },
+    {
+      title: '启用',
+      dataIndex: 'enabled',
+      key: 'enabled',
+      render: (enabled: boolean) => (enabled ? <Tag color="green">开</Tag> : <Tag color="red">关</Tag>),
+    },
+    {
+      title: '归属',
+      dataIndex: 'ownerType',
+      key: 'ownerType',
+      render: (ownerType: LlmProvider['ownerType']) => {
+        if (ownerType === 'SYSTEM') return <Tag color="blue">SYSTEM</Tag>;
+        if (ownerType === 'TENANT') return <Tag color="green">TENANT</Tag>;
+        return <Tag color="orange">USER</Tag>;
+      },
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      render: (_: unknown, record: LlmProvider) => (
+        <Space>
+          <Button
+            icon={<ApiOutlined />}
+            loading={validatingProviderId === record.id}
+            onClick={() => handleValidateProvider(record.id)}
+          >
+            连接测试
+          </Button>
+          <Button icon={<EditOutlined />} onClick={() => openLlmProviderModal(record)}>
+            编辑
+          </Button>
+          <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteLlmProvider(record)}>
+            删除
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
+  const assignmentColumns: ColumnsType<ConfigAssignment> = [
+    {
+      title: '客户ID',
+      dataIndex: 'customerId',
+      key: 'customerId',
+    },
+    {
+      title: 'LLM服务商',
+      dataIndex: 'llmProviderId',
+      key: 'llmProviderId',
+      render: (llmProviderId: number) => {
+        const provider = llmProviders.find((item) => item.id === llmProviderId);
+        return provider ? `${provider.name} (${provider.model})` : String(llmProviderId);
+      },
+    },
+    {
+      title: '分配者',
+      dataIndex: 'assignedBy',
+      key: 'assignedBy',
+    },
+    {
+      title: '分配时间',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      render: (createdAt?: string) => createdAt || '-',
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      render: (_: unknown, record: ConfigAssignment) => (
+        <Space>
+          <Button icon={<EditOutlined />} onClick={() => openAssignmentModal(record)}>
+            编辑
+          </Button>
+          <Button danger icon={<DeleteOutlined />} onClick={() => handleRemoveAssignment(record)}>
+            移除
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
   const tabItems = [
     {
       key: 'basic',
@@ -814,6 +1253,10 @@ const Settings = () => {
               </Card>
             ),
           },
+        ]
+      : []),
+    ...(isAdmin
+      ? [
           {
             key: 'plugins',
             label: (
@@ -823,87 +1266,112 @@ const Settings = () => {
             ),
             children: (
               <Card bordered={false}>
-                <Spin spinning={pluginLoading}>
-                  <Alert
-                    message="TIRE插件配置"
-                    description="可按需启用/禁用插件，并调整优先级和超时时间。保存后需运行 apply-tire-config.sh 同步到集群。"
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 24 }}
-                  />
-                  <Form
-                    form={pluginForm}
-                    layout="vertical"
-                    onFinish={handlePluginSave}
-                  >
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                        gap: 12,
-                        alignItems: 'center',
-                        marginBottom: 12,
-                        padding: '0 8px',
-                      }}
+                {isSuperAdmin && (
+                  <Spin spinning={pluginLoading}>
+                    <Alert
+                      message="TIRE插件配置"
+                      description="可按需启用/禁用插件，并调整优先级和超时时间。保存后需运行 apply-tire-config.sh 同步到集群。"
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 24 }}
+                    />
+                    <Form
+                      form={pluginForm}
+                      layout="vertical"
+                      onFinish={handlePluginSave}
                     >
-                      <Text type="secondary">插件名称</Text>
-                      <Text type="secondary">启用状态</Text>
-                      <Text type="secondary">优先级</Text>
-                      <Text type="secondary">超时（秒）</Text>
-                    </div>
-                    <Space direction="vertical" style={{ width: '100%' }} size={8}>
-                      {pluginRows.map((row) => (
-                        <Card key={row.pluginName} size="small">
-                          <div
-                            style={{
-                              display: 'grid',
-                              gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                              gap: 12,
-                              alignItems: 'center',
-                            }}
-                          >
-                            <Text strong>{row.label}</Text>
-                            <Form.Item name={row.enabledKey} valuePropName="checked" style={{ marginBottom: 0 }}>
-                              <Switch checkedChildren="开" unCheckedChildren="关" />
-                            </Form.Item>
-                            <Form.Item name={row.priorityKey} style={{ marginBottom: 0 }}>
-                              <InputNumber min={1} max={100} style={{ width: '100%' }} />
-                            </Form.Item>
-                            <Form.Item name={row.timeoutKey} style={{ marginBottom: 0 }}>
-                              <InputNumber min={5} max={300} addonAfter="秒" style={{ width: '100%' }} />
-                            </Form.Item>
-                          </div>
-                        </Card>
-                      ))}
-                    </Space>
-                    {pluginRows.length === 0 && (
-                      <Alert
-                        message="未找到插件配置项"
-                        description="请先执行 30-system-config.sql 初始化配置数据"
-                        type="warning"
-                        style={{ marginTop: 12 }}
-                      />
-                    )}
-                    <Form.Item style={{ marginTop: 24 }}>
-                      <Space>
-                        <Button
-                          type="primary"
-                          htmlType="submit"
-                          icon={<SaveOutlined />}
-                          loading={pluginSaving}
-                        >
-                          保存插件配置
-                        </Button>
-                        <Button icon={<ReloadOutlined />} onClick={loadPluginConfigs}>
-                          刷新
-                        </Button>
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                          gap: 12,
+                          alignItems: 'center',
+                          marginBottom: 12,
+                          padding: '0 8px',
+                        }}
+                      >
+                        <Text type="secondary">插件名称</Text>
+                        <Text type="secondary">启用状态</Text>
+                        <Text type="secondary">优先级</Text>
+                        <Text type="secondary">超时（秒）</Text>
+                      </div>
+                      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                        {pluginRows.map((row) => (
+                          <Card key={row.pluginName} size="small">
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                                gap: 12,
+                                alignItems: 'center',
+                              }}
+                            >
+                              <Text strong>{row.label}</Text>
+                              <Form.Item name={row.enabledKey} valuePropName="checked" style={{ marginBottom: 0 }}>
+                                <Switch checkedChildren="开" unCheckedChildren="关" />
+                              </Form.Item>
+                              <Form.Item name={row.priorityKey} style={{ marginBottom: 0 }}>
+                                <InputNumber min={1} max={100} style={{ width: '100%' }} />
+                              </Form.Item>
+                              <Form.Item name={row.timeoutKey} style={{ marginBottom: 0 }}>
+                                <InputNumber min={5} max={300} addonAfter="秒" style={{ width: '100%' }} />
+                              </Form.Item>
+                            </div>
+                          </Card>
+                        ))}
                       </Space>
-                    </Form.Item>
-                  </Form>
-                </Spin>
+                      {pluginRows.length === 0 && (
+                        <Alert
+                          message="未找到插件配置项"
+                          description="请先执行 30-system-config.sql 初始化配置数据"
+                          type="warning"
+                          style={{ marginTop: 12 }}
+                        />
+                      )}
+                      <Form.Item style={{ marginTop: 24 }}>
+                        <Space>
+                          <Button
+                            type="primary"
+                            htmlType="submit"
+                            icon={<SaveOutlined />}
+                            loading={pluginSaving}
+                          >
+                            保存插件配置
+                          </Button>
+                          <Button icon={<ReloadOutlined />} onClick={loadPluginConfigs}>
+                            刷新
+                          </Button>
+                        </Space>
+                      </Form.Item>
+                    </Form>
+                  </Spin>
+                )}
+
+                <Divider orientation="left">自定义插件</Divider>
+                <Space style={{ marginBottom: 16 }}>
+                  {isAdmin && (
+                    <Button type="primary" icon={<PlusOutlined />} onClick={() => openCustomPluginModal()}>
+                      添加自定义插件
+                    </Button>
+                  )}
+                  <Button icon={<ReloadOutlined />} onClick={loadCustomPlugins}>
+                    刷新
+                  </Button>
+                </Space>
+                <Table<TireCustomPlugin>
+                  rowKey="id"
+                  loading={customPluginLoading}
+                  columns={customPluginColumns}
+                  dataSource={customPlugins}
+                  pagination={{ pageSize: 10 }}
+                />
               </Card>
             ),
           },
+        ]
+      : []),
+    ...(canAccessLlmTab
+      ? [
           {
             key: 'llm',
             label: (
@@ -913,86 +1381,140 @@ const Settings = () => {
             ),
             children: (
               <Card bordered={false}>
-                <Spin spinning={llmLoading}>
-                  <Alert
-                    message="大语言模型 (LLM) 配置"
-                    description="用于TIRE威胁情报报告生成的LLM服务配置。支持OpenAI兼容API。保存后需运行 apply-tire-config.sh 同步到集群。"
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 24 }}
-                  />
-                  <Form
-                    form={llmForm}
-                    layout="vertical"
-                    onFinish={handleLlmSave}
-                    style={{ maxWidth: 600 }}
-                  >
-                    {llmConfigs.map((config) => {
-                      if (config.key !== 'LLM_MODEL') {
-                        return renderConfigField(config);
-                      }
-                      if (llmModels.length === 0) {
-                        return renderConfigField(config);
-                      }
-                      return (
-                        <Form.Item
-                          key={config.key}
-                          label={
-                            <Space>
-                              {config.description || config.key}
-                            </Space>
-                          }
-                          name={config.key}
-                          tooltip={config.key}
-                          getValueProps={(value: string) => ({ value: value ? [value] : [] })}
-                          normalize={(value: string[]) => {
-                            const candidates = value.filter((item) => item !== '__other__');
-                            return candidates[candidates.length - 1] || '';
-                          }}
-                        >
-                          <Select
-                            mode="tags"
-                            placeholder="请选择或输入模型名称"
-                            options={[
-                              ...llmModels.map((model) => ({ label: model, value: model })),
-                              { label: 'Other（可直接输入）', value: '__other__', disabled: true },
-                            ]}
-                            tokenSeparators={[',']}
-                          />
-                        </Form.Item>
-                      );
-                    })}
-                    {llmConfigs.length === 0 && (
-                      <Alert
-                        message="未找到LLM配置项"
-                        description="请先执行 30-system-config.sql 初始化配置数据"
-                        type="warning"
-                      />
-                    )}
-                    <Form.Item>
-                      <Space>
-                        <Button
-                          type="primary"
-                          htmlType="submit"
-                          icon={<SaveOutlined />}
-                          loading={llmSaving}
-                        >
-                          保存LLM配置
-                        </Button>
-                        <Button
-                          icon={<ApiOutlined />}
-                          onClick={handleLlmValidate}
-                          loading={llmValidating}
-                        >
-                          测试连接
-                        </Button>
-                        <Button icon={<ReloadOutlined />} onClick={loadLlmConfigs}>
-                          刷新
-                        </Button>
-                      </Space>
-                    </Form.Item>
-                  </Form>
-                </Spin>
+                {isSuperAdmin && (
+                  <Spin spinning={llmLoading}>
+                    <Alert
+                      message="大语言模型 (LLM) 配置"
+                      description="用于TIRE威胁情报报告生成的LLM服务配置。支持OpenAI兼容API。保存后需运行 apply-tire-config.sh 同步到集群。"
+                      type="info"
+                      showIcon
+                      style={{ marginBottom: 24 }}
+                    />
+                    <Divider orientation="left">全局LLM配置 (system_config)</Divider>
+                    <Form
+                      form={llmForm}
+                      layout="vertical"
+                      onFinish={handleLlmSave}
+                      style={{ maxWidth: 600 }}
+                    >
+                      {llmConfigs.map((config) => {
+                        if (config.key !== 'LLM_MODEL') {
+                          return renderConfigField(config);
+                        }
+                        if (llmModels.length === 0) {
+                          return renderConfigField(config);
+                        }
+                        return (
+                          <Form.Item
+                            key={config.key}
+                            label={
+                              <Space>
+                                {config.description || config.key}
+                              </Space>
+                            }
+                            name={config.key}
+                            tooltip={config.key}
+                            getValueProps={(value: string) => ({ value: value ? [value] : [] })}
+                            normalize={(value: string[]) => {
+                              const candidates = value.filter((item) => item !== '__other__');
+                              return candidates[candidates.length - 1] || '';
+                            }}
+                          >
+                            <Select
+                              mode="tags"
+                              placeholder="请选择或输入模型名称"
+                              options={[
+                                ...llmModels.map((model) => ({ label: model, value: model })),
+                                { label: 'Other（可直接输入）', value: '__other__', disabled: true },
+                              ]}
+                              tokenSeparators={[',']}
+                            />
+                          </Form.Item>
+                        );
+                      })}
+                      {llmConfigs.length === 0 && (
+                        <Alert
+                          message="未找到LLM配置项"
+                          description="请先执行 30-system-config.sql 初始化配置数据"
+                          type="warning"
+                        />
+                      )}
+                      <Form.Item>
+                        <Space>
+                          <Button
+                            type="primary"
+                            htmlType="submit"
+                            icon={<SaveOutlined />}
+                            loading={llmSaving}
+                          >
+                            保存LLM配置
+                          </Button>
+                          <Button
+                            icon={<ApiOutlined />}
+                            onClick={handleLlmValidate}
+                            loading={llmValidating}
+                          >
+                            测试连接
+                          </Button>
+                          <Button icon={<ReloadOutlined />} onClick={loadLlmConfigs}>
+                            刷新
+                          </Button>
+                        </Space>
+                      </Form.Item>
+                    </Form>
+                  </Spin>
+                )}
+
+                <Divider orientation="left">LLM服务商管理</Divider>
+                <Space style={{ marginBottom: 16 }}>
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => openLlmProviderModal()}>
+                    添加LLM服务商
+                  </Button>
+                  <Button icon={<ReloadOutlined />} onClick={loadLlmProviders}>
+                    刷新
+                  </Button>
+                </Space>
+                <Table<LlmProvider>
+                  rowKey="id"
+                  loading={llmProviderLoading}
+                  columns={llmProviderColumns}
+                  dataSource={llmProviders}
+                  pagination={{ pageSize: 10 }}
+                />
+              </Card>
+            ),
+          },
+        ]
+      : []),
+    ...(isAdmin
+      ? [
+          {
+            key: 'assignments',
+            label: (
+              <span>
+                <LinkOutlined /> 配置分配
+              </span>
+            ),
+            children: (
+              <Card bordered={false}>
+                <Space style={{ marginBottom: 16 }}>
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => openAssignmentModal()}>
+                    分配LLM服务商
+                  </Button>
+                  <Button icon={<ReloadOutlined />} onClick={loadAssignments}>
+                    刷新分配
+                  </Button>
+                  <Button icon={<ReloadOutlined />} onClick={loadLlmProviders}>
+                    刷新服务商
+                  </Button>
+                </Space>
+                <Table<ConfigAssignment>
+                  rowKey={(record) => `${record.customerId}-${record.llmProviderId}`}
+                  loading={assignmentLoading}
+                  columns={assignmentColumns}
+                  dataSource={assignments}
+                  pagination={{ pageSize: 10 }}
+                />
               </Card>
             ),
           },
@@ -1001,9 +1523,157 @@ const Settings = () => {
   ];
 
   return (
-    <Card title="系统设置" bordered={false}>
-      <Tabs defaultActiveKey="basic" items={tabItems} />
-    </Card>
+    <>
+      <Card title="系统设置" bordered={false}>
+        <Tabs defaultActiveKey="basic" items={tabItems} />
+      </Card>
+
+      <Modal
+        title={editingPlugin ? '编辑自定义插件' : '添加自定义插件'}
+        open={customPluginModalOpen}
+        onCancel={() => {
+          setCustomPluginModalOpen(false);
+          customPluginForm.resetFields();
+          setEditingPlugin(null);
+        }}
+        onOk={handleCustomPluginSubmit}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Form form={customPluginForm} layout="vertical">
+          <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="Slug" name="slug" rules={[{ required: true, message: '请输入Slug' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="描述" name="description">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Form.Item label="插件URL" name="pluginUrl" rules={[{ required: true, message: '请输入插件URL' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="API Key" name="apiKey">
+            <Input.Password placeholder="留空则保留原值" />
+          </Form.Item>
+          <Form.Item label="认证类型" name="authType" initialValue="bearer">
+            <Select
+              options={[
+                { label: 'bearer', value: 'bearer' },
+                { label: 'header', value: 'header' },
+                { label: 'query', value: 'query' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item label="认证头" name="authHeader" initialValue="Authorization">
+            <Input />
+          </Form.Item>
+          <Form.Item label="解析类型" name="parserType" initialValue="json">
+            <Select
+              options={[
+                { label: 'json', value: 'json' },
+                { label: 'xml', value: 'xml' },
+                { label: 'regex', value: 'regex' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item label="请求方式" name="requestMethod" initialValue="GET">
+            <Select
+              options={[
+                { label: 'GET', value: 'GET' },
+                { label: 'POST', value: 'POST' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate>
+            {({ getFieldValue }) =>
+              getFieldValue('requestMethod') === 'POST' ? (
+                <Form.Item label="请求体" name="requestBody">
+                  <Input.TextArea rows={3} />
+                </Form.Item>
+              ) : null
+            }
+          </Form.Item>
+          <Form.Item label="响应路径" name="responsePath">
+            <Input />
+          </Form.Item>
+          <Form.Item label="启用" name="enabled" valuePropName="checked" initialValue>
+            <Switch checkedChildren="开" unCheckedChildren="关" />
+          </Form.Item>
+          <Form.Item label="优先级" name="priority" initialValue={50}>
+            <InputNumber min={1} max={100} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item label="超时(秒)" name="timeout" initialValue={30}>
+            <InputNumber min={5} max={300} style={{ width: '100%' }} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={editingProvider ? '编辑LLM服务商' : '添加LLM服务商'}
+        open={llmProviderModalOpen}
+        onCancel={() => {
+          setLlmProviderModalOpen(false);
+          llmProviderForm.resetFields();
+          setEditingProvider(null);
+        }}
+        onOk={handleLlmProviderSubmit}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Form form={llmProviderForm} layout="vertical">
+          <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="API Key" name="apiKey">
+            <Input.Password placeholder="留空则保留原值" />
+          </Form.Item>
+          <Form.Item label="模型" name="model" rules={[{ required: true, message: '请输入模型' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="Base URL" name="baseUrl" rules={[{ required: true, message: '请输入Base URL' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="默认" name="isDefault" valuePropName="checked">
+            <Switch checkedChildren="是" unCheckedChildren="否" />
+          </Form.Item>
+          <Form.Item label="启用" name="enabled" valuePropName="checked" initialValue>
+            <Switch checkedChildren="开" unCheckedChildren="关" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={editingAssignment ? '编辑配置分配' : '分配LLM服务商'}
+        open={assignmentModalOpen}
+        onCancel={() => {
+          setAssignmentModalOpen(false);
+          assignmentForm.resetFields();
+          setEditingAssignment(null);
+        }}
+        onOk={handleAssignmentSubmit}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Form form={assignmentForm} layout="vertical">
+          <Form.Item label="客户ID" name="customerId" rules={[{ required: true, message: '请输入客户ID' }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item
+            label="LLM服务商"
+            name="llmProviderId"
+            rules={[{ required: true, message: '请选择LLM服务商' }]}
+          >
+            <Select
+              options={llmProviders.map((provider) => ({
+                label: `${provider.name} (${provider.model})`,
+                value: provider.id,
+              }))}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
   );
 };
 

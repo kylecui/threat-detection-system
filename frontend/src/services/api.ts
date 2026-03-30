@@ -101,7 +101,10 @@ apiClient.interceptors.request.use(
     const url = config.url || '';
     if (!url.includes('/api/v1/auth/') && !url.includes('/api/v1/system-config')
         && !url.includes('/api/v1/tenants') && !url.includes('/api/v1/users')
-        && !url.includes('/tenant')) {
+        && !url.includes('/tenant')
+        && !url.includes('/api/v1/tire-plugins')
+        && !url.includes('/api/v1/llm-providers')
+        && !url.includes('/api/v1/config-assignments')) {
       const customerId = localStorage.getItem('customer_id') || 'demo-customer';
       if (config.params) {
         config.params.customer_id = customerId;
