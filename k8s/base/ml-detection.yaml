@@ -17,6 +17,21 @@ spec:
     app: ml-detection
 
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ml-models-pvc
+  namespace: threat-detection
+  labels:
+    app: ml-detection
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -68,6 +83,19 @@ spec:
           value: "/app/models"
         - name: LOG_LEVEL
           value: "INFO"
+        - name: POSTGRES_HOST
+          value: "postgres"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_DB
+          value: "threat_detection"
+        - name: POSTGRES_USER
+          value: "threat_user"
+        - name: POSTGRES_PASSWORD
+          value: "threat_password"
+        volumeMounts:
+        - name: ml-models
+          mountPath: /app/models
         resources:
           requests:
             memory: "512Mi"
@@ -91,3 +119,7 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
+      volumes:
+      - name: ml-models
+        persistentVolumeClaim:
+          claimName: ml-models-pvc
