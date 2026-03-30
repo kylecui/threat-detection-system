@@ -14,7 +14,10 @@
    - API文档 → `docs/api/`
    - 设计规范 → `docs/design/`
    - 测试指南 → `docs/testing/`
-   - 构建部署 → `docs/build/`
+   - 构建部署 → `docs/build/` (含部署指南)
+   - RBAC文档 → `docs/rbac/`
+   - ML文档 → `docs/ml/`
+   - TIRE文档 → `docs/tire/`
 
 📄 **快速导航**: [DOCS_NAVIGATION.md](./DOCS_NAVIGATION.md)
 
@@ -26,31 +29,34 @@
 
 | 服务 | 状态 | 端口 | 说明 |
 |------|------|------|------|
-| **数据摄取服务** (Data Ingestion) | ✅ 完成 | 8080 | 接收rsyslog/logstash日志并发布到Kafka，支持批量处理 |
-| **流处理服务** (Stream Processing) | ✅ 完成 | 8081 (Flink UI) | Apache Flink实时威胁检测，多维度评分算法 |
+| **数据摄取服务** (Data Ingestion) | ✅ 完成 | 8080 | 接收rsyslog/logstash日志并发布到Kafka，支持V1 syslog KV + V2 MQTT JSON，批量处理，心跳持久化 |
+| **流处理服务** (Stream Processing) | ✅ 完成 | 8081 (Flink UI) | Apache Flink实时威胁检测，3级时间窗口 (30s/5min/15min)，多维度评分算法 |
 | **告警管理服务** (Alert Management) | ✅ 完成 | 8082 | 多通道通知 (Email/SMS/Webhook/Slack/Teams)，智能去重和升级 |
-| **威胁评估服务** (Threat Assessment) | ✅ 完成 | 8083 | 威胁评分和风险评估，历史趋势分析 |
-| **客户管理服务** (Customer Management) | ✅ 完成 | 8084 | 客户CRUD、设备绑定、通知配置 |
+| **威胁评估服务** (Threat Assessment) | ✅ 完成 | 8083 | 威胁评分和风险评估，历史趋势分析，设备管理，白名单 |
+| **客户管理服务** (Customer Management) | ✅ 完成 | 8084 | 客户CRUD、设备绑定、多租户层级、通知配置 |
 | **威胁情报服务** (Threat Intelligence) | ✅ 完成 | 8085 | 威胁情报指标管理、IP信誉查询、多源IOC聚合 |
-| **API网关** (API Gateway) | ✅ 完成 | 8888 | 统一入口，路由管理、熔断降级，含单元测试和K8s清单 |
-| **配置服务器** (Config Server) | ✅ 完成 | 8899 | Spring Cloud Config Server (native backend)，含Dockerfile、K8s清单和单元测试 |
-| **ML检测服务** (ML Detection) | ✅ 完成 | 8086 | PyTorch自编码器异常检测，ONNX Runtime推理，Kafka异步集成 |
+| **API网关** (API Gateway) | ✅ 完成 | 8888 / 30080 | 统一入口，JWT RBAC鉴权，Spring Cloud Gateway (WebFlux)，系统配置管理，TIRE插件配置，LLM验证 |
+| **配置服务器** (Config Server) | ✅ 完成 | 8899 | Spring Cloud Config Server (native backend)，统一配置中心 |
+| **ML检测服务** (ML Detection) | ✅ 完成 | 8086 | PyTorch自编码器+BiGRU异常检测，ONNX Runtime推理，3级模型，Kafka异步集成 |
+| **TIRE服务** (TIRE) | ✅ 完成 | 5000 | 威胁情报信誉引擎 (Threat Intelligence Reputation Engine)，11款插件集成，LLM支持 |
+| **前端界面** (Frontend) | ✅ 完成 | 3000 / 30080 | React SPA 仪表板，包含分析、告警、客户、ML检测、情报及系统设置 |
 
 ## 🛠️ 技术栈
 
 | 组件 | 技术 | 版本 |
 |------|------|------|
 | 后端 | Spring Boot | 3.1.5 (OpenJDK 21 LTS) |
+| 前端 | React | 18 |
 | 事件流 | Apache Kafka | 3.4+ |
 | 流处理 | Apache Flink | 1.17+ |
 | 容器化 | Docker + Docker Compose | — |
-| 编排 | Kubernetes + Kustomize | — |
+| 编排 | Kubernetes (K3s) | 1.25+ |
 | 构建工具 | Maven | 3.8.7 |
 | 数据库 | PostgreSQL | 15 |
 | 缓存 | Redis | 可选 |
 | MQTT Broker | EMQX | 5.5.1 |
 | ML推理 | PyTorch + ONNX Runtime | 2.2+ |
-| ML后端 | Python (FastAPI) | 3.11+ |
+| TIRE后端 | Python (FastAPI) | 3.11+ |
 
 ## 🚀 快速启动
 
@@ -99,12 +105,12 @@ V2哨兵 (MQTT JSON) → EMQX:1883  ↗                        ↓
                                                     Kafka (threat-alerts)
                                                       ↓         ↓
                                    Threat Assessment ← → PostgreSQL
-                                                      ↓         ↓
-                                                      ↓    ML Detection (PyTorch/ONNX)
-                                                      ↓         ↓
-                                                      ↓    Kafka (ml-threat-detections)
-                                                      ↓
-                                                    Alert Management → Email/SMS/Slack/Webhook/Teams
+                                          ↓           ↓         ↓
+                                   TIRE Enrichment ← → ML Detection (PyTorch/ONNX)
+                                          ↓                     ↓
+                                   Alert Management ← Kafka (ml-threat-detections)
+                                          ↓
+                                   Email/SMS/Slack/Webhook/Teams
 ```
 
 1. **日志摄取 (V1)**: rsyslog:9080 → 数据摄取服务，支持单条和批量处理 (syslog KV格式)
@@ -112,8 +118,36 @@ V2哨兵 (MQTT JSON) → EMQX:1883  ↗                        ↓
 3. **事件发布**: 结构化事件发布到Kafka主题 (`attack-events`, `status-events`)
 4. **实时处理**: Apache Flink多维度威胁评分 (30s/5min/15min 三级时间窗口)
 5. **威胁评估**: 风险等级评估 + 历史趋势分析 → PostgreSQL持久化
-6. **ML检测**: PyTorch自编码器异常检测 → ONNX Runtime推理 → mlWeight建议性评分倍率 (0.5-3.0)
-7. **告警通知**: 多通道通知 + 智能去重 + 升级策略
+6. **ML检测**: PyTorch自编码器+BiGRU异常检测 → ONNX Runtime推理 → mlWeight建议性评分倍率 (0.5-3.0)
+7. **TIRE增强**: 11款插件情报聚合 + LLM验证，为告警提供深度上下文
+8. **告警通知**: 多通道通知 + 智能去重 + 升级策略
+
+## 🛡️ 核心特性
+
+### 🔐 RBAC & 多租户架构
+- **层级管理**: SuperAdmin (系统管理) → TenantAdmin (分销商/大客户) → CustomerUser (普通用户)
+- **鉴权机制**: 统一 JWT 认证，支持 `POST /api/v1/auth/login` 登录
+- **权限控制**: 基于角色的菜单可见性与 API 访问控制 (RBAC)
+
+### 🔍 TIRE 威胁情报引擎
+- **多源聚合**: 集成 AbuseIPDB, VirusTotal, OTX, GreyNoise, Shodan, RDAP, Reverse DNS, Honeynet, Internal Flow, ThreatBook, 天际友盟等 11 款插件
+- **智能集成**: 支持 LLM 连接验证，插件启用/优先级/超时管理
+
+### 🤖 ML 检测流水线
+- **三级模型**: 
+  - Tier 1: 30s 窗口，专注勒索软件检测
+  - Tier 2: 5min 窗口，主要威胁检测
+  - Tier 3: 15min 窗口，APT 长期行为分析
+- **技术架构**: BiGRU 序列模型 + 自编码器，ONNX Runtime 高性能推理
+- **闭环流程**: `threat-alerts` → `ml-detection` → `ml-threat-detections` → DB
+
+### 🖥️ Web 管理仪表板
+- **React SPA**: 包含 Dashboard (概览), Analytics (分析), Alerts (告警), Customers (客户), ML Detection (机器学习), Threat Intel (情报), Logs (日志), Settings (设置), Login (登录) 等 9 大核心页面
+- **系统配置**: 支持 TIRE 插件管理、LLM 配置、RBAC 权限分配
+
+### 🌐 多区域支持
+- **高可用部署**: 支持 K8s Overlays 环境定制
+- **数据同步**: 集成 MirrorMaker2 与 PostgreSQL 复制配置，支持跨地域部署
 
 ## 🧮 威胁评分算法
 
@@ -292,15 +326,17 @@ cd docker && docker compose build --no-cache && docker compose up -d
 - [x] 多通道告警通知系统
 - [x] 数据库持久化层
 - [x] 客户管理与多租户隔离
-- [x] API Gateway完善 (测试 + K8s清单)
+- [x] API Gateway完善 (JWT RBAC + K8s清单)
 - [x] Config Server实现 (native backend, Docker, K8s)
 - [x] V2哨兵数据支持 (MQTT + JSON，EMQX Broker)
 - [x] 网段权重配置系统 (CRUD API + 评分集成)
 - [x] 网络拓扑与心跳持久化 (设备清单、拓扑快照、主机发现)
-- [x] 高级威胁情报集成
-- [x] 机器学习威胁检测 (PyTorch自编码器 + ONNX Runtime推理)
-- [x] Web管理仪表板
-- [x] 多区域部署支持
+- [x] 高级威胁情报集成 (TIRE 11款插件)
+- [x] 机器学习威胁检测 (PyTorch自编码器 + BiGRU + ONNX Runtime)
+- [x] Web管理仪表板 (React SPA 9大页面)
+- [x] 多区域部署支持 (K8s Overlays + MirrorMaker2)
+- [x] RBAC 权限体系与多租户层级
+- [x] LLM 智能验证与 TIRE 插件管理系统
 
 ## License
 
@@ -308,6 +344,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-*最后更新: 2026-03-27*
-*系统版本: v2.5*
-*部署状态: 全部核心服务 (9/9) 完成并可部署，ML威胁检测已集成，V2哨兵MQTT支持已集成，威胁情报集成已完成*
+*最后更新: 2026-03-30*
+*系统版本: v3.0*
+*部署状态: 全部核心服务 (11/11) 完成并可部署，18+ Pods 运行于 K3s 单节点，支持多区域部署*

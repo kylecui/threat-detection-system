@@ -1,48 +1,58 @@
 # 📚 威胁检测系统文档索引
 
-**版本**: 2.0
-**更新日期**: 2025-10-22
-**文档总数**: 120+ 文档
+**版本**: 3.0  
+**更新日期**: 2026-03-30  
+**文档总数**: 130+ 文档
 
 ---
 
-## 🎯 文档导航指南 (重要提醒)
+## 🎯 文档导航指南
 
-**请始终按照以下标准三步流程使用文档系统：**
+**请按照标准三步流程使用文档系统：**
 
-### 📋 第一步：从项目根目录的 README.md 开始
-- **位置**: `/README.md` (项目根目录)
-- **目的**: 了解项目整体概况、架构、技术栈、快速启动
-- **内容**: 系统架构介绍、部署指南、核心特性说明
+### 📋 第一步：项目概况
+- **[README.md](../README.md)** — 项目概述、架构、技术栈、快速启动
 
-### 🔍 第二步：查看本文档 (DOCUMENTATION_INDEX.md) 进行导航
-- **位置**: `docs/DOCUMENTATION_INDEX.md` (您正在阅读的文档)
-- **目的**: 获取完整的文档目录，快速定位所需信息
-- **内容**: 文档分类导航、搜索指南、使用统计
+### 🔍 第二步：本索引导航
+- **[DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)** — 您正在阅读的文档，完整目录与分类
 
-### 📂 第三步：根据具体需求进入相应子目录
-- **API文档**: `docs/api/` - REST API接口详细说明
-- **设计规范**: `docs/design/` - 架构设计和技术规范
-- **测试指南**: `docs/testing/` - 测试方法和自动化脚本
-- **构建部署**: `docs/build/` - Docker构建和部署指南
-- **审计报告**: `docs/audit/` - 代码质量和安全审计
-- **修复记录**: `docs/fixes/` - Bug修复和技术债务清理
+### 📂 第三步：深入具体文档
+| 目录 | 说明 |
+|------|------|
+| `docs/api/` | REST API 接口文档 |
+| `docs/design/` | 架构设计、领域规则、RBAC、ML、TIRE |
+| `docs/deployment/` | K3s 部署指南、FAQ、运维手册 |
+| `docs/testing/` | 测试方法和自动化脚本 |
+| `docs/build/` | Docker 构建和部署指南 |
+| `docs/fixes/` | Bug 修复和技术债务清理 |
+| `docs/guides/` | 使用指南、配置指南 |
+| `docs/progress/` | 进度报告、路线图 |
 
-**💡 提示**: 这三步流程确保您能够高效地找到所需信息，避免在文档海洋中迷失方向。
+---
+
+## ⭐ v3.0 新增文档 (2026-03-30)
+
+| 文档 | 路径 | 说明 |
+|------|------|------|
+| **K3s 部署指南 + FAQ** | [deployment/k3s_deployment_guide.md](deployment/k3s_deployment_guide.md) | 单节点 K3s 完整部署流程，含 16 条 FAQ |
+| **领域规则参考** | [design/domain_rules_reference.md](design/domain_rules_reference.md) | 6 条 V1 日志 + 设备管理 + 租户业务规则 |
+| **RBAC 多租户架构** | [design/rbac_multi_tenant_architecture.md](design/rbac_multi_tenant_architecture.md) | 三级角色体系 (SuperAdmin → TenantAdmin → CustomerUser) |
+| **ML 流水线训练指南** | [design/ml_pipeline_training_guide.md](design/ml_pipeline_training_guide.md) | PyTorch 3 层自编码器 + BiGRU, ONNX 推理, Kafka 集成 |
+| **TIRE/LLM 集成文档** | [design/tire_llm_integration.md](design/tire_llm_integration.md) | 11 款插件配置、LLM 连接验证、Plugin Management UI |
 
 ---
 
 ## 📖 快速导航
 
-### 🚀 核心文档 (docs/ 根目录)
+### 🚀 核心文档 (必读)
 | 文档 | 说明 | 状态 |
 |------|------|------|
-| [README.md](README.md) | 项目介绍和快速开始 | ✅ 最新 |
-| [DEVELOPMENT_PLAN_AND_PROGRESS.md](DEVELOPMENT_PLAN_AND_PROGRESS.md) | 开发计划及进度 | ✅ 最新 |
-| [TESTING_PRINCIPLES.md](TESTING_PRINCIPLES.md) | 测试原则 | ✅ 最新 |
-| [DATA_STRUCTURES_AND_CONNECTIONS.md](DATA_STRUCTURES_AND_CONNECTIONS.md) | 数据结构和数据库连接 | ✅ 最新 |
-| [CONTAINER_ARCHITECTURE_AND_APIS.md](CONTAINER_ARCHITECTURE_AND_APIS.md) | 容器结构和API配置 | ✅ 最新 |
-| [API_COLLECTION_AND_REFERENCE.md](API_COLLECTION_AND_REFERENCE.md) | API集合及快速参考 | ✅ 最新 |
+| [README.md](../README.md) | 项目概述、架构、部署 | ✅ v3.0 |
+| [DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md) | 本索引 | ✅ v3.0 |
+| [DEVELOPMENT_PLAN_AND_PROGRESS.md](DEVELOPMENT_PLAN_AND_PROGRESS.md) | 开发计划及进度 | ✅ |
+| [DATA_STRUCTURES_AND_CONNECTIONS.md](DATA_STRUCTURES_AND_CONNECTIONS.md) | 数据结构和数据库连接 | ✅ |
+| [CONTAINER_ARCHITECTURE_AND_APIS.md](CONTAINER_ARCHITECTURE_AND_APIS.md) | 容器结构和 API 配置 | ✅ |
+| [API_COLLECTION_AND_REFERENCE.md](API_COLLECTION_AND_REFERENCE.md) | API 集合及快速参考 | ✅ |
 
 ---
 
@@ -50,246 +60,201 @@
 
 ```
 docs/
-├── README.md                              # 项目介绍
+├── DOCUMENTATION_INDEX.md                 # ⭐ 本索引 (v3.0)
+├── README.md                              # 文档中心入口
 ├── DEVELOPMENT_PLAN_AND_PROGRESS.md       # 开发计划及进度
 ├── TESTING_PRINCIPLES.md                  # 测试原则
 ├── DATA_STRUCTURES_AND_CONNECTIONS.md     # 数据结构和连接
-├── CONTAINER_ARCHITECTURE_AND_APIS.md     # 容器架构和API
-├── API_COLLECTION_AND_REFERENCE.md        # API集合参考
+├── CONTAINER_ARCHITECTURE_AND_APIS.md     # 容器架构和 API
+├── API_COLLECTION_AND_REFERENCE.md        # API 集合参考
 │
-├── api/                                   # API详细文档
-│   ├── API_QUICK_REFERENCE.md
-│   ├── API_COMPLETE_VERIFICATION_CHECKLIST.md
+├── api/                                   # REST API 详细文档
 │   ├── customer_management_api.md
 │   ├── alert_management_api.md
 │   ├── data_ingestion_api.md
-│   └── threat_assessment_api.md
+│   ├── threat_assessment_api.md
+│   └── ...
 │
-├── audit/                                 # 代码审计报告
-│   ├── CODE_AUDIT_FINAL_REPORT_2025-10-22.md
-│   ├── AUDIT_COMPLETION_SUMMARY_2025-10-22.md
-│   └── CODE_AUDIT_BEST_PRACTICES_2025-10-22.md
+├── design/                                # 架构设计与领域规范
+│   ├── domain_rules_reference.md          # ⭐ v3.0 领域规则参考 (6 条核心规则)
+│   ├── rbac_multi_tenant_architecture.md  # ⭐ v3.0 RBAC 多租户架构
+│   ├── ml_pipeline_training_guide.md      # ⭐ v3.0 ML 流水线训练指南
+│   ├── tire_llm_integration.md            # ⭐ v3.0 TIRE/LLM 集成文档
+│   ├── flink_stream_processing_architecture.md
+│   ├── honeypot_based_threat_scoring.md
+│   ├── new_system_architecture_spec.md
+│   ├── v2_event_schemas.md
+│   ├── mqtt_ingestion_architecture.md
+│   ├── net_weighting_strategy.md
+│   └── ...
 │
-├── build/                                 # 构建和部署
+├── deployment/                            # 部署与运维
+│   ├── k3s_deployment_guide.md            # ⭐ v3.0 K3s 单节点部署 + 16 FAQ
+│   └── ...
+│
+├── guides/                                # 使用指南
+│   ├── USAGE_GUIDE.md
+│   ├── TIME_WINDOW_CONFIGURATION.md
+│   └── CONTAINER_REBUILD_WORKFLOW.md
+│
+├── build/                                 # 构建文档
 │   ├── DOCKER_COMPOSE_OPTIMIZATION_GUIDE.md
-│   ├── BUILD_SYSTEM_VERIFICATION_REPORT.md
 │   └── DOCKER_BEST_PRACTICES_GUIDE.md
 │
-├── testing/                               # 测试相关
-│   ├── BACKEND_API_INVENTORY.md
+├── testing/                               # 测试文档
 │   ├── COMPREHENSIVE_DEVELOPMENT_TEST_PLAN.md
 │   └── BACKEND_API_TESTING_DAY2_SUMMARY.md
 │
 ├── fixes/                                 # 修复报告
 │   ├── THREAT_ASSESSMENT_FIX_REPORT_2025-10-22.md
-│   ├── GET_ALERTS_ID_FIX_REPORT.md
 │   └── DATABASE_FIX_REPORT.md
 │
-├── phases/                                # 各阶段报告
-│   ├── PHASE1_COMPLETION_CERTIFICATE.md
-│   ├── DAY1_COMPLETION_REPORT.md
-│   └── PROJECT_UNDERSTANDING_SUMMARY_2025-10-20.md
-│
-├── guides/                                # 使用指南
-│   ├── USAGE_GUIDE.md
-│   ├── TIME_WINDOW_CONFIGURATION.md       # ⭐ 时间窗口自定义配置指南 (最新)
-│   └── CONTAINER_REBUILD_WORKFLOW.md
-│
-├── design/                                # 设计文档
-│   ├── flink_stream_processing_architecture.md  # ⭐ Flink流处理架构详解 (最新)
-│   ├── honeypot_based_threat_scoring.md
-│   ├── new_system_architecture_spec.md
-│   └── understanding_corrections_summary.md
-│
-├── analysis/                              # 分析报告
-│   ├── COMPREHENSIVE_OPTIMIZATION_PLAN.md
-│   └── 01_time_window_analysis.md
-│
-├── architecture/                          # 架构文档
-│   └── service_responsibility_separation.md
+├── audit/                                 # 代码审计
+│   └── CODE_AUDIT_FINAL_REPORT_2025-10-22.md
 │
 ├── progress/                              # 进度报告
 │   ├── IMPLEMENTATION_ROADMAP.md
 │   ├── COMPLETION_REPORT.md
-│   └── NEXT_DEVELOPMENT_PLAN.md        # 🎯 下一步研发工作计划 ⭐ 最新
+│   └── NEXT_DEVELOPMENT_PLAN.md
+│
+├── analysis/                              # 分析报告
+│   └── COMPREHENSIVE_OPTIMIZATION_PLAN.md
+│
+├── architecture/                          # 架构文档
+│   └── service_responsibility_separation.md
 │
 └── history/                               # 历史文档
-    ├── project_summary.md
-    └── cloud_native_architecture.md
+    └── ...
 ```
 
 ---
 
-## 🎯 文档分类说明
+## 🎯 文档分类详解
 
-### 📋 核心文档 (必须阅读)
-这些文档提供了系统的基础信息和使用指南：
+### 🏗️ 设计文档 (design/)
 
-1. **README.md** - 项目概述、架构介绍、快速开始
-2. **DEVELOPMENT_PLAN_AND_PROGRESS.md** - 当前开发状态和进度
-3. **TESTING_PRINCIPLES.md** - 测试方法和原则
-4. **DATA_STRUCTURES_AND_CONNECTIONS.md** - 数据模型和数据库配置
-5. **CONTAINER_ARCHITECTURE_AND_APIS.md** - 容器配置和API端点
-6. **API_COLLECTION_AND_REFERENCE.md** - API测试状态和快速参考
+#### ⭐ v3.0 新增
+| 文档 | 说明 |
+|------|------|
+| [domain_rules_reference.md](design/domain_rules_reference.md) | 6 条核心业务领域规则：设备归属、多设备支持、心跳日志、设备转移、TIRE/LLM 配置、租户分销商模型 |
+| [rbac_multi_tenant_architecture.md](design/rbac_multi_tenant_architecture.md) | SUPER_ADMIN → TENANT_ADMIN → CUSTOMER_USER 三级角色体系, JWT 认证, 权限范围, 前端角色 UI |
+| [ml_pipeline_training_guide.md](design/ml_pipeline_training_guide.md) | 3 层自编码器 (30s/5min/15min) + BiGRU, alpha=0.6 混合, mlWeight 0.5-3.0, ONNX 推理, 训练命令, Kafka 主题 |
+| [tire_llm_integration.md](design/tire_llm_integration.md) | 11 款插件 (AbuseIPDB, VirusTotal, OTX...), system_config 表, 插件管理 API, LLM 验证, 前端 Settings UI |
 
-### 🔧 开发文档 (按需阅读)
+#### 核心架构
+| 文档 | 说明 |
+|------|------|
+| [flink_stream_processing_architecture.md](design/flink_stream_processing_architecture.md) | Flink 流处理架构详解 |
+| [new_system_architecture_spec.md](design/new_system_architecture_spec.md) | 云原生系统架构规范 |
+| [honeypot_based_threat_scoring.md](design/honeypot_based_threat_scoring.md) | 蜜罐威胁评分方案 |
+| [data_structures.md](design/data_structures.md) | 数据结构定义 (Kafka, PostgreSQL) |
+| [v2_event_schemas.md](design/v2_event_schemas.md) | V2 哨兵 7 种 JSON 事件格式 |
+| [mqtt_ingestion_architecture.md](design/mqtt_ingestion_architecture.md) | EMQX MQTT 摄取架构 |
+| [net_weighting_strategy.md](design/net_weighting_strategy.md) | 网段权重策略 |
 
-#### API文档 (`api/`)
-- 详细的API接口说明
-- 请求/响应格式
-- 使用示例
+### 🚀 部署文档 (deployment/)
 
-#### 审计报告 (`audit/`)
-- 代码质量审计结果
-- 安全检查报告
-- 性能优化建议
+| 文档 | 说明 |
+|------|------|
+| [k3s_deployment_guide.md](deployment/k3s_deployment_guide.md) | ⭐ K3s 单节点完整部署指南: 前置条件, 18+ pods 部署, 镜像构建, 数据库初始化, 16 条 FAQ |
 
-#### 构建部署 (`build/`)
-- Docker配置优化
-- 构建流程说明
-- 部署最佳实践
+### 🔌 API 文档 (api/)
 
-#### 测试文档 (`testing/`)
-- 测试计划和策略
-- API测试覆盖
-- 自动化测试脚本
+| 文档 | 说明 |
+|------|------|
+| [customer_management_api.md](api/customer_management_api.md) | 客户 CRUD、设备绑定、通知配置 (26 端点) |
+| [data_ingestion_api.md](api/data_ingestion_api.md) | 日志摄取、批量处理、统计监控 |
+| [threat_assessment_overview.md](api/threat_assessment_overview.md) | 威胁评估架构、评分算法 |
+| [alert_management_overview.md](api/alert_management_overview.md) | 告警管理、通知系统 |
 
-#### 修复报告 (`fixes/`)
-- Bug修复记录
-- 问题分析和解决方案
-- 技术债务清理
+### 📚 使用指南 (guides/)
 
-### 📚 参考文档 (可选阅读)
-
-#### 阶段报告 (`phases/`)
-- 各开发阶段的完成情况
-- 里程碑达成记录
-
-#### 设计文档 (`design/`)
-- 系统设计决策
-- 架构设计说明
-
-#### 分析报告 (`analysis/`)
-- 技术分析和优化建议
-
-#### 进度报告 (`progress/`)
-- 开发进度跟踪
-- 实现路线图
-
-#### 历史文档 (`history/`)
-- 项目演进历史
-- 技术决策记录
+| 文档 | 说明 |
+|------|------|
+| [USAGE_GUIDE.md](guides/USAGE_GUIDE.md) | 系统使用指南 |
+| [TIME_WINDOW_CONFIGURATION.md](guides/TIME_WINDOW_CONFIGURATION.md) | 时间窗口配置 |
+| [CONTAINER_REBUILD_WORKFLOW.md](guides/CONTAINER_REBUILD_WORKFLOW.md) | 容器重建流程 |
 
 ---
 
-## 🔍 文档搜索指南
+## 🔍 按主题查找
 
-### 按主题查找
-- **API相关**: `docs/api/`
-- **数据库**: `docs/DATA_STRUCTURES_AND_CONNECTIONS.md`
-- **容器部署**: `docs/CONTAINER_ARCHITECTURE_AND_APIS.md`
-- **测试**: `docs/TESTING_PRINCIPLES.md` + `docs/testing/`
-- **问题修复**: `docs/fixes/`
-- **代码审计**: `docs/audit/`
+| 主题 | 文档位置 |
+|------|----------|
+| 项目概述 | [README.md](../README.md) |
+| 系统架构 | [design/new_system_architecture_spec.md](design/new_system_architecture_spec.md) |
+| 领域规则 | [design/domain_rules_reference.md](design/domain_rules_reference.md) |
+| RBAC / 多租户 | [design/rbac_multi_tenant_architecture.md](design/rbac_multi_tenant_architecture.md) |
+| ML 检测 | [design/ml_pipeline_training_guide.md](design/ml_pipeline_training_guide.md) |
+| TIRE / 威胁情报 | [design/tire_llm_integration.md](design/tire_llm_integration.md) |
+| K3s 部署 | [deployment/k3s_deployment_guide.md](deployment/k3s_deployment_guide.md) |
+| Flink 流处理 | [design/flink_stream_processing_architecture.md](design/flink_stream_processing_architecture.md) |
+| 蜜罐评分 | [design/honeypot_based_threat_scoring.md](design/honeypot_based_threat_scoring.md) |
+| V2 MQTT | [design/mqtt_ingestion_architecture.md](design/mqtt_ingestion_architecture.md) |
+| API 接口 | [api/](api/) |
+| Docker 构建 | [build/](build/) |
+| 测试 | [testing/](testing/) |
+| 问题修复 | [fixes/](fixes/) |
 
-### 按时间查找
-- **最新文档**: 查看文件修改日期
-- **历史版本**: `docs/history/` + `docs/phases/`
-- **当前状态**: 核心文档 (docs/ 根目录)
+---
 
-### 按类型查找
-- **使用指南**: `docs/guides/` + `docs/USAGE_GUIDE.md`
-- **技术规范**: `docs/design/` + `docs/architecture/`
-- **质量保证**: `docs/audit/` + `docs/testing/`
-- **项目管理**: `docs/DEVELOPMENT_PLAN_AND_PROGRESS.md`
+## 🎯 按角色推荐路径
+
+### 新开发者
+1. [README.md](../README.md) → 项目概况
+2. [本索引](DOCUMENTATION_INDEX.md) → 导航
+3. [design/domain_rules_reference.md](design/domain_rules_reference.md) → 领域规则
+4. [design/rbac_multi_tenant_architecture.md](design/rbac_multi_tenant_architecture.md) → 权限体系
+
+### 运维人员
+1. [README.md](../README.md) → 部署概览
+2. [deployment/k3s_deployment_guide.md](deployment/k3s_deployment_guide.md) → K3s 部署 + FAQ
+3. [guides/CONTAINER_REBUILD_WORKFLOW.md](guides/CONTAINER_REBUILD_WORKFLOW.md) → 容器重建
+
+### ML 工程师
+1. [design/ml_pipeline_training_guide.md](design/ml_pipeline_training_guide.md) → 训练指南
+2. [design/flink_stream_processing_architecture.md](design/flink_stream_processing_architecture.md) → 上游数据流
+
+### 威胁情报分析师
+1. [design/tire_llm_integration.md](design/tire_llm_integration.md) → TIRE/LLM 集成
+2. [design/honeypot_based_threat_scoring.md](design/honeypot_based_threat_scoring.md) → 蜜罐评分
+
+### API 开发者
+1. [API_COLLECTION_AND_REFERENCE.md](API_COLLECTION_AND_REFERENCE.md) → API 快速参考
+2. [api/](api/) → 具体接口文档
 
 ---
 
 ## 📊 文档统计
 
-### 文档数量
-- **核心文档**: 6个 (docs/ 根目录)
-- **API文档**: 15个 (api/)
-- **审计文档**: 7个 (audit/)
-- **构建文档**: 6个 (build/)
-- **测试文档**: 5个 (testing/)
-- **修复文档**: 8个 (fixes/)
-- **阶段文档**: 12个 (phases/)
-- **指南文档**: 2个 (guides/)
-- **设计文档**: 10个 (design/)
-- **分析文档**: 9个 (analysis/)
-- **架构文档**: 1个 (architecture/)
-- **进度文档**: 15个 (progress/)
-- **历史文档**: 5个 (history/)
-
-**总计**: 120+ 个文档文件
-
-### 文档质量
-- **完整性**: ✅ 100% (所有功能都有文档)
-- **时效性**: ✅ 最新 (2025-10-22更新)
-- **一致性**: ✅ 统一 (标准格式和术语)
-- **可访问性**: ✅ 分类清晰 (目录结构合理)
-
----
-
-## 🚀 快速开始 (标准导航流程)
-
-### 📋 所有用户的统一入口 (必循三步)
-
-**第一步**: 从项目根目录的 [README.md](../README.md) 开始
-- 了解项目整体架构和技术栈
-- 查看快速启动指南和系统特性
-
-**第二步**: 返回本文档进行导航定位
-- 浏览文档分类和目录结构
-- 根据需求类型选择相应文档
-
-**第三步**: 深入具体子目录获取详细信息
-- 技术文档 → 相应子目录
-- API文档 → `docs/api/`
-- 部署指南 → `docs/build/`
-
-### 🎯 不同角色推荐路径
-
-#### 新开发者 (推荐完全遵循三步流程)
-1. 📖 [README.md](../README.md) → 项目概况
-2. 📚 [本文档](DOCUMENTATION_INDEX.md) → 导航定位  
-3. 📂 [USAGE_GUIDE.md](guides/USAGE_GUIDE.md) → 详细使用指南
-
-#### API开发者
-1. 📖 [README.md](../README.md) → 基础了解
-2. 📚 [本文档](DOCUMENTATION_INDEX.md) → 定位API文档
-3. 📂 [api/](api/) → 具体API接口文档
-
-#### 运维人员  
-1. 📖 [README.md](../README.md) → 部署概览
-2. 📚 [本文档](DOCUMENTATION_INDEX.md) → 查找部署文档
-3. 📂 [build/](build/) → 构建和部署指南
-
-#### 测试人员
-1. 📖 [README.md](../README.md) → 系统架构
-2. 📚 [本文档](DOCUMENTATION_INDEX.md) → 测试文档导航
-3. 📂 [testing/](testing/) → 测试方法和脚本
+| 分类 | 数量 |
+|------|------|
+| 核心文档 (docs/ 根目录) | 6 |
+| API 文档 (api/) | 15 |
+| 设计文档 (design/) | 14 |
+| 部署文档 (deployment/) | 1 |
+| 使用指南 (guides/) | 3 |
+| 构建文档 (build/) | 6 |
+| 测试文档 (testing/) | 5 |
+| 修复报告 (fixes/) | 8 |
+| 审计报告 (audit/) | 7 |
+| 进度报告 (progress/) | 15 |
+| 分析报告 (analysis/) | 9 |
+| 架构文档 (architecture/) | 1 |
+| 历史文档 (history/) | 5 |
+| **总计** | **130+** |
 
 ---
 
 ## 📞 文档维护
 
-### 更新原则
 - **核心文档**: 实时更新，反映最新状态
 - **技术文档**: 代码变更时同步更新
 - **历史文档**: 重大事件后归档保留
-
-### 贡献指南
 - 新功能开发时必须更新相关文档
 - 文档格式统一使用 Markdown
 - 保持目录结构清晰和一致
 
-### 文档审查
-- 代码审查时包含文档审查
-- 发布前进行文档完整性检查
-- 定期清理过时文档
-
 ---
 
-*此索引帮助您快速定位所需的文档和信息*
+*最后更新: 2026-03-30 · 系统版本: v3.0*
