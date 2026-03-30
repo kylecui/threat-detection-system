@@ -22,30 +22,59 @@ def load_from_csv(path: str) -> np.ndarray:
 
 
 def load_from_postgres(database_url: str, tier: int) -> np.ndarray:
-    conn = psycopg2.connect(database_url)
+    """Load 12-dim feature vectors from threat_assessments table.
+
+    Feature mapping (aligned with actual DB schema):
+      0: attack_count_log     — LN(1 + attack_count)
+      1: unique_ips           — raw unique IP count
+      2: unique_ports         — raw unique port count
+      3: unique_devices_norm  — unique_devices / 10.0
+      4: port_risk_score      — COALESCE(port_risk_score, 1.0)
+      5: threat_score_log     — LN(1 + threat_score) as proxy for net weight
+      6: ml_weight_norm       — COALESCE(ml_weight, 1.0) / 3.0
+      7: time_weight          — COALESCE(time_weight, 1.0)
+      8: ip_weight            — COALESCE(ip_weight, 1.0)
+      9: port_weight          — COALESCE(port_weight, 1.0)
+     10: hour_sin             — SIN(2π × hour / 24)
+     11: hour_cos             — COS(2π × hour / 24)
+    """
+    import logging
+    _logger = logging.getLogger(__name__)
+
+    try:
+        conn = psycopg2.connect(database_url)
+    except Exception as e:
+        _logger.warning("Cannot connect to postgres: %s — returning empty", e)
+        return np.zeros((0, 12), dtype=np.float32)
+
     try:
         with conn.cursor() as cursor:
             cursor.execute(
                 """
                 SELECT
-                    LN(1 + GREATEST(attack_count, 0)) AS attack_count_log,
-                    GREATEST(unique_ips, 0)::float AS unique_ips,
-                    GREATEST(unique_ports, 0)::float AS unique_ports,
-                    GREATEST(unique_devices, 0)::float / 10.0 AS unique_devices_norm,
-                    COALESCE(mixed_port_weight, 1.0)::float AS mixed_port_weight,
-                    LN(1 + GREATEST(net_weight, 0))::float AS net_weight_log,
-                    COALESCE(intel_score, 0)::float / 100.0 AS intel_score_norm,
-                    LN(1 + GREATEST(event_time_span, 0) / 1000.0)::float AS event_time_span_log,
-                    COALESCE(burst_intensity, 0.0)::float AS burst_intensity,
-                    COALESCE(time_distribution_weight, 1.0)::float AS time_dist_weight,
-                    SIN(2 * PI() * EXTRACT(HOUR FROM window_start) / 24.0)::float AS hour_sin,
-                    COS(2 * PI() * EXTRACT(HOUR FROM window_start) / 24.0)::float AS hour_cos
-                FROM threat_alerts
-                WHERE tier = %s
+                    LN(1 + GREATEST(attack_count, 0))::float             AS attack_count_log,
+                    GREATEST(unique_ips, 0)::float                       AS unique_ips,
+                    GREATEST(unique_ports, 0)::float                     AS unique_ports,
+                    GREATEST(unique_devices, 0)::float / 10.0            AS unique_devices_norm,
+                    COALESCE(port_risk_score, 1.0)::float                AS port_risk_score,
+                    LN(1 + GREATEST(threat_score, 0))::float             AS threat_score_log,
+                    COALESCE(ml_weight, 1.0)::float / 3.0               AS ml_weight_norm,
+                    COALESCE(time_weight, 1.0)::float                    AS time_weight,
+                    COALESCE(ip_weight, 1.0)::float                      AS ip_weight,
+                    COALESCE(port_weight, 1.0)::float                    AS port_weight,
+                    SIN(2 * PI() * EXTRACT(HOUR FROM assessment_time) / 24.0)::float AS hour_sin,
+                    COS(2 * PI() * EXTRACT(HOUR FROM assessment_time) / 24.0)::float AS hour_cos
+                FROM threat_assessments
+                WHERE detection_tier = %s
+                ORDER BY assessment_time DESC
+                LIMIT 10000
                 """,
                 (tier,),
             )
             rows = cursor.fetchall()
+    except Exception as e:
+        _logger.warning("Failed to query threat_assessments: %s — returning empty", e)
+        return np.zeros((0, 12), dtype=np.float32)
     finally:
         conn.close()
 
