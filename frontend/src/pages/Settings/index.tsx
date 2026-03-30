@@ -24,6 +24,7 @@ import {
   MailOutlined,
   SettingOutlined,
   BellOutlined,
+  AppstoreOutlined,
   SaveOutlined,
   ReloadOutlined,
   GlobalOutlined,
@@ -33,7 +34,8 @@ import {
   EyeInvisibleOutlined,
 } from '@ant-design/icons';
 import apiClient, { switchRegion } from '@/services/api';
-import { getConfigsByCategory, batchUpdateConfigs } from '@/services/config';
+import { getConfigsByCategory, batchUpdateConfigs, validateLlmConnection } from '@/services/config';
+import type { LlmValidateResult } from '@/services/config';
 import type { SmtpConfig, NotificationConfig, RegionId, SystemConfig } from '@/types';
 import { REGION_ENDPOINTS } from '@/types';
 
@@ -44,6 +46,7 @@ const Settings = () => {
   const [smtpForm] = Form.useForm();
   const [notifForm] = Form.useForm();
   const [tireForm] = Form.useForm();
+  const [pluginForm] = Form.useForm();
   const [llmForm] = Form.useForm();
 
   const [smtpConfig, setSmtpConfig] = useState<SmtpConfig | null>(null);
@@ -54,10 +57,15 @@ const Settings = () => {
   const [tireConfigs, setTireConfigs] = useState<SystemConfig[]>([]);
   const [llmConfigs, setLlmConfigs] = useState<SystemConfig[]>([]);
   const [tireGeneralConfigs, setTireGeneralConfigs] = useState<SystemConfig[]>([]);
+  const [pluginConfigs, setPluginConfigs] = useState<SystemConfig[]>([]);
   const [tireLoading, setTireLoading] = useState(false);
+  const [pluginLoading, setPluginLoading] = useState(false);
   const [llmLoading, setLlmLoading] = useState(false);
   const [tireSaving, setTireSaving] = useState(false);
+  const [pluginSaving, setPluginSaving] = useState(false);
   const [llmSaving, setLlmSaving] = useState(false);
+  const [llmValidating, setLlmValidating] = useState(false);
+  const [llmModels, setLlmModels] = useState<string[]>([]);
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
 
   const customerId = localStorage.getItem('customer_id') || 'demo-customer';
@@ -140,10 +148,34 @@ const Settings = () => {
     }
   }, [isSuperAdmin, llmForm]);
 
+  const loadPluginConfigs = useCallback(async () => {
+    if (!isSuperAdmin) return;
+    try {
+      setPluginLoading(true);
+      const configs = await getConfigsByCategory('tire_plugins');
+      setPluginConfigs(configs);
+      const formValues: Record<string, boolean | number> = {};
+      configs.forEach((c) => {
+        if (c.key.endsWith('_ENABLED')) {
+          formValues[c.key] = c.value === 'true';
+          return;
+        }
+        const num = Number(c.value);
+        formValues[c.key] = Number.isNaN(num) ? 0 : num;
+      });
+      pluginForm.setFieldsValue(formValues);
+    } catch {
+      console.log('Failed to load plugin configs');
+    } finally {
+      setPluginLoading(false);
+    }
+  }, [isSuperAdmin, pluginForm]);
+
   useEffect(() => {
     loadSmtpConfig();
     loadNotifConfig();
     loadTireConfigs();
+    loadPluginConfigs();
     loadLlmConfigs();
   }, []);
 
@@ -235,6 +267,67 @@ const Settings = () => {
     }
   };
 
+  const handlePluginSave = async (values: Record<string, boolean | number>) => {
+    try {
+      setPluginSaving(true);
+      const updates: Record<string, string> = {};
+      Object.entries(values).forEach(([key, val]) => {
+        if (val === undefined || val === null) return;
+        const configDef = pluginConfigs.find((c) => c.key === key);
+        if (!configDef) return;
+        const nextValue = key.endsWith('_ENABLED')
+          ? String(Boolean(val))
+          : String(val);
+        if (nextValue !== configDef.value) {
+          updates[key] = nextValue;
+        }
+      });
+      if (Object.keys(updates).length > 0) {
+        await batchUpdateConfigs(updates);
+      }
+      message.success('插件配置已保存，请运行 apply-tire-config.sh 同步到集群');
+      loadPluginConfigs();
+    } catch {
+      message.error('插件配置保存失败');
+    } finally {
+      setPluginSaving(false);
+    }
+  };
+
+  const handleLlmValidate = async () => {
+    const values = llmForm.getFieldsValue(['LLM_API_KEY', 'LLM_BASE_URL']) as {
+      LLM_API_KEY?: string;
+      LLM_BASE_URL?: string;
+    };
+    const apiKeyConfig = llmConfigs.find((c) => c.key === 'LLM_API_KEY');
+    if (!values.LLM_API_KEY && apiKeyConfig?.hasValue) {
+      message.info('当前API Key为密文存储，请重新输入API Key后再测试连接');
+      return;
+    }
+    if (!values.LLM_API_KEY) {
+      message.warning('请先输入LLM API Key');
+      return;
+    }
+    if (!values.LLM_BASE_URL) {
+      message.warning('请先输入LLM Base URL');
+      return;
+    }
+    try {
+      setLlmValidating(true);
+      const result: LlmValidateResult = await validateLlmConnection(values.LLM_API_KEY, values.LLM_BASE_URL);
+      if (result.ok) {
+        setLlmModels(result.models || []);
+        message.success(`连接测试成功，获取到 ${result.models.length} 个模型`);
+      } else {
+        message.error(result.error || '连接测试失败');
+      }
+    } catch {
+      message.error('连接测试失败');
+    } finally {
+      setLlmValidating(false);
+    }
+  };
+
   const toggleReveal = (key: string) => {
     setRevealedKeys((prev) => {
       const next = new Set(prev);
@@ -282,6 +375,64 @@ const Settings = () => {
       </Form.Item>
     );
   };
+
+  const pluginLabelMap: Record<string, string> = {
+    abuseipdb: 'AbuseIPDB',
+    virustotal: 'VirusTotal',
+    otx: 'AlienVault OTX',
+    greynoise: 'GreyNoise',
+    shodan: 'Shodan',
+    rdap: 'RDAP',
+    reverse_dns: 'Reverse DNS',
+    honeynet: 'Honeynet',
+    internal_flow: 'Internal Flow',
+    threatbook: 'Threatbook (微步在线)',
+    tianjiyoumeng: 'TianjiYoumeng (天际友盟)',
+  };
+
+  const pluginOrder = [
+    'abuseipdb',
+    'virustotal',
+    'otx',
+    'greynoise',
+    'shodan',
+    'rdap',
+    'reverse_dns',
+    'honeynet',
+    'internal_flow',
+    'threatbook',
+    'tianjiyoumeng',
+  ];
+
+  const pluginGroupedConfigs = pluginConfigs.reduce<Record<string, Partial<Record<'enabled' | 'priority' | 'timeout', string>>>>((acc, config) => {
+    const match = config.key.match(/^PLUGIN_(.+)_(ENABLED|PRIORITY|TIMEOUT)$/);
+    if (!match) return acc;
+    const pluginName = match[1].toLowerCase();
+    const field = match[2].toLowerCase() as 'enabled' | 'priority' | 'timeout';
+    acc[pluginName] = acc[pluginName] || {};
+    acc[pluginName][field] = config.key;
+    return acc;
+  }, {});
+
+  const pluginRows = pluginOrder
+    .map((pluginName) => {
+      const grouped = pluginGroupedConfigs[pluginName];
+      if (!grouped?.enabled || !grouped?.priority || !grouped?.timeout) return null;
+      return {
+        pluginName,
+        label: pluginLabelMap[pluginName] || pluginName,
+        enabledKey: grouped.enabled,
+        priorityKey: grouped.priority,
+        timeoutKey: grouped.timeout,
+      };
+    })
+    .filter((item): item is {
+      pluginName: string;
+      label: string;
+      enabledKey: string;
+      priorityKey: string;
+      timeoutKey: string;
+    } => item !== null);
 
   // ──────── Tab项 ────────
   const tabItems = [
@@ -664,6 +815,96 @@ const Settings = () => {
             ),
           },
           {
+            key: 'plugins',
+            label: (
+              <span>
+                <AppstoreOutlined /> 插件管理
+              </span>
+            ),
+            children: (
+              <Card bordered={false}>
+                <Spin spinning={pluginLoading}>
+                  <Alert
+                    message="TIRE插件配置"
+                    description="可按需启用/禁用插件，并调整优先级和超时时间。保存后需运行 apply-tire-config.sh 同步到集群。"
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 24 }}
+                  />
+                  <Form
+                    form={pluginForm}
+                    layout="vertical"
+                    onFinish={handlePluginSave}
+                  >
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                        gap: 12,
+                        alignItems: 'center',
+                        marginBottom: 12,
+                        padding: '0 8px',
+                      }}
+                    >
+                      <Text type="secondary">插件名称</Text>
+                      <Text type="secondary">启用状态</Text>
+                      <Text type="secondary">优先级</Text>
+                      <Text type="secondary">超时（秒）</Text>
+                    </div>
+                    <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                      {pluginRows.map((row) => (
+                        <Card key={row.pluginName} size="small">
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                              gap: 12,
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Text strong>{row.label}</Text>
+                            <Form.Item name={row.enabledKey} valuePropName="checked" style={{ marginBottom: 0 }}>
+                              <Switch checkedChildren="开" unCheckedChildren="关" />
+                            </Form.Item>
+                            <Form.Item name={row.priorityKey} style={{ marginBottom: 0 }}>
+                              <InputNumber min={1} max={100} style={{ width: '100%' }} />
+                            </Form.Item>
+                            <Form.Item name={row.timeoutKey} style={{ marginBottom: 0 }}>
+                              <InputNumber min={5} max={300} addonAfter="秒" style={{ width: '100%' }} />
+                            </Form.Item>
+                          </div>
+                        </Card>
+                      ))}
+                    </Space>
+                    {pluginRows.length === 0 && (
+                      <Alert
+                        message="未找到插件配置项"
+                        description="请先执行 30-system-config.sql 初始化配置数据"
+                        type="warning"
+                        style={{ marginTop: 12 }}
+                      />
+                    )}
+                    <Form.Item style={{ marginTop: 24 }}>
+                      <Space>
+                        <Button
+                          type="primary"
+                          htmlType="submit"
+                          icon={<SaveOutlined />}
+                          loading={pluginSaving}
+                        >
+                          保存插件配置
+                        </Button>
+                        <Button icon={<ReloadOutlined />} onClick={loadPluginConfigs}>
+                          刷新
+                        </Button>
+                      </Space>
+                    </Form.Item>
+                  </Form>
+                </Spin>
+              </Card>
+            ),
+          },
+          {
             key: 'llm',
             label: (
               <span>
@@ -686,7 +927,41 @@ const Settings = () => {
                     onFinish={handleLlmSave}
                     style={{ maxWidth: 600 }}
                   >
-                    {llmConfigs.map(renderConfigField)}
+                    {llmConfigs.map((config) => {
+                      if (config.key !== 'LLM_MODEL') {
+                        return renderConfigField(config);
+                      }
+                      if (llmModels.length === 0) {
+                        return renderConfigField(config);
+                      }
+                      return (
+                        <Form.Item
+                          key={config.key}
+                          label={
+                            <Space>
+                              {config.description || config.key}
+                            </Space>
+                          }
+                          name={config.key}
+                          tooltip={config.key}
+                          getValueProps={(value: string) => ({ value: value ? [value] : [] })}
+                          normalize={(value: string[]) => {
+                            const candidates = value.filter((item) => item !== '__other__');
+                            return candidates[candidates.length - 1] || '';
+                          }}
+                        >
+                          <Select
+                            mode="tags"
+                            placeholder="请选择或输入模型名称"
+                            options={[
+                              ...llmModels.map((model) => ({ label: model, value: model })),
+                              { label: 'Other（可直接输入）', value: '__other__', disabled: true },
+                            ]}
+                            tokenSeparators={[',']}
+                          />
+                        </Form.Item>
+                      );
+                    })}
                     {llmConfigs.length === 0 && (
                       <Alert
                         message="未找到LLM配置项"
@@ -703,6 +978,13 @@ const Settings = () => {
                           loading={llmSaving}
                         >
                           保存LLM配置
+                        </Button>
+                        <Button
+                          icon={<ApiOutlined />}
+                          onClick={handleLlmValidate}
+                          loading={llmValidating}
+                        >
+                          测试连接
                         </Button>
                         <Button icon={<ReloadOutlined />} onClick={loadLlmConfigs}>
                           刷新

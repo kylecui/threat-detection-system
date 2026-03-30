@@ -9,13 +9,16 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * System Configuration REST controller
@@ -149,6 +152,66 @@ public class SystemConfigController {
                                 return ResponseEntity.ok(result);
                             })
                             .defaultIfEmpty(ResponseEntity.notFound().build());
+                })
+                .onErrorResume(SecurityException.class, e ->
+                        Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build()));
+    }
+
+    /**
+     * Validate LLM connection by listing available models from the provider.
+     * Body: { "api_key": "sk-...", "base_url": "https://api.openai.com/v1" }
+     * Returns: { "ok": true/false, "models": [...], "error": null/string }
+     */
+    @PostMapping("/llm/validate")
+    public Mono<ResponseEntity<Map<String, Object>>> validateLlmConnection(
+            @RequestBody Map<String, String> body,
+            ServerWebExchange exchange) {
+        return requireSuperAdmin(exchange)
+                .flatMap(ok -> {
+                    String apiKey = body.get("api_key");
+                    String baseUrl = body.get("base_url");
+                    if (apiKey == null || apiKey.isBlank() || baseUrl == null || baseUrl.isBlank()) {
+                        Map<String, Object> err = new HashMap<>();
+                        err.put("ok", false);
+                        err.put("models", List.of());
+                        err.put("error", "api_key and base_url are required");
+                        return Mono.just(ResponseEntity.badRequest().body(err));
+                    }
+
+                    String effectiveBase = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+
+                    return WebClient.create()
+                            .get()
+                            .uri(effectiveBase + "/models")
+                            .header("Authorization", "Bearer " + apiKey)
+                            .retrieve()
+                            .bodyToMono(Map.class)
+                            .timeout(Duration.ofSeconds(15))
+                            .map(data -> {
+                                @SuppressWarnings("unchecked")
+                                List<Map<String, Object>> modelList = (List<Map<String, Object>>) data.get("data");
+                                List<String> models = modelList == null ? List.of() :
+                                        modelList.stream()
+                                                .map(m -> (String) m.get("id"))
+                                                .filter(id -> id != null)
+                                                .sorted()
+                                                .collect(Collectors.toList());
+
+                                Map<String, Object> result = new HashMap<>();
+                                result.put("ok", true);
+                                result.put("models", models);
+                                result.put("error", null);
+                                log.info("LLM connection validated: {} models found at {}", models.size(), effectiveBase);
+                                return ResponseEntity.ok(result);
+                            })
+                            .onErrorResume(e -> {
+                                Map<String, Object> errResult = new HashMap<>();
+                                errResult.put("ok", false);
+                                errResult.put("models", List.of());
+                                errResult.put("error", e.getMessage());
+                                log.warn("LLM connection validation failed for {}: {}", effectiveBase, e.getMessage());
+                                return Mono.just(ResponseEntity.ok(errResult));
+                            });
                 })
                 .onErrorResume(SecurityException.class, e ->
                         Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build()));

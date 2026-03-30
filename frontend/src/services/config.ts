@@ -13,3 +13,17 @@ export async function batchUpdateConfigs(configs: Record<string, string>): Promi
 export async function updateConfig(key: string, value: string): Promise<void> {
   await apiClient.put(`/api/v1/system-config/${key}`, { value });
 }
+
+export interface LlmValidateResult {
+  ok: boolean;
+  models: string[];
+  error: string | null;
+}
+
+export async function validateLlmConnection(apiKey: string, baseUrl: string): Promise<LlmValidateResult> {
+  const resp = await apiClient.post<LlmValidateResult>('/api/v1/system-config/llm/validate', {
+    api_key: apiKey,
+    base_url: baseUrl,
+  });
+  return resp.data;
+}

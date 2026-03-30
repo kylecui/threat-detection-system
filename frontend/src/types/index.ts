@@ -484,7 +484,7 @@ export interface SystemConfig {
 }
 
 /** 系统配置分类 */
-export type SystemConfigCategory = 'tire_api_keys' | 'llm' | 'tire_general';
+export type SystemConfigCategory = 'tire_api_keys' | 'llm' | 'tire_general' | 'tire_plugins';
 
 // ============================================================
 // SMTP配置 (Alert Management)
