@@ -21,12 +21,12 @@ CREATE TABLE IF NOT EXISTS apt_temporal_accumulations (
     unique_devices_count INTEGER NOT NULL DEFAULT 0,     -- 唯一设备数量
 
     -- 指数衰减累积评分
-    decay_accumulated_score DECIMAL(12,4) NOT NULL DEFAULT 0.0,  -- 衰减累积威胁评分
+    decay_accumulated_score DECIMAL(20,4) NOT NULL DEFAULT 0.0,  -- 衰减累积威胁评分 (widened for high-volume ingestion)
     half_life_days INTEGER NOT NULL DEFAULT 30,          -- 半衰期天数 (默认30天)
 
     -- 攻击阶段推断
     inferred_attack_phase VARCHAR(30),                   -- 推断的攻击阶段: RECON/EXPLOITATION/PERSISTENCE/UNKNOWN
-    phase_confidence DECIMAL(3,2),                       -- 阶段推断置信度 (0.0-1.0)
+    phase_confidence DECIMAL(8,4),                       -- 阶段推断置信度 (0.0-1.0)
 
     -- 时间窗口信息
     window_start TIMESTAMP WITH TIME ZONE NOT NULL,      -- 累积窗口开始时间

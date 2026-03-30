@@ -76,13 +76,17 @@ spec:
         - name: KAFKA_CONSUMER_GROUP
           value: "ml-detection-group"
         - name: KAFKA_INPUT_TOPIC
-          value: "attack-events"
+          value: "threat-alerts"
         - name: KAFKA_OUTPUT_TOPIC
           value: "ml-threat-detections"
         - name: MODEL_PATH
           value: "/app/models"
         - name: LOG_LEVEL
           value: "INFO"
+        - name: BIGRU_ENABLED
+          value: "true"
+        - name: MODEL_WATCH_ENABLED
+          value: "true"
         - name: POSTGRES_HOST
           value: "postgres"
         - name: POSTGRES_PORT

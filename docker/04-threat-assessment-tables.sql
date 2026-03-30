@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS threat_assessments (
     id BIGSERIAL PRIMARY KEY,
     customer_id VARCHAR(100) NOT NULL,
     attack_mac VARCHAR(17) NOT NULL,
-    threat_score DECIMAL(10,2) NOT NULL,
+    threat_score DECIMAL(20,4) NOT NULL,
     threat_level VARCHAR(20) NOT NULL,
     attack_count INTEGER NOT NULL,
     unique_ips INTEGER NOT NULL,
@@ -20,14 +20,14 @@ CREATE TABLE IF NOT EXISTS threat_assessments (
 
     -- 扩展字段
     port_list TEXT,
-    port_risk_score DECIMAL(5,2) DEFAULT 0.0,
+    port_risk_score DECIMAL(12,4) DEFAULT 0.0,
     detection_tier INTEGER DEFAULT 2,
 
     -- 权重因子 (用于审计和调试)
-    time_weight DECIMAL(5,2),
-    ip_weight DECIMAL(5,2),
-    port_weight DECIMAL(5,2),
-    device_weight DECIMAL(5,2),
+    time_weight DECIMAL(12,4),
+    ip_weight DECIMAL(12,4),
+    port_weight DECIMAL(12,4),
+    device_weight DECIMAL(12,4),
 
     -- 攻击源IP
     attack_ip VARCHAR(45),
