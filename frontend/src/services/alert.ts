@@ -46,8 +46,7 @@ class AlertService {
   ): Promise<Alert> {
     const response = await apiClient.post<Alert>(
       `/api/v1/alerts/${id}/resolve`,
-      null,
-      { params: data }
+      data
     );
     return response.data;
   }
@@ -56,8 +55,7 @@ class AlertService {
   async assign(id: number, assignedTo: string): Promise<Alert> {
     const response = await apiClient.post<Alert>(
       `/api/v1/alerts/${id}/assign`,
-      null,
-      { params: { assignedTo } }
+      { assignedTo }
     );
     return response.data;
   }
@@ -66,8 +64,7 @@ class AlertService {
   async escalate(id: number, reason: string): Promise<Alert> {
     const response = await apiClient.post<Alert>(
       `/api/v1/alerts/${id}/escalate`,
-      null,
-      { params: { reason } }
+      { reason }
     );
     return response.data;
   }
