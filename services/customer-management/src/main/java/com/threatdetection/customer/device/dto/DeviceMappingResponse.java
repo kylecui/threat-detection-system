@@ -39,10 +39,14 @@ public class DeviceMappingResponse {
     @JsonProperty("updated_at")
     private Instant updatedAt;
 
-    /**
-     * 从实体转换为DTO
-     */
+    @JsonProperty("real_host_count")
+    private Integer realHostCount;
+
     public static DeviceMappingResponse fromEntity(DeviceMapping mapping) {
+        return fromEntity(mapping, null);
+    }
+
+    public static DeviceMappingResponse fromEntity(DeviceMapping mapping, Integer realHostCount) {
         return DeviceMappingResponse.builder()
                 .id(mapping.getId())
                 .devSerial(mapping.getDevSerial())
@@ -51,6 +55,7 @@ public class DeviceMappingResponse {
                 .description(mapping.getDescription())
                 .createdAt(mapping.getCreatedAt())
                 .updatedAt(mapping.getUpdatedAt())
+                .realHostCount(realHostCount)
                 .build();
     }
 }

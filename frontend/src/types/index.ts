@@ -220,6 +220,9 @@ export interface Device {
   lastHeartbeat?: string;
   createdAt: string;
   updatedAt: string;
+  isActive?: boolean;
+  description?: string;
+  realHostCount?: number;
 }
 
 /** 设备配额 */
@@ -228,6 +231,7 @@ export interface DeviceQuota {
   maxDevices: number;
   currentDevices: number;
   remainingQuota: number;
+  protectedHostCount: number;
 }
 
 /** 网段权重 */

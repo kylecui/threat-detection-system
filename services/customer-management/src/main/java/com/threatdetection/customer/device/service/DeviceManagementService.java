@@ -161,7 +161,6 @@ public class DeviceManagementService {
     public Page<DeviceMappingResponse> getCustomerDevices(String customerId, Boolean isActive, Pageable pageable) {
         log.debug("Getting devices for customer {}, isActive: {}", customerId, isActive);
 
-        // 检查客户是否存在
         if (!customerRepository.existsByCustomerId(customerId)) {
             throw new CustomerNotFoundException(customerId);
         }
@@ -173,7 +172,10 @@ public class DeviceManagementService {
             devices = deviceMappingRepository.findByCustomerId(customerId, pageable);
         }
 
-        return devices.map(DeviceMappingResponse::fromEntity);
+        return devices.map(mapping -> {
+            Integer realHostCount = deviceMappingRepository.findLatestRealHostCountByDevSerial(mapping.getDevSerial());
+            return DeviceMappingResponse.fromEntity(mapping, realHostCount);
+        });
     }
 
     /**
@@ -282,19 +284,18 @@ public class DeviceManagementService {
     public DeviceQuotaResponse syncDeviceCount(String customerId) {
         log.info("Syncing device count for customer {}", customerId);
 
-        // 1. 检查客户是否存在
         Customer customer = customerRepository.findByCustomerId(customerId)
                 .orElseThrow(() -> new CustomerNotFoundException(customerId));
 
-        // 2. 统计激活设备数
         long activeDeviceCount = deviceMappingRepository.countActiveDevicesByCustomerId(customerId);
+        long protectedHostCount = deviceMappingRepository.sumProtectedHostCountByCustomerId(customerId);
 
-        // 3. 更新客户记录
         customerService.updateDeviceCount(customerId, (int) activeDeviceCount);
 
-        log.info("Synced device count for customer {}: {}/{}", customerId, activeDeviceCount, customer.getMaxDevices());
+        log.info("Synced device count for customer {}: devices={}/{}, protectedHosts={}",
+            customerId, activeDeviceCount, customer.getMaxDevices(), protectedHostCount);
 
-        return DeviceQuotaResponse.calculate(customerId, activeDeviceCount, customer.getMaxDevices());
+        return DeviceQuotaResponse.calculate(customerId, activeDeviceCount, customer.getMaxDevices(), protectedHostCount);
     }
 
     /**
@@ -304,14 +305,13 @@ public class DeviceManagementService {
     public DeviceQuotaResponse getDeviceQuota(String customerId) {
         log.debug("Getting device quota for customer {}", customerId);
 
-        // 1. 检查客户是否存在
         Customer customer = customerRepository.findByCustomerId(customerId)
                 .orElseThrow(() -> new CustomerNotFoundException(customerId));
 
-        // 2. 统计激活设备数
         long activeDeviceCount = deviceMappingRepository.countActiveDevicesByCustomerId(customerId);
+        long protectedHostCount = deviceMappingRepository.sumProtectedHostCountByCustomerId(customerId);
 
-        return DeviceQuotaResponse.calculate(customerId, activeDeviceCount, customer.getMaxDevices());
+        return DeviceQuotaResponse.calculate(customerId, activeDeviceCount, customer.getMaxDevices(), protectedHostCount);
     }
 
     /**

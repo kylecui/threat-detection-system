@@ -11,9 +11,6 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * 设备映射数据访问层
- */
 @Repository
 public interface DeviceMappingRepository extends JpaRepository<DeviceMapping, Long> {
 
@@ -63,8 +60,47 @@ public interface DeviceMappingRepository extends JpaRepository<DeviceMapping, Lo
      */
     List<DeviceMapping> findByDevSerialIn(List<String> devSerials);
 
-    /**
-     * 删除客户的所有设备映射
-     */
     void deleteByCustomerId(String customerId);
+
+    /**
+     * SUM(real_host_count) across V1 heartbeats (device_status_history) and
+     * V2 heartbeats (topology_snapshots) for a customer's active devices.
+     *
+     * V1: latest real_host_count per dev_serial from device_status_history
+     * V2: latest active_decoy_count per device_id from topology_snapshots (only for devices NOT in V1)
+     */
+    @Query(value =
+        "SELECT COALESCE(SUM(latest_count), 0) FROM (" +
+        "  SELECT latest_count FROM (" +
+        "    SELECT DISTINCT ON (dsh.dev_serial) dsh.real_host_count AS latest_count" +
+        "    FROM device_customer_mapping dcm" +
+        "    JOIN device_status_history dsh ON UPPER(dcm.dev_serial) = UPPER(dsh.dev_serial)" +
+        "    WHERE dcm.customer_id = :customerId AND dcm.is_active = true" +
+        "    ORDER BY dsh.dev_serial, dsh.report_time DESC" +
+        "  ) v1" +
+        "  UNION ALL" +
+        "  SELECT latest_count FROM (" +
+        "    SELECT DISTINCT ON (ts.device_id) ts.active_decoy_count AS latest_count" +
+        "    FROM device_customer_mapping dcm" +
+        "    JOIN topology_snapshots ts ON UPPER(dcm.dev_serial) = UPPER(ts.device_id)" +
+        "    WHERE dcm.customer_id = :customerId AND dcm.is_active = true" +
+        "    AND UPPER(dcm.dev_serial) NOT IN (" +
+        "      SELECT DISTINCT UPPER(dev_serial) FROM device_status_history" +
+        "    )" +
+        "    ORDER BY ts.device_id, ts.snapshot_time DESC" +
+        "  ) v2" +
+        ") sub",
+        nativeQuery = true)
+    long sumProtectedHostCountByCustomerId(@Param("customerId") String customerId);
+
+    /**
+     * Latest real_host_count for a specific dev_serial from V1 heartbeats.
+     * Returns null if no heartbeat exists.
+     */
+    @Query(value =
+        "SELECT dsh.real_host_count FROM device_status_history dsh" +
+        " WHERE UPPER(dsh.dev_serial) = UPPER(:devSerial)" +
+        " ORDER BY dsh.report_time DESC LIMIT 1",
+        nativeQuery = true)
+    Integer findLatestRealHostCountByDevSerial(@Param("devSerial") String devSerial);
 }

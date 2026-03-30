@@ -165,8 +165,8 @@ const CustomerMgmt = () => {
       ),
     },
     {
-      title: '设备',
-      width: 100,
+      title: '防护主机',
+      width: 120,
       search: false,
       render: (_, record) => (
         <span>{record.currentDevices}/{record.maxDevices}</span>
@@ -235,6 +235,10 @@ const CustomerMgmt = () => {
     { title: '序列号', dataIndex: 'devSerial', key: 'devSerial' },
     { title: '描述', dataIndex: 'description', key: 'description' },
     {
+      title: '发现主机数', dataIndex: 'realHostCount', key: 'realHostCount',
+      render: (val: number | null | undefined) => val != null ? val : '-',
+    },
+    {
       title: '状态', dataIndex: 'isActive', key: 'isActive',
       render: (val: boolean) => (
         <Tag color={val ? 'green' : 'default'}>{val ? '激活' : '未激活'}</Tag>
@@ -294,7 +298,7 @@ const CustomerMgmt = () => {
           ]}
         />
       </Form.Item>
-      <Form.Item name="maxDevices" label="最大设备数" initialValue={10}>
+      <Form.Item name="maxDevices" label="最大防护设备数 (授权在线设备数)" initialValue={10}>
         <Input type="number" />
       </Form.Item>
       <Form.Item name="description" label="描述">
@@ -385,8 +389,9 @@ const CustomerMgmt = () => {
         {deviceQuota && (
           <Descriptions bordered size="small" style={{ marginBottom: 16 }}>
             <Descriptions.Item label="客户ID">{deviceQuota.customerId}</Descriptions.Item>
-            <Descriptions.Item label="最大设备数">{deviceQuota.maxDevices}</Descriptions.Item>
-            <Descriptions.Item label="当前设备数">{deviceQuota.currentDevices}</Descriptions.Item>
+            <Descriptions.Item label="最大防护设备数">{deviceQuota.maxDevices}</Descriptions.Item>
+            <Descriptions.Item label="当前防护主机数">{deviceQuota.protectedHostCount ?? 0}</Descriptions.Item>
+            <Descriptions.Item label="终端设备数">{deviceQuota.currentDevices}</Descriptions.Item>
             <Descriptions.Item label="剩余配额">{deviceQuota.remainingQuota}</Descriptions.Item>
           </Descriptions>
         )}

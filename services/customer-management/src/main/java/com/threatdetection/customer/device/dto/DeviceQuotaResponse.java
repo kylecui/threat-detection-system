@@ -51,13 +51,17 @@ public class DeviceQuotaResponse {
     @JsonProperty("quota_exceeded")
     private boolean quotaExceeded;
 
-    /**
-     * 计算剩余可用设备数和使用率
-     */
+    @JsonProperty("protected_host_count")
+    private long protectedHostCount;
+
     public static DeviceQuotaResponse calculate(String customerId, long currentDevices, int maxDevices) {
+        return calculate(customerId, currentDevices, maxDevices, 0);
+    }
+
+    public static DeviceQuotaResponse calculate(String customerId, long currentDevices, int maxDevices, long protectedHostCount) {
         int available = Math.max(0, maxDevices - (int) currentDevices);
-        double usageRate = maxDevices > 0 ? (double) currentDevices / maxDevices : 0.0;
-        boolean exceeded = currentDevices >= maxDevices;
+        double usageRate = maxDevices > 0 ? (double) protectedHostCount / maxDevices : 0.0;
+        boolean exceeded = protectedHostCount >= maxDevices;
 
         return DeviceQuotaResponse.builder()
                 .customerId(customerId)
@@ -66,6 +70,7 @@ public class DeviceQuotaResponse {
                 .availableDevices(available)
                 .usageRate(Math.min(1.0, usageRate))
                 .quotaExceeded(exceeded)
+                .protectedHostCount(protectedHostCount)
                 .build();
     }
 }

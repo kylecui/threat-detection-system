@@ -184,6 +184,7 @@ class CustomerService {
     if ('availableDevices' in raw && !('remainingQuota' in raw)) {
       raw.remainingQuota = raw.availableDevices;
     }
+    // protectedHostCount comes through snake→camel transform automatically
     return raw as unknown as DeviceQuota;
   }
 
