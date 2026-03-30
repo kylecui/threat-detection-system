@@ -49,6 +49,7 @@ spec:
       containers:
         - name: tire
           image: threat-detection/tire:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
               name: http
