@@ -1,6 +1,16 @@
 spring:
   application:
     name: api-gateway
+
+  # R2DBC (Reactive DB — auth tables)
+  r2dbc:
+    url: r2dbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:threat_detection}
+    username: ${POSTGRES_USER:threat_user}
+    password: ${POSTGRES_PASSWORD:threat_password}
+    pool:
+      initial-size: 2
+      max-size: 10
+      max-idle-time: 30m
   
   # Cloud Gateway配置
   cloud:
@@ -99,6 +109,12 @@ management:
         enabled: true
     tags:
       application: ${spring.application.name}
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:defaultSecretKeyThatShouldBeChangedInProduction1234567890}
+  expiration-ms: ${JWT_EXPIRATION_MS:3600000}           # 1 hour
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:86400000}  # 24 hours
 
 # 应用信息
 info:

@@ -28,6 +28,18 @@ spec:
           value: "redis"
         - name: REDIS_PORT
           value: "6379"
+        - name: POSTGRES_HOST
+          value: "postgres"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_DB
+          value: "threat_detection"
+        - name: POSTGRES_USER
+          value: "threat_user"
+        - name: POSTGRES_PASSWORD
+          value: "threat_password"
+        - name: JWT_SECRET
+          value: "K8sThreatDetectionJwtSecret2026!ChangeInProd"
         resources:
           requests:
             memory: "256Mi"

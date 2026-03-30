@@ -43,18 +43,20 @@ export function switchRegion(regionId: RegionId): void {
  */
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // 添加认证token (如果需要)
     const token = localStorage.getItem('token');
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // 添加customer_id (多租户)
-    const customerId = localStorage.getItem('customer_id') || 'demo-customer';
-    if (config.params) {
-      config.params.customer_id = customerId;
-    } else {
-      config.params = { customer_id: customerId };
+    // Skip customer_id injection for auth endpoints
+    const url = config.url || '';
+    if (!url.includes('/api/v1/auth/')) {
+      const customerId = localStorage.getItem('customer_id') || 'demo-customer';
+      if (config.params) {
+        config.params.customer_id = customerId;
+      } else {
+        config.params = { customer_id: customerId };
+      }
     }
 
     console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.params);
