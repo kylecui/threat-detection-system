@@ -95,7 +95,14 @@ public class RbacAuthorizationFilter implements GlobalFilter, Ordered {
         if (tokenCustomerId != null && !tokenCustomerId.isBlank()) {
             String tenantIdHeader = exchange.getRequest().getHeaders().getFirst("X-Tenant-Id");
 
-            // Overwrite customer_id param to enforce tenant isolation
+            if (roles.contains("TENANT_ADMIN")) {
+                ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
+                        .header("X-Customer-Id", tokenCustomerId)
+                        .header("X-Tenant-Id", tenantIdHeader != null ? tenantIdHeader : "")
+                        .build();
+                return chain.filter(exchange.mutate().request(mutatedRequest).build());
+            }
+
             ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
                     .header("X-Customer-Id", tokenCustomerId)
                     .header("X-Tenant-Id", tenantIdHeader != null ? tenantIdHeader : "")

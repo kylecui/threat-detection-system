@@ -47,6 +47,8 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
      */
     List<Customer> findBySubscriptionTier(Customer.SubscriptionTier tier);
 
+    List<Customer> findByTenantId(Long tenantId);
+
     /**
      * 根据名称模糊查询 (支持分页)
      */

@@ -116,6 +116,14 @@ public class CustomerService {
                 .map(CustomerResponse::fromEntity);
     }
 
+    public List<CustomerResponse> getCustomersByTenant(Long tenantId) {
+        log.debug("Fetching customers by tenantId: {}", tenantId);
+        return customerRepository.findByTenantId(tenantId)
+                .stream()
+                .map(CustomerResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
+
     /**
      * 更新客户信息
      */

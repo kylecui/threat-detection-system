@@ -25,6 +25,8 @@ public interface ThreatAssessmentRepository extends JpaRepository<ThreatAssessme
      */
     Page<ThreatAssessment> findByCustomerIdOrderByAssessmentTimeDesc(String customerId, Pageable pageable);
 
+    Page<ThreatAssessment> findByCustomerIdInOrderByAssessmentTimeDesc(List<String> customerIds, Pageable pageable);
+
     /**
      * 按客户ID和威胁等级分页查询
      */
@@ -55,11 +57,17 @@ public interface ThreatAssessmentRepository extends JpaRepository<ThreatAssessme
     @Query("SELECT COUNT(ta) FROM ThreatAssessment ta WHERE ta.customerId = :customerId")
     long countByCustomerId(@Param("customerId") String customerId);
 
+    @Query("SELECT COUNT(ta) FROM ThreatAssessment ta WHERE ta.customerId IN :customerIds")
+    long countByCustomerIdIn(@Param("customerIds") List<String> customerIds);
+
     /**
      * 统计指定客户的特定等级威胁数
      */
     @Query("SELECT COUNT(ta) FROM ThreatAssessment ta WHERE ta.customerId = :customerId AND ta.threatLevel = :level")
     long countByCustomerIdAndLevel(@Param("customerId") String customerId, @Param("level") String level);
+
+    @Query("SELECT COUNT(ta) FROM ThreatAssessment ta WHERE ta.customerId IN :customerIds AND ta.threatLevel = :level")
+    long countByCustomerIdInAndLevel(@Param("customerIds") List<String> customerIds, @Param("level") String level);
 
     /**
      * 获取指定客户的平均威胁评分
@@ -67,11 +75,20 @@ public interface ThreatAssessmentRepository extends JpaRepository<ThreatAssessme
     @Query("SELECT AVG(ta.threatScore) FROM ThreatAssessment ta WHERE ta.customerId = :customerId")
     Double getAverageThreatScore(@Param("customerId") String customerId);
 
+    @Query("SELECT AVG(ta.threatScore) FROM ThreatAssessment ta WHERE ta.customerId IN :customerIds")
+    Double getAverageThreatScoreForCustomers(@Param("customerIds") List<String> customerIds);
+
     /**
      * 获取指定客户的最高威胁评分
      */
     @Query("SELECT MAX(ta.threatScore) FROM ThreatAssessment ta WHERE ta.customerId = :customerId")
     Double getMaxThreatScore(@Param("customerId") String customerId);
+
+    @Query("SELECT MAX(ta.threatScore) FROM ThreatAssessment ta WHERE ta.customerId IN :customerIds")
+    Double getMaxThreatScoreForCustomers(@Param("customerIds") List<String> customerIds);
+
+    @Query("SELECT MIN(ta.threatScore) FROM ThreatAssessment ta WHERE ta.customerId IN :customerIds")
+    Double getMinThreatScoreForCustomers(@Param("customerIds") List<String> customerIds);
 
     /**
      * 获取指定客户的最低威胁评分
@@ -102,6 +119,24 @@ public interface ThreatAssessmentRepository extends JpaRepository<ThreatAssessme
                                   @Param("startTime") Instant startTime, 
                                   @Param("endTime") Instant endTime);
 
+    @Query(value = "SELECT " +
+            "DATE_TRUNC('hour', assessment_time) as timestamp, " +
+            "COUNT(*) as count, " +
+            "AVG(threat_score) as avg_score, " +
+            "MAX(threat_score) as max_score, " +
+            "SUM(CASE WHEN threat_level = 'CRITICAL' THEN 1 ELSE 0 END) as critical_count, " +
+            "SUM(CASE WHEN threat_level = 'HIGH' THEN 1 ELSE 0 END) as high_count, " +
+            "SUM(CASE WHEN threat_level = 'MEDIUM' THEN 1 ELSE 0 END) as medium_count " +
+            "FROM threat_assessments " +
+            "WHERE customer_id IN (:customerIds) " +
+            "AND assessment_time BETWEEN :startTime AND :endTime " +
+            "GROUP BY DATE_TRUNC('hour', assessment_time) " +
+            "ORDER BY timestamp",
+            nativeQuery = true)
+    List<Object[]> getHourlyTrendForCustomers(@Param("customerIds") List<String> customerIds,
+                                              @Param("startTime") Instant startTime,
+                                              @Param("endTime") Instant endTime);
+
     /**
      * 获取最近24小时的威胁列表
      */
@@ -111,4 +146,11 @@ public interface ThreatAssessmentRepository extends JpaRepository<ThreatAssessme
            "ORDER BY ta.assessmentTime DESC")
     List<ThreatAssessment> findRecent24Hours(@Param("customerId") String customerId, 
                                              @Param("since") Instant since);
+
+    @Query("SELECT ta FROM ThreatAssessment ta " +
+           "WHERE ta.customerId IN :customerIds " +
+           "AND ta.assessmentTime >= :since " +
+           "ORDER BY ta.assessmentTime DESC")
+    List<ThreatAssessment> findRecent24HoursForCustomers(@Param("customerIds") List<String> customerIds,
+                                                          @Param("since") Instant since);
 }

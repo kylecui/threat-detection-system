@@ -3,7 +3,8 @@ package com.threatdetection.assessment.service;
 import com.threatdetection.assessment.dto.*;
 import com.threatdetection.assessment.model.ThreatAssessment;
 import com.threatdetection.assessment.repository.ThreatAssessmentRepository;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -33,10 +34,11 @@ import java.util.stream.Collectors;
  * @author ThreatDetection Team
  * @version 2.0
  */
-@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class ThreatQueryService {
+
+    private static final Logger log = LoggerFactory.getLogger(ThreatQueryService.class);
     
     private final ThreatAssessmentRepository repository;
     
@@ -91,6 +93,19 @@ public class ThreatQueryService {
         
         return assessmentPage.map(this::convertToDetailResponse);
     }
+
+    public Page<ThreatAssessmentDetailResponse> getTenantAssessmentList(List<String> customerIds, int page, int size) {
+        log.info("Querying tenant assessment list: customerIds={}, page={}, size={}", customerIds, page, size);
+
+        if (customerIds == null || customerIds.isEmpty()) {
+            return Page.empty(PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "assessmentTime")));
+        }
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "assessmentTime"));
+        Page<ThreatAssessment> assessmentPage = repository.findByCustomerIdInOrderByAssessmentTimeDesc(customerIds, pageable);
+
+        return assessmentPage.map(this::convertToDetailResponse);
+    }
     
     /**
      * 获取威胁统计
@@ -120,19 +135,78 @@ public class ThreatQueryService {
                 "INFO", infoCount
         );
         
-        return ThreatStatisticsResponse.builder()
-                .customerId(customerId)
-                .totalCount(totalCount)
-                .criticalCount(criticalCount)
-                .highCount(highCount)
-                .mediumCount(mediumCount)
-                .lowCount(lowCount)
-                .infoCount(infoCount)
-                .averageThreatScore(avgScore != null ? avgScore : 0.0)
-                .maxThreatScore(maxScore != null ? maxScore : 0.0)
-                .minThreatScore(minScore != null ? minScore : 0.0)
-                .levelDistribution(levelDistribution)
-                .build();
+        ThreatStatisticsResponse response = new ThreatStatisticsResponse();
+        response.setCustomerId(customerId);
+        response.setTotalCount(totalCount);
+        response.setCriticalCount(criticalCount);
+        response.setHighCount(highCount);
+        response.setMediumCount(mediumCount);
+        response.setLowCount(lowCount);
+        response.setInfoCount(infoCount);
+        response.setAverageThreatScore(avgScore != null ? avgScore : 0.0);
+        response.setMaxThreatScore(maxScore != null ? maxScore : 0.0);
+        response.setMinThreatScore(minScore != null ? minScore : 0.0);
+        response.setLevelDistribution(levelDistribution);
+        return response;
+    }
+
+    public ThreatStatisticsResponse getTenantStatistics(List<String> customerIds) {
+        log.info("Getting tenant threat statistics: customerIds={}", customerIds);
+
+        if (customerIds == null || customerIds.isEmpty()) {
+            ThreatStatisticsResponse emptyResponse = new ThreatStatisticsResponse();
+            emptyResponse.setCustomerId("TENANT");
+            emptyResponse.setTotalCount(0L);
+            emptyResponse.setCriticalCount(0L);
+            emptyResponse.setHighCount(0L);
+            emptyResponse.setMediumCount(0L);
+            emptyResponse.setLowCount(0L);
+            emptyResponse.setInfoCount(0L);
+            emptyResponse.setAverageThreatScore(0.0);
+            emptyResponse.setMaxThreatScore(0.0);
+            emptyResponse.setMinThreatScore(0.0);
+            emptyResponse.setLevelDistribution(Map.of(
+                    "CRITICAL", 0L,
+                    "HIGH", 0L,
+                    "MEDIUM", 0L,
+                    "LOW", 0L,
+                    "INFO", 0L
+            ));
+            return emptyResponse;
+        }
+
+        long totalCount = repository.countByCustomerIdIn(customerIds);
+        long criticalCount = repository.countByCustomerIdInAndLevel(customerIds, "CRITICAL");
+        long highCount = repository.countByCustomerIdInAndLevel(customerIds, "HIGH");
+        long mediumCount = repository.countByCustomerIdInAndLevel(customerIds, "MEDIUM");
+        long lowCount = repository.countByCustomerIdInAndLevel(customerIds, "LOW");
+        long infoCount = repository.countByCustomerIdInAndLevel(customerIds, "INFO");
+
+        Double avgScore = repository.getAverageThreatScoreForCustomers(customerIds);
+        Double maxScore = repository.getMaxThreatScoreForCustomers(customerIds);
+        Double minScore = repository.getMinThreatScoreForCustomers(customerIds);
+
+        Map<String, Long> levelDistribution = Map.of(
+                "CRITICAL", criticalCount,
+                "HIGH", highCount,
+                "MEDIUM", mediumCount,
+                "LOW", lowCount,
+                "INFO", infoCount
+        );
+
+        ThreatStatisticsResponse response = new ThreatStatisticsResponse();
+        response.setCustomerId("TENANT");
+        response.setTotalCount(totalCount);
+        response.setCriticalCount(criticalCount);
+        response.setHighCount(highCount);
+        response.setMediumCount(mediumCount);
+        response.setLowCount(lowCount);
+        response.setInfoCount(infoCount);
+        response.setAverageThreatScore(avgScore != null ? avgScore : 0.0);
+        response.setMaxThreatScore(maxScore != null ? maxScore : 0.0);
+        response.setMinThreatScore(minScore != null ? minScore : 0.0);
+        response.setLevelDistribution(levelDistribution);
+        return response;
     }
     
     /**
@@ -149,6 +223,23 @@ public class ThreatQueryService {
         
         List<Object[]> rawData = repository.getHourlyTrend(customerId, yesterday, now);
         
+        return rawData.stream()
+                .map(this::convertToTrendDataPoint)
+                .collect(Collectors.toList());
+    }
+
+    public List<TrendDataPoint> getTenantThreatTrend(List<String> customerIds) {
+        log.info("Getting tenant threat trend: customerIds={}", customerIds);
+
+        if (customerIds == null || customerIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Instant now = Instant.now();
+        Instant yesterday = now.minus(24, ChronoUnit.HOURS);
+
+        List<Object[]> rawData = repository.getHourlyTrendForCustomers(customerIds, yesterday, now);
+
         return rawData.stream()
                 .map(this::convertToTrendDataPoint)
                 .collect(Collectors.toList());
@@ -203,12 +294,64 @@ public class ThreatQueryService {
                     String portName = PORT_NAMES.getOrDefault(port, String.valueOf(port));
                     String label = port + "-" + portName;
                     
-                    return PortDistribution.builder()
-                            .port(port)
-                            .portName(label)
-                            .count(count)
-                            .percentage(Math.round(percentage * 100.0) / 100.0)
-                            .build();
+                    PortDistribution distribution = new PortDistribution();
+                    distribution.setPort(port);
+                    distribution.setPortName(label);
+                    distribution.setCount(count);
+                    distribution.setPercentage(Math.round(percentage * 100.0) / 100.0);
+                    return distribution;
+                })
+                .collect(Collectors.toList());
+    }
+
+    public List<PortDistribution> getTenantPortDistribution(List<String> customerIds) {
+        log.info("Getting tenant port distribution: customerIds={}", customerIds);
+
+        if (customerIds == null || customerIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Instant since = Instant.now().minus(24, ChronoUnit.HOURS);
+        List<ThreatAssessment> recentThreats = repository.findRecent24HoursForCustomers(customerIds, since);
+
+        Map<Integer, Long> portCountMap = new HashMap<>();
+
+        for (ThreatAssessment threat : recentThreats) {
+            String portList = threat.getPortList();
+            if (portList != null && !portList.isEmpty()) {
+                String cleaned = portList.replaceAll("[\\[\\]\\s]", "");
+                String[] ports = cleaned.split(",");
+
+                for (String portStr : ports) {
+                    try {
+                        int port = Integer.parseInt(portStr.trim());
+                        portCountMap.merge(port, 1L, Long::sum);
+                    } catch (NumberFormatException e) {
+                        log.warn("Invalid port number: {}", portStr);
+                    }
+                }
+            }
+        }
+
+        long totalCount = portCountMap.values().stream().mapToLong(Long::longValue).sum();
+
+        return portCountMap.entrySet().stream()
+                .sorted(Map.Entry.<Integer, Long>comparingByValue().reversed())
+                .limit(10)
+                .map(entry -> {
+                    int port = entry.getKey();
+                    long count = entry.getValue();
+                    double percentage = totalCount > 0 ? (count * 100.0 / totalCount) : 0.0;
+
+                    String portName = PORT_NAMES.getOrDefault(port, String.valueOf(port));
+                    String label = port + "-" + portName;
+
+                    PortDistribution distribution = new PortDistribution();
+                    distribution.setPort(port);
+                    distribution.setPortName(label);
+                    distribution.setCount(count);
+                    distribution.setPercentage(Math.round(percentage * 100.0) / 100.0);
+                    return distribution;
                 })
                 .collect(Collectors.toList());
     }
@@ -219,24 +362,24 @@ public class ThreatQueryService {
     private ThreatAssessmentDetailResponse convertToDetailResponse(ThreatAssessment assessment) {
         List<String> recommendations = generateRecommendations(assessment);
         
-        return ThreatAssessmentDetailResponse.builder()
-                .id(assessment.getId())
-                .customerId(assessment.getCustomerId())
-                .attackMac(assessment.getAttackMac())
-                .attackIp("N/A")  // 数据库没有存储attackIp
-                .threatScore(assessment.getThreatScore())
-                .threatLevel(assessment.getThreatLevel())
-                .attackCount(assessment.getAttackCount())
-                .uniqueIps(assessment.getUniqueIps())
-                .uniquePorts(assessment.getUniquePorts())
-                .uniqueDevices(assessment.getUniqueDevices())
-                .assessmentTime(assessment.getAssessmentTime())
-                .createdAt(assessment.getCreatedAt())
-                .portList(assessment.getPortList())
-                .portRiskScore(assessment.getPortRiskScore())
-                .detectionTier(assessment.getDetectionTier())
-                .mitigationRecommendations(recommendations)
-                .build();
+        ThreatAssessmentDetailResponse response = new ThreatAssessmentDetailResponse();
+        response.setId(assessment.getId());
+        response.setCustomerId(assessment.getCustomerId());
+        response.setAttackMac(assessment.getAttackMac());
+        response.setAttackIp("N/A");
+        response.setThreatScore(assessment.getThreatScore());
+        response.setThreatLevel(assessment.getThreatLevel());
+        response.setAttackCount(assessment.getAttackCount());
+        response.setUniqueIps(assessment.getUniqueIps());
+        response.setUniquePorts(assessment.getUniquePorts());
+        response.setUniqueDevices(assessment.getUniqueDevices());
+        response.setAssessmentTime(assessment.getAssessmentTime());
+        response.setCreatedAt(assessment.getCreatedAt());
+        response.setPortList(assessment.getPortList());
+        response.setPortRiskScore(assessment.getPortRiskScore());
+        response.setDetectionTier(assessment.getDetectionTier());
+        response.setMitigationRecommendations(recommendations);
+        return response;
     }
     
     /**
@@ -287,14 +430,14 @@ public class ThreatQueryService {
         Long highCount = ((Number) row[5]).longValue();
         Long mediumCount = ((Number) row[6]).longValue();
         
-        return TrendDataPoint.builder()
-                .timestamp(timestamp)
-                .count(count)
-                .averageScore(Math.round(avgScore * 100.0) / 100.0)
-                .maxScore(Math.round(maxScore * 100.0) / 100.0)
-                .criticalCount(criticalCount)
-                .highCount(highCount)
-                .mediumCount(mediumCount)
-                .build();
+        TrendDataPoint point = new TrendDataPoint();
+        point.setTimestamp(timestamp);
+        point.setCount(count);
+        point.setAverageScore(Math.round(avgScore * 100.0) / 100.0);
+        point.setMaxScore(Math.round(maxScore * 100.0) / 100.0);
+        point.setCriticalCount(criticalCount);
+        point.setHighCount(highCount);
+        point.setMediumCount(mediumCount);
+        return point;
     }
 }

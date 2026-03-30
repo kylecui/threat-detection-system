@@ -164,6 +164,23 @@ public class AssessmentController {
         }
     }
 
+    @GetMapping("/assessments/tenant")
+    public ResponseEntity<Page<ThreatAssessmentDetailResponse>> getTenantAssessmentList(
+            @RequestParam(name = "customer_ids") List<String> customerIds,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        logger.info("Querying tenant assessment list: customerIds={}, page={}, size={}", customerIds, page, size);
+
+        try {
+            Page<ThreatAssessmentDetailResponse> result = threatQueryService.getTenantAssessmentList(customerIds, page, size);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error querying tenant assessment list: customerIds={}", customerIds, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
     /**
      * 获取威胁统计
      * 
@@ -187,6 +204,21 @@ public class AssessmentController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("Error getting statistics: customerId={}", customerId, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/statistics/tenant")
+    public ResponseEntity<ThreatStatisticsResponse> getTenantStatistics(
+            @RequestParam(name = "customer_ids") List<String> customerIds) {
+
+        logger.info("Getting tenant threat statistics: customerIds={}", customerIds);
+
+        try {
+            ThreatStatisticsResponse response = threatQueryService.getTenantStatistics(customerIds);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Error getting tenant statistics: customerIds={}", customerIds, e);
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -218,6 +250,21 @@ public class AssessmentController {
         }
     }
 
+    @GetMapping("/trend/tenant")
+    public ResponseEntity<List<TrendDataPoint>> getTenantThreatTrend(
+            @RequestParam(name = "customer_ids") List<String> customerIds) {
+
+        logger.info("Getting tenant threat trend: customerIds={}", customerIds);
+
+        try {
+            List<TrendDataPoint> trend = threatQueryService.getTenantThreatTrend(customerIds);
+            return ResponseEntity.ok(trend);
+        } catch (Exception e) {
+            logger.error("Error getting tenant threat trend: customerIds={}", customerIds, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
     /**
      * 获取端口分布 (TOP 10)
      * 
@@ -240,6 +287,21 @@ public class AssessmentController {
             return ResponseEntity.ok(distribution);
         } catch (Exception e) {
             logger.error("Error getting port distribution: customerId={}", customerId, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/port-distribution/tenant")
+    public ResponseEntity<List<PortDistribution>> getTenantPortDistribution(
+            @RequestParam(name = "customer_ids") List<String> customerIds) {
+
+        logger.info("Getting tenant port distribution: customerIds={}", customerIds);
+
+        try {
+            List<PortDistribution> distribution = threatQueryService.getTenantPortDistribution(customerIds);
+            return ResponseEntity.ok(distribution);
+        } catch (Exception e) {
+            logger.error("Error getting tenant port distribution: customerIds={}", customerIds, e);
             return ResponseEntity.internalServerError().build();
         }
     }

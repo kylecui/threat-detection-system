@@ -20,7 +20,8 @@ import java.time.Instant;
 @Table(name = "customers", indexes = {
     @Index(name = "idx_customer_id", columnList = "customer_id", unique = true),
     @Index(name = "idx_customer_email", columnList = "email"),
-    @Index(name = "idx_customer_status", columnList = "status")
+    @Index(name = "idx_customer_status", columnList = "status"),
+    @Index(name = "idx_customer_tenant_id", columnList = "tenant_id")
 })
 @Data
 @Builder
@@ -40,6 +41,9 @@ public class Customer {
     @NotBlank(message = "客户ID不能为空")
     @Size(max = 100, message = "客户ID长度不能超过100")
     private String customerId;
+
+    @Column(name = "tenant_id")
+    private Long tenantId;
 
     /**
      * 客户名称/公司名称

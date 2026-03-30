@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -109,6 +110,13 @@ public class CustomerController {
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortParams[0]));
         
         Page<CustomerResponse> customers = customerService.getAllCustomers(pageable);
+        return ResponseEntity.ok(customers);
+    }
+
+    @GetMapping("/by-tenant/{tenantId}")
+    public ResponseEntity<List<CustomerResponse>> getCustomersByTenant(@PathVariable Long tenantId) {
+        log.info("API: Fetching customers by tenantId: {}", tenantId);
+        List<CustomerResponse> customers = customerService.getCustomersByTenant(tenantId);
         return ResponseEntity.ok(customers);
     }
 
