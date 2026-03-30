@@ -114,10 +114,11 @@ class CustomerService {
 
   /** 获取客户设备列表 */
   async getDevices(customerId: string): Promise<Device[]> {
-    const response = await apiClient.get<Device[]>(
+    const response = await apiClient.get(
       `/api/v1/customers/${customerId}/devices`
     );
-    return response.data;
+    const data = response.data;
+    return Array.isArray(data) ? data : (data?.content ?? []);
   }
 
   /** 获取设备详情 */
@@ -175,10 +176,15 @@ class CustomerService {
 
   /** 获取设备配额 */
   async getDeviceQuota(customerId: string): Promise<DeviceQuota> {
-    const response = await apiClient.get<DeviceQuota>(
+    const response = await apiClient.get(
       `/api/v1/customers/${customerId}/devices/quota`
     );
-    return response.data;
+    const raw = response.data as Record<string, unknown>;
+    // Backend returns availableDevices (after snake→camel transform); frontend type uses remainingQuota
+    if ('availableDevices' in raw && !('remainingQuota' in raw)) {
+      raw.remainingQuota = raw.availableDevices;
+    }
+    return raw as unknown as DeviceQuota;
   }
 
   // ---- 通知配置 ----

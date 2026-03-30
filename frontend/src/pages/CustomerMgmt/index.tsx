@@ -185,7 +185,9 @@ const CustomerMgmt = () => {
       width: 170,
       search: false,
       render: (_, record) =>
-        record.createdAt ? dayjs(record.createdAt).format('YYYY-MM-DD HH:mm') : '-',
+        record.createdAt
+          ? dayjs(typeof record.createdAt === 'number' ? record.createdAt * 1000 : record.createdAt).format('YYYY-MM-DD HH:mm')
+          : '-',
     },
     {
       title: '操作',
@@ -231,18 +233,16 @@ const CustomerMgmt = () => {
 
   const deviceColumns = [
     { title: '序列号', dataIndex: 'devSerial', key: 'devSerial' },
-    { title: '名称', dataIndex: 'deviceName', key: 'deviceName' },
-    { title: '类型', dataIndex: 'deviceType', key: 'deviceType' },
+    { title: '描述', dataIndex: 'description', key: 'description' },
     {
-      title: '状态', dataIndex: 'status', key: 'status',
-      render: (status: string) => (
-        <Tag color={status === 'ONLINE' ? 'green' : 'default'}>{status}</Tag>
+      title: '状态', dataIndex: 'isActive', key: 'isActive',
+      render: (val: boolean) => (
+        <Tag color={val ? 'green' : 'default'}>{val ? '激活' : '未激活'}</Tag>
       ),
     },
-    { title: 'IP', dataIndex: 'ipAddress', key: 'ipAddress' },
     {
-      title: '最后心跳', dataIndex: 'lastHeartbeat', key: 'lastHeartbeat',
-      render: (val: string) => val ? dayjs(val).format('MM-DD HH:mm:ss') : '-',
+      title: '创建时间', dataIndex: 'createdAt', key: 'createdAt',
+      render: (val: string | number) => val ? dayjs(typeof val === 'number' ? val * 1000 : val).format('YYYY-MM-DD HH:mm') : '-',
     },
     {
       title: '操作', key: 'actions',

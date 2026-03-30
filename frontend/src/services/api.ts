@@ -3,6 +3,55 @@ import { message } from 'antd';
 import { REGION_ENDPOINTS, type RegionId } from '@/types';
 
 /**
+ * snake_case → camelCase 键名转换
+ *
+ * customer-management 服务使用 Jackson SNAKE_CASE 命名策略,
+ * 前端 TypeScript 类型全部使用 camelCase。
+ * 此转换器在响应拦截器中自动桥接两者差异。
+ */
+function snakeToCamel(str: string): string {
+  return str.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
+}
+
+function convertKeys(obj: unknown): unknown {
+  if (Array.isArray(obj)) {
+    return obj.map(convertKeys);
+  }
+  if (obj !== null && typeof obj === 'object' && !(obj instanceof Date)) {
+    return Object.entries(obj as Record<string, unknown>).reduce(
+      (acc, [key, value]) => {
+        acc[snakeToCamel(key)] = convertKeys(value);
+        return acc;
+      },
+      {} as Record<string, unknown>,
+    );
+  }
+  return obj;
+}
+
+function camelToSnake(str: string): string {
+  return str.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+}
+
+function convertKeysToSnake(obj: unknown): unknown {
+  if (Array.isArray(obj)) {
+    return obj.map(convertKeysToSnake);
+  }
+  if (obj !== null && typeof obj === 'object' && !(obj instanceof Date)) {
+    return Object.entries(obj as Record<string, unknown>).reduce(
+      (acc, [key, value]) => {
+        acc[camelToSnake(key)] = convertKeysToSnake(value);
+        return acc;
+      },
+      {} as Record<string, unknown>,
+    );
+  }
+  return obj;
+}
+
+const SNAKE_CASE_ROUTES = ['/api/v1/customers'];
+
+/**
  * 区域路由优先级: localStorage.region → VITE_API_BASE_URL → /api
  */
 function getRegionBaseURL(): string {
@@ -62,6 +111,14 @@ apiClient.interceptors.request.use(
     }
 
     console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.params);
+
+    // Convert request body to snake_case for customer-management endpoints
+    if (config.data && typeof config.data === 'object') {
+      if (SNAKE_CASE_ROUTES.some((route) => url.startsWith(route))) {
+        config.data = convertKeysToSnake(config.data);
+      }
+    }
+
     return config;
   },
   (error: AxiosError) => {
@@ -75,6 +132,9 @@ apiClient.interceptors.request.use(
  */
 apiClient.interceptors.response.use(
   (response) => {
+    if (response.data && typeof response.data === 'object') {
+      response.data = convertKeys(response.data);
+    }
     console.log(`[API Response] ${response.config.url}`, response.data);
     return response;
   },
