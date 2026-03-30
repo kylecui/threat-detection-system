@@ -28,6 +28,14 @@ class AggregatedAttackData(BaseModel):
     threatScore: float = 0.0
     threatLevel: str = "INFO"
 
+    @field_validator("windowStart", "windowEnd", "timestamp", mode="before")
+    @classmethod
+    def coerce_to_str(cls, value):
+        """Flink may send timestamps as float/int — coerce to string."""
+        if isinstance(value, (int, float)):
+            return str(value)
+        return value
+
     @field_validator("tier")
     @classmethod
     def validate_tier(cls, value: int) -> int:
