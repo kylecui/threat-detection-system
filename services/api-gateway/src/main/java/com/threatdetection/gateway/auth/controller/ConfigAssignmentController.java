@@ -5,6 +5,7 @@ import com.threatdetection.gateway.auth.entity.LlmProvider;
 import com.threatdetection.gateway.auth.repository.ConfigAssignmentRepository;
 import com.threatdetection.gateway.auth.repository.LlmProviderRepository;
 import com.threatdetection.gateway.auth.service.JwtTokenProvider;
+import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -19,11 +20,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * LLM provider → customer assignment CRUD with multi-tenant RBAC.
- * <p>SUPER_ADMIN/TENANT_ADMIN: assign providers. CUSTOMER_USER: view own assignment.
- * <p>Routes: GET /api/v1/config-assignments, GET/PUT/DELETE /api/v1/config-assignments/{customerId}
- */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/config-assignments")
@@ -45,25 +41,16 @@ public class ConfigAssignmentController {
                     }
 
                     return assignmentRepository.findByCustomerId(customerId)
-                            .flatMap(assignment -> providerRepository.findById(assignment.getLlmProviderId())
-                                    .map(provider -> {
-                                        Map<String, Object> result = new HashMap<>();
-                                        result.put("customerId", assignment.getCustomerId());
-                                        result.put("llmProviderId", assignment.getLlmProviderId());
-                                        result.put("assignedBy", assignment.getAssignedBy());
-                                        result.put("createdAt", assignment.getCreatedAt());
-                                        result.put("updatedAt", assignment.getUpdatedAt());
-                                        result.put("providerName", provider.getName());
-                                        result.put("providerModel", provider.getModel());
-                                        result.put("providerBaseUrl", provider.getBaseUrl());
-                                        result.put("providerEnabled", provider.getEnabled());
-                                        return ResponseEntity.ok(result);
-                                    })
-                                    .defaultIfEmpty(ResponseEntity.ok(Map.<String, Object>of(
-                                            "customerId", customerId,
-                                            "llmProviderId", assignment.getLlmProviderId(),
-                                            "error", "Assigned provider not found"
-                                    ))))
+                            .flatMap(assignment -> {
+                                Mono<LlmProvider> providerMono = assignment.getLlmProviderId() != null
+                                        ? providerRepository.findById(assignment.getLlmProviderId())
+                                        : Mono.empty();
+
+                                return providerMono
+                                        .map(provider -> buildAssignmentResponse(assignment, provider))
+                                        .defaultIfEmpty(buildAssignmentResponse(assignment, null));
+                            })
+                            .map(ResponseEntity::ok)
                             .defaultIfEmpty(ResponseEntity.ok(Map.<String, Object>of(
                                     "customerId", customerId,
                                     "assigned", false
@@ -85,16 +72,40 @@ public class ConfigAssignmentController {
                                 ResponseEntity.status(HttpStatus.FORBIDDEN).build());
                     }
 
+                    Long providerId = null;
                     Object pidObj = body.get("llmProviderId");
-                    if (pidObj == null) {
-                        return Mono.just(ResponseEntity.badRequest()
-                                .body(Map.<String, Object>of("error", "Missing llmProviderId")));
+                    if (pidObj != null) {
+                        providerId = ((Number) pidObj).longValue();
                     }
-                    Long providerId = ((Number) pidObj).longValue();
 
-                    return providerRepository.findById(providerId)
+                    String tireApiKeysStr = "{}";
+                    Object tireObj = body.get("tireApiKeys");
+                    if (tireObj instanceof Map) {
+                        tireApiKeysStr = toJson((Map<?, ?>) tireObj);
+                    } else if (tireObj instanceof String) {
+                        tireApiKeysStr = (String) tireObj;
+                    }
+
+                    Boolean lockLlm = body.get("lockLlm") instanceof Boolean
+                            ? (Boolean) body.get("lockLlm") : false;
+                    Boolean lockTire = body.get("lockTire") instanceof Boolean
+                            ? (Boolean) body.get("lockTire") : false;
+
+                    final Long fProviderId = providerId;
+                    final Json fTireKeys = Json.of(tireApiKeysStr);
+
+                    Mono<LlmProvider> providerCheck = fProviderId != null
+                            ? providerRepository.findById(fProviderId)
+                            : Mono.just(LlmProvider.builder().build());
+
+                    return providerCheck
                             .flatMap(provider -> {
-                                if (!canViewProvider(caller, provider)) {
+                                if (fProviderId != null && provider.getId() == null) {
+                                    return Mono.just(ResponseEntity.badRequest()
+                                            .body(Map.<String, Object>of("error",
+                                                    "LLM provider not found: " + fProviderId)));
+                                }
+                                if (fProviderId != null && !canViewProvider(caller, provider)) {
                                     return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN)
                                             .body(Map.<String, Object>of("error",
                                                     "Cannot assign a provider outside your scope")));
@@ -103,25 +114,33 @@ public class ConfigAssignmentController {
                                 return assignmentRepository.deleteByCustomerId(customerId)
                                         .then(assignmentRepository.save(ConfigAssignment.builder()
                                                 .customerId(customerId)
-                                                .llmProviderId(providerId)
+                                                .llmProviderId(fProviderId)
+                                                .tireApiKeys(fTireKeys)
+                                                .lockLlm(lockLlm)
+                                                .lockTire(lockTire)
                                                 .assignedBy(caller.userId)
                                                 .createdAt(LocalDateTime.now())
                                                 .updatedAt(LocalDateTime.now())
                                                 .build()))
                                         .map(saved -> {
-                                            log.info("Assigned LLM provider {} to customer {}, by user {}",
-                                                    providerId, customerId, caller.userId);
+                                            log.info("Assigned config to customer {}: llm={}, lockLlm={}, lockTire={}, by user {}",
+                                                    customerId, fProviderId, lockLlm, lockTire, caller.userId);
                                             Map<String, Object> result = new HashMap<>();
                                             result.put("customerId", customerId);
-                                            result.put("llmProviderId", providerId);
-                                            result.put("providerName", provider.getName());
+                                            result.put("llmProviderId", fProviderId);
+                                            result.put("lockLlm", lockLlm);
+                                            result.put("lockTire", lockTire);
+                                            result.put("hasTireApiKeys", !fTireKeys.asString().equals("{}"));
                                             result.put("status", "assigned");
+                                            if (fProviderId != null && provider.getName() != null) {
+                                                result.put("providerName", provider.getName());
+                                            }
                                             return ResponseEntity.ok(result);
                                         });
                             })
                             .defaultIfEmpty(ResponseEntity.badRequest()
                                     .body(Map.<String, Object>of("error",
-                                            "LLM provider not found: " + providerId)));
+                                            "LLM provider not found: " + fProviderId)));
                 })
                 .onErrorResume(SecurityException.class, e ->
                         Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build()));
@@ -139,7 +158,7 @@ public class ConfigAssignmentController {
 
                     return assignmentRepository.deleteByCustomerId(customerId)
                             .then(Mono.fromCallable(() -> {
-                                log.info("Removed LLM provider assignment for customer {}, by user {}",
+                                log.info("Removed config assignment for customer {}, by user {}",
                                         customerId, caller.userId);
                                 Map<String, Object> result = new HashMap<>();
                                 result.put("customerId", customerId);
@@ -166,6 +185,10 @@ public class ConfigAssignmentController {
                                 map.put("id", a.getId());
                                 map.put("customerId", a.getCustomerId());
                                 map.put("llmProviderId", a.getLlmProviderId());
+                                map.put("lockLlm", a.getLockLlm() != null && a.getLockLlm());
+                                map.put("lockTire", a.getLockTire() != null && a.getLockTire());
+                                String keysJson = a.getTireApiKeys() != null ? a.getTireApiKeys().asString() : "{}";
+                                map.put("hasTireApiKeys", !keysJson.equals("{}") && !keysJson.isEmpty());
                                 map.put("assignedBy", a.getAssignedBy());
                                 map.put("createdAt", a.getCreatedAt());
                                 map.put("updatedAt", a.getUpdatedAt());
@@ -176,6 +199,63 @@ public class ConfigAssignmentController {
                 })
                 .onErrorResume(SecurityException.class, e ->
                         Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build()));
+    }
+
+    private Map<String, Object> buildAssignmentResponse(ConfigAssignment a, LlmProvider provider) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("customerId", a.getCustomerId());
+        result.put("llmProviderId", a.getLlmProviderId());
+        result.put("lockLlm", a.getLockLlm() != null && a.getLockLlm());
+        result.put("lockTire", a.getLockTire() != null && a.getLockTire());
+        String keysStr = a.getTireApiKeys() != null ? a.getTireApiKeys().asString() : "{}";
+        result.put("tireApiKeys", maskTireApiKeys(keysStr));
+        result.put("hasTireApiKeys", a.getTireApiKeys() != null
+                && !keysStr.equals("{}") && !keysStr.isEmpty());
+        result.put("assignedBy", a.getAssignedBy());
+        result.put("createdAt", a.getCreatedAt());
+        result.put("updatedAt", a.getUpdatedAt());
+        if (provider != null) {
+            result.put("providerName", provider.getName());
+            result.put("providerModel", provider.getModel());
+            result.put("providerBaseUrl", provider.getBaseUrl());
+            result.put("providerEnabled", provider.getEnabled());
+        }
+        return result;
+    }
+
+    private Map<String, String> maskTireApiKeys(String json) {
+        Map<String, String> masked = new HashMap<>();
+        if (json == null || json.equals("{}") || json.isEmpty()) return masked;
+        try {
+            String content = json.trim();
+            if (content.startsWith("{") && content.endsWith("}")) {
+                content = content.substring(1, content.length() - 1);
+                for (String pair : content.split(",")) {
+                    String[] kv = pair.split(":", 2);
+                    if (kv.length == 2) {
+                        String key = kv[0].trim().replaceAll("\"", "");
+                        String val = kv[1].trim().replaceAll("\"", "");
+                        masked.put(key, val.isEmpty() ? "" : "••••••");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse tire_api_keys JSON: {}", e.getMessage());
+        }
+        return masked;
+    }
+
+    private String toJson(Map<?, ?> map) {
+        StringBuilder sb = new StringBuilder("{");
+        boolean first = true;
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (!first) sb.append(",");
+            sb.append("\"").append(entry.getKey()).append("\":\"")
+                    .append(entry.getValue() != null ? entry.getValue() : "").append("\"");
+            first = false;
+        }
+        sb.append("}");
+        return sb.toString();
     }
 
     private boolean canViewCustomer(CallerContext caller, String customerId) {

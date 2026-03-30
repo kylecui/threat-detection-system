@@ -89,8 +89,12 @@ export async function validateLlmProvider(id: number): Promise<LlmValidateResult
 export interface ConfigAssignment {
   id?: number;
   customerId: string;
-  llmProviderId: number;
-  assignedBy: number;
+  llmProviderId?: number | null;
+  tireApiKeys?: Record<string, string>;
+  hasTireApiKeys?: boolean;
+  lockLlm?: boolean;
+  lockTire?: boolean;
+  assignedBy?: number;
   providerName?: string;
   providerModel?: string;
   providerBaseUrl?: string;
@@ -105,8 +109,13 @@ export async function getConfigAssignment(customerId: string): Promise<ConfigAss
   return resp.data;
 }
 
-export async function assignConfig(customerId: string, llmProviderId: number): Promise<ConfigAssignment> {
-  const resp = await apiClient.put<ConfigAssignment>(`/api/v1/config-assignments/${customerId}`, { llmProviderId });
+export async function assignConfig(customerId: string, data: {
+  llmProviderId?: number | null;
+  tireApiKeys?: Record<string, string>;
+  lockLlm?: boolean;
+  lockTire?: boolean;
+}): Promise<ConfigAssignment> {
+  const resp = await apiClient.put<ConfigAssignment>(`/api/v1/config-assignments/${customerId}`, data);
   return resp.data;
 }
 
@@ -116,5 +125,50 @@ export async function unassignConfig(customerId: string): Promise<void> {
 
 export async function listConfigAssignments(): Promise<ConfigAssignment[]> {
   const resp = await apiClient.get<ConfigAssignment[]>('/api/v1/config-assignments');
+  return resp.data;
+}
+
+export interface UserConfig {
+  userId: number;
+  llmProviderId?: number | null;
+  tireApiKeys?: Record<string, string>;
+  hasTireApiKeys?: boolean;
+  useOwnLlm?: boolean;
+  useOwnTire?: boolean;
+  lockLlm?: boolean;
+  lockTire?: boolean;
+  adminLlmProviderId?: number | null;
+  adminHasTireApiKeys?: boolean;
+}
+
+export interface ResolvedConfig {
+  userId: number;
+  llmProviderId?: number | null;
+  llmSource: string;
+  tireApiKeys?: Record<string, string>;
+  tireSource: string;
+  lockLlm?: boolean;
+  lockTire?: boolean;
+  providerName?: string;
+  providerModel?: string;
+}
+
+export async function getUserConfig(): Promise<UserConfig> {
+  const resp = await apiClient.get<UserConfig>('/api/v1/user-config');
+  return resp.data;
+}
+
+export async function saveUserConfig(data: {
+  llmProviderId?: number | null;
+  tireApiKeys?: Record<string, string>;
+  useOwnLlm?: boolean;
+  useOwnTire?: boolean;
+}): Promise<unknown> {
+  const resp = await apiClient.put('/api/v1/user-config', data);
+  return resp.data;
+}
+
+export async function getResolvedConfig(): Promise<ResolvedConfig> {
+  const resp = await apiClient.get<ResolvedConfig>('/api/v1/user-config/resolved');
   return resp.data;
 }

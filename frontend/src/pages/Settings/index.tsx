@@ -53,8 +53,12 @@ import {
   deleteLlmProvider,
   validateLlmProvider,
   listConfigAssignments,
+  getConfigAssignment,
   assignConfig,
   unassignConfig,
+  getUserConfig,
+  saveUserConfig,
+  getResolvedConfig,
 } from '@/services/tire';
 import type { ColumnsType } from 'antd/es/table';
 import type {
@@ -62,11 +66,23 @@ import type {
   LlmProvider,
   ConfigAssignment,
   LlmValidateResult,
+  UserConfig,
+  ResolvedConfig,
 } from '@/services/tire';
 import type { SmtpConfig, NotificationConfig, RegionId, SystemConfig } from '@/types';
 import { REGION_ENDPOINTS } from '@/types';
 
 const { Text } = Typography;
+
+const TI_API_KEY_NAMES = [
+  'ABUSEIPDB_API_KEY',
+  'GREYNOISE_API_KEY',
+  'OTX_API_KEY',
+  'SHODAN_API_KEY',
+  'THREATBOOK_API_KEY',
+  'TIANJIYOUMENG_API_KEY',
+  'VT_API_KEY',
+] as const;
 
 const Settings = () => {
   const [basicForm] = Form.useForm();
@@ -78,6 +94,7 @@ const Settings = () => {
   const [customPluginForm] = Form.useForm();
   const [llmProviderForm] = Form.useForm();
   const [assignmentForm] = Form.useForm();
+  const [userConfigForm] = Form.useForm();
 
   const [smtpConfig, setSmtpConfig] = useState<SmtpConfig | null>(null);
   const [, setNotifConfig] = useState<NotificationConfig | null>(null);
@@ -110,6 +127,10 @@ const Settings = () => {
   const [assignmentLoading, setAssignmentLoading] = useState(false);
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState<ConfigAssignment | null>(null);
+  const [userConfig, setUserConfig] = useState<UserConfig | null>(null);
+  const [resolvedConfig, setResolvedConfig] = useState<ResolvedConfig | null>(null);
+  const [userConfigLoading, setUserConfigLoading] = useState(false);
+  const [userConfigSaving, setUserConfigSaving] = useState(false);
 
   const customerId = localStorage.getItem('customer_id') || 'demo-customer';
   const userRoles: string[] = (() => {
@@ -257,6 +278,33 @@ const Settings = () => {
     }
   }, [isAdmin]);
 
+  const loadUserConfigs = useCallback(async () => {
+    if (!isCustomerUser) return;
+    try {
+      setUserConfigLoading(true);
+      const [ownConfig, resolved] = await Promise.all([
+        getUserConfig(),
+        getResolvedConfig(),
+      ]);
+      setUserConfig(ownConfig);
+      setResolvedConfig(resolved);
+
+      const formValues: Record<string, boolean | number | string | undefined> = {
+        llmProviderId: ownConfig.llmProviderId ?? undefined,
+        useOwnLlm: ownConfig.useOwnLlm ?? false,
+        useOwnTire: ownConfig.useOwnTire ?? false,
+      };
+      TI_API_KEY_NAMES.forEach((key) => {
+        formValues[key] = ownConfig.tireApiKeys?.[key] || '';
+      });
+      userConfigForm.setFieldsValue(formValues);
+    } catch {
+      message.error('加载我的配置失败');
+    } finally {
+      setUserConfigLoading(false);
+    }
+  }, [isCustomerUser, userConfigForm]);
+
   useEffect(() => {
     loadSmtpConfig();
     loadNotifConfig();
@@ -266,6 +314,7 @@ const Settings = () => {
     loadCustomPlugins();
     loadLlmProviders();
     loadAssignments();
+    loadUserConfigs();
   }, []);
 
   // ──────── 保存基础设置 ────────
@@ -565,19 +614,55 @@ const Settings = () => {
     }
   };
 
-  const openAssignmentModal = (assignment?: ConfigAssignment) => {
+  const openAssignmentModal = async (assignment?: ConfigAssignment) => {
     setEditingAssignment(assignment || null);
-    assignmentForm.setFieldsValue({
-      customerId: assignment?.customerId,
-      llmProviderId: assignment?.llmProviderId,
-    });
+    if (!assignment) {
+      assignmentForm.setFieldsValue({
+        customerId: undefined,
+        llmProviderId: undefined,
+        lockLlm: false,
+        lockTire: false,
+      });
+      TI_API_KEY_NAMES.forEach((key) => assignmentForm.setFieldValue(key, ''));
+      setAssignmentModalOpen(true);
+      return;
+    }
+
+    try {
+      const detail = await getConfigAssignment(assignment.customerId);
+      assignmentForm.setFieldsValue({
+        customerId: detail.customerId,
+        llmProviderId: detail.llmProviderId ?? undefined,
+        lockLlm: detail.lockLlm ?? false,
+        lockTire: detail.lockTire ?? false,
+      });
+      TI_API_KEY_NAMES.forEach((key) => {
+        assignmentForm.setFieldValue(key, detail.tireApiKeys?.[key] || '');
+      });
+    } catch {
+      message.error('加载配置分配详情失败');
+      return;
+    }
+
     setAssignmentModalOpen(true);
   };
 
   const handleAssignmentSubmit = async () => {
     try {
       const values = await assignmentForm.validateFields();
-      await assignConfig(values.customerId, values.llmProviderId);
+      const tireApiKeys: Record<string, string> = {};
+      TI_API_KEY_NAMES.forEach((key) => {
+        if (values[key]) {
+          tireApiKeys[key] = values[key];
+        }
+      });
+
+      await assignConfig(values.customerId, {
+        llmProviderId: values.llmProviderId || null,
+        tireApiKeys,
+        lockLlm: values.lockLlm || false,
+        lockTire: values.lockTire || false,
+      });
       message.success(editingAssignment ? '配置分配已更新' : '配置分配已创建');
       setAssignmentModalOpen(false);
       assignmentForm.resetFields();
@@ -599,6 +684,39 @@ const Settings = () => {
         loadAssignments();
       },
     });
+  };
+
+  const handleUserConfigSubmit = async () => {
+    try {
+      const values = await userConfigForm.validateFields();
+      const tireApiKeys: Record<string, string> = {};
+      TI_API_KEY_NAMES.forEach((key) => {
+        if (values[key]) {
+          tireApiKeys[key] = values[key];
+        }
+      });
+
+      setUserConfigSaving(true);
+      await saveUserConfig({
+        llmProviderId: values.llmProviderId || null,
+        tireApiKeys,
+        useOwnLlm: values.useOwnLlm || false,
+        useOwnTire: values.useOwnTire || false,
+      });
+      message.success('我的配置已保存');
+      await loadUserConfigs();
+    } catch {
+      message.error('保存我的配置失败');
+    } finally {
+      setUserConfigSaving(false);
+    }
+  };
+
+  const resolveSourceColor = (source?: string) => {
+    if (source === 'admin_locked') return 'red';
+    if (source === 'user_own') return 'blue';
+    if (source === 'admin_assigned') return 'green';
+    return 'default';
   };
 
   const renderConfigField = (config: SystemConfig) => {
@@ -842,10 +960,37 @@ const Settings = () => {
       title: 'LLM服务商',
       dataIndex: 'llmProviderId',
       key: 'llmProviderId',
-      render: (llmProviderId: number) => {
+      render: (llmProviderId?: number | null) => {
+        if (llmProviderId === undefined || llmProviderId === null) {
+          return <Tag>未配置</Tag>;
+        }
         const provider = llmProviders.find((item) => item.id === llmProviderId);
         return provider ? `${provider.name} (${provider.model})` : String(llmProviderId);
       },
+    },
+    {
+      title: 'LLM锁定',
+      dataIndex: 'lockLlm',
+      key: 'lockLlm',
+      render: (lockLlm?: boolean) => (
+        lockLlm ? <Tag color="green">已锁定</Tag> : <Tag>未锁定</Tag>
+      ),
+    },
+    {
+      title: 'TI锁定',
+      dataIndex: 'lockTire',
+      key: 'lockTire',
+      render: (lockTire?: boolean) => (
+        lockTire ? <Tag color="green">已锁定</Tag> : <Tag>未锁定</Tag>
+      ),
+    },
+    {
+      title: 'TI Keys',
+      dataIndex: 'hasTireApiKeys',
+      key: 'hasTireApiKeys',
+      render: (hasTireApiKeys?: boolean) => (
+        hasTireApiKeys ? <Tag color="green">已配置</Tag> : <Tag color="orange">未配置</Tag>
+      ),
     },
     {
       title: '分配者',
@@ -1486,6 +1631,127 @@ const Settings = () => {
           },
         ]
       : []),
+    ...(isCustomerUser
+      ? [
+          {
+            key: 'my-config',
+            label: (
+              <span>
+                <UserOutlined /> 我的配置
+              </span>
+            ),
+            children: (
+              <Card bordered={false}>
+                <Spin spinning={userConfigLoading}>
+                  <Divider orientation="left">当前生效配置</Divider>
+                  <Card size="small" style={{ marginBottom: 16 }}>
+                    <Descriptions column={1} size="small">
+                      <Descriptions.Item label="LLM来源">
+                        <Tag color={resolveSourceColor(resolvedConfig?.llmSource)}>
+                          {resolvedConfig?.llmSource || 'system_default'}
+                        </Tag>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="TI来源">
+                        <Tag color={resolveSourceColor(resolvedConfig?.tireSource)}>
+                          {resolvedConfig?.tireSource || 'system_default'}
+                        </Tag>
+                      </Descriptions.Item>
+                      <Descriptions.Item label="生效LLM服务商">
+                        {resolvedConfig?.providerName
+                          ? `${resolvedConfig.providerName}${resolvedConfig.providerModel ? ` (${resolvedConfig.providerModel})` : ''}`
+                          : '未配置'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="生效TI API Keys">
+                        <Space wrap>
+                          {TI_API_KEY_NAMES.map((key) => (
+                            resolvedConfig?.tireApiKeys?.[key]
+                              ? (
+                                <Tag key={key} color="green">
+                                  {key}: {resolvedConfig.tireApiKeys[key]}
+                                </Tag>
+                                )
+                              : (
+                                <Tag key={key}>
+                                  {key}: 未配置
+                                </Tag>
+                                )
+                          ))}
+                        </Space>
+                      </Descriptions.Item>
+                    </Descriptions>
+                  </Card>
+
+                  <Divider orientation="left">自定义配置</Divider>
+                  <Form form={userConfigForm} layout="vertical">
+                    {userConfig?.lockLlm ? (
+                      <Alert
+                        type="warning"
+                        showIcon
+                        message="管理员已锁定LLM配置，无法修改"
+                        style={{ marginBottom: 16 }}
+                      />
+                    ) : (
+                      <>
+                        <Form.Item label="使用自己的LLM配置" name="useOwnLlm" valuePropName="checked">
+                          <Switch />
+                        </Form.Item>
+                        <Form.Item label="LLM服务商" name="llmProviderId">
+                          <Select
+                            allowClear
+                            options={llmProviders.map((provider) => ({
+                              label: `${provider.name} (${provider.model})`,
+                              value: provider.id,
+                            }))}
+                          />
+                        </Form.Item>
+                      </>
+                    )}
+
+                    <Divider />
+
+                    {userConfig?.lockTire ? (
+                      <Alert
+                        type="warning"
+                        showIcon
+                        message="管理员已锁定TI配置，无法修改"
+                        style={{ marginBottom: 16 }}
+                      />
+                    ) : (
+                      <>
+                        <Form.Item label="使用自己的TI配置" name="useOwnTire" valuePropName="checked">
+                          <Switch />
+                        </Form.Item>
+                        {TI_API_KEY_NAMES.map((key) => (
+                          <Form.Item key={key} label={key} name={key}>
+                            <Input.Password placeholder="留空则保留原值" />
+                          </Form.Item>
+                        ))}
+                      </>
+                    )}
+
+                    <Form.Item>
+                      <Space>
+                        <Button
+                          type="primary"
+                          icon={<SaveOutlined />}
+                          onClick={handleUserConfigSubmit}
+                          loading={userConfigSaving}
+                          disabled={userConfig?.lockLlm && userConfig?.lockTire}
+                        >
+                          保存我的配置
+                        </Button>
+                        <Button icon={<ReloadOutlined />} onClick={loadUserConfigs}>
+                          刷新
+                        </Button>
+                      </Space>
+                    </Form.Item>
+                  </Form>
+                </Spin>
+              </Card>
+            ),
+          },
+        ]
+      : []),
     ...(isAdmin
       ? [
           {
@@ -1499,7 +1765,7 @@ const Settings = () => {
               <Card bordered={false}>
                 <Space style={{ marginBottom: 16 }}>
                   <Button type="primary" icon={<PlusOutlined />} onClick={() => openAssignmentModal()}>
-                    分配LLM服务商
+                    新建配置分配
                   </Button>
                   <Button icon={<ReloadOutlined />} onClick={loadAssignments}>
                     刷新分配
@@ -1644,7 +1910,7 @@ const Settings = () => {
       </Modal>
 
       <Modal
-        title={editingAssignment ? '编辑配置分配' : '分配LLM服务商'}
+        title={editingAssignment ? '编辑配置分配' : '配置分配'}
         open={assignmentModalOpen}
         onCancel={() => {
           setAssignmentModalOpen(false);
@@ -1659,17 +1925,35 @@ const Settings = () => {
           <Form.Item label="客户ID" name="customerId" rules={[{ required: true, message: '请输入客户ID' }]}>
             <Input />
           </Form.Item>
-          <Form.Item
-            label="LLM服务商"
-            name="llmProviderId"
-            rules={[{ required: true, message: '请选择LLM服务商' }]}
-          >
+          <Form.Item label="LLM服务商" name="llmProviderId">
             <Select
+              allowClear
               options={llmProviders.map((provider) => ({
                 label: `${provider.name} (${provider.model})`,
                 value: provider.id,
               }))}
             />
+          </Form.Item>
+
+          <Divider orientation="left">威胁情报 API Keys</Divider>
+          {TI_API_KEY_NAMES.map((key) => (
+            <Form.Item key={key} label={key} name={key}>
+              <Input.Password placeholder="留空则表示不修改" />
+            </Form.Item>
+          ))}
+
+          <Divider orientation="left">锁定策略</Divider>
+          <Alert
+            type="warning"
+            showIcon
+            message="锁定后客户将无法使用自己的配置"
+            style={{ marginBottom: 16 }}
+          />
+          <Form.Item label="锁定LLM配置" name="lockLlm" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item label="锁定TI配置" name="lockTire" valuePropName="checked">
+            <Switch />
           </Form.Item>
         </Form>
       </Modal>

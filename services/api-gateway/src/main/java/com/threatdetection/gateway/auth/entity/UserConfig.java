@@ -15,14 +15,14 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("config_assignments")
-public class ConfigAssignment {
+@Table("user_configs")
+public class UserConfig {
 
     @Id
     private Long id;
 
-    @Column("customer_id")
-    private String customerId;
+    @Column("user_id")
+    private Long userId;
 
     @Column("llm_provider_id")
     private Long llmProviderId;
@@ -30,14 +30,11 @@ public class ConfigAssignment {
     @Column("tire_api_keys")
     private Json tireApiKeys;
 
-    @Column("lock_llm")
-    private Boolean lockLlm;
+    @Column("use_own_llm")
+    private Boolean useOwnLlm;
 
-    @Column("lock_tire")
-    private Boolean lockTire;
-
-    @Column("assigned_by")
-    private Long assignedBy;
+    @Column("use_own_tire")
+    private Boolean useOwnTire;
 
     @Column("created_at")
     private LocalDateTime createdAt;

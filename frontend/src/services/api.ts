@@ -104,7 +104,8 @@ apiClient.interceptors.request.use(
         && !url.includes('/tenant')
         && !url.includes('/api/v1/tire-plugins')
         && !url.includes('/api/v1/llm-providers')
-        && !url.includes('/api/v1/config-assignments')) {
+        && !url.includes('/api/v1/config-assignments')
+        && !url.includes('/api/v1/user-config')) {
       const customerId = localStorage.getItem('customer_id') || 'demo-customer';
       if (config.params) {
         config.params.customer_id = customerId;
