@@ -159,7 +159,7 @@ class InferenceEngine:
 
         session = self._sessions[tier]
         input_name = session.get_inputs()[0].name
-        arr = np.asarray(features, dtype=np.float16)
+        arr = np.asarray(features, dtype=np.float32)
         if arr.ndim == 1:
             arr = np.expand_dims(arr, axis=0)
 
@@ -175,8 +175,8 @@ class InferenceEngine:
         session = self._bigru_sessions[tier]
         input_names = [inp.name for inp in session.get_inputs()]
         feeds = {
-            input_names[0]: np.asarray(features_seq, dtype=np.float16),
-            input_names[1]: np.asarray(mask, dtype=np.float16),
+            input_names[0]: np.asarray(features_seq, dtype=np.float32),
+            input_names[1]: np.asarray(mask, dtype=np.float32),
         }
         outputs = session.run(None, feeds)
         prediction = float(outputs[0].flatten()[0])
@@ -246,7 +246,7 @@ class InferenceEngine:
 
         session = self._challenger_sessions[tier]
         input_name = session.get_inputs()[0].name
-        arr = np.asarray(features, dtype=np.float16)
+        arr = np.asarray(features, dtype=np.float32)
         if arr.ndim == 1:
             arr = np.expand_dims(arr, axis=0)
 
@@ -263,8 +263,8 @@ class InferenceEngine:
         session = self._challenger_bigru_sessions[tier]
         input_names = [inp.name for inp in session.get_inputs()]
         feeds = {
-            input_names[0]: np.asarray(features_seq, dtype=np.float16),
-            input_names[1]: np.asarray(mask, dtype=np.float16),
+            input_names[0]: np.asarray(features_seq, dtype=np.float32),
+            input_names[1]: np.asarray(mask, dtype=np.float32),
         }
         outputs = session.run(None, feeds)
         return float(outputs[0].flatten()[0])
