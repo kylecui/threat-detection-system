@@ -26,6 +26,9 @@ export default function LoginPage() {
         if (data.user?.customerId) {
           localStorage.setItem('customer_id', data.user.customerId);
         }
+        if (data.user?.tenantId) {
+          localStorage.setItem('tenant_id', String(data.user.tenantId));
+        }
         message.success(`欢迎, ${data.user?.displayName || data.user?.username}`);
         navigate('/dashboard', { replace: true });
       } else {

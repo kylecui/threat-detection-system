@@ -11,35 +11,32 @@ import org.springframework.data.relational.core.mapping.Table;
 import java.time.LocalDateTime;
 
 /**
- * 用户实体 (R2DBC)
+ * Tenant entity (R2DBC)
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("auth_users")
-public class AuthUser {
+@Table("tenants")
+public class Tenant {
 
     @Id
     private Long id;
 
-    private String username;
-
-    @Column("password_hash")
-    private String passwordHash;
-
-    @Column("display_name")
-    private String displayName;
-
-    private String email;
-
-    @Column("customer_id")
-    private String customerId;
-
     @Column("tenant_id")
-    private Long tenantId;
+    private String tenantId;
 
-    private Boolean enabled;
+    private String name;
+
+    private String description;
+
+    @Column("contact_email")
+    private String contactEmail;
+
+    private String status;
+
+    @Column("max_customers")
+    private Integer maxCustomers;
 
     @Column("created_at")
     private LocalDateTime createdAt;

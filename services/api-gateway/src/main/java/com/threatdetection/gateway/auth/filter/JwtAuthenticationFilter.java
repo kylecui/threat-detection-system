@@ -82,12 +82,19 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             @SuppressWarnings("unchecked")
             List<String> roles = (List<String>) claims.get("roles");
             String customerId = (String) claims.get("customerId");
+            Object tenantIdObj = claims.get("tenantId");
+            String tenantIdStr = "";
+            if (tenantIdObj != null) {
+                long tid = ((Number) tenantIdObj).longValue();
+                if (tid > 0) tenantIdStr = String.valueOf(tid);
+            }
 
             ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
                     .header("X-Auth-Username", username)
                     .header("X-Auth-UserId", String.valueOf(userId))
                     .header("X-Auth-Roles", String.join(",", roles))
                     .header("X-Customer-Id", customerId != null ? customerId : "")
+                    .header("X-Tenant-Id", tenantIdStr)
                     .build();
 
             return chain.filter(exchange.mutate().request(mutatedRequest).build());

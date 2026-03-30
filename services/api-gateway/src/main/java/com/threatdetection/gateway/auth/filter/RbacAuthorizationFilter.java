@@ -93,9 +93,12 @@ public class RbacAuthorizationFilter implements GlobalFilter, Ordered {
 
         // Scope customer_id for non-SUPER_ADMIN users
         if (tokenCustomerId != null && !tokenCustomerId.isBlank()) {
+            String tenantIdHeader = exchange.getRequest().getHeaders().getFirst("X-Tenant-Id");
+
             // Overwrite customer_id param to enforce tenant isolation
             ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
                     .header("X-Customer-Id", tokenCustomerId)
+                    .header("X-Tenant-Id", tenantIdHeader != null ? tenantIdHeader : "")
                     .build();
 
             // Replace query param customer_id with the JWT value

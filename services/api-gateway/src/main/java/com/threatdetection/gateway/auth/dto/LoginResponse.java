@@ -29,6 +29,7 @@ public class LoginResponse {
         private String displayName;
         private String email;
         private String customerId;
+        private Long tenantId;
         private List<String> roles;
     }
 }

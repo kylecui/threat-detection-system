@@ -65,6 +65,7 @@ public class AuthService {
                                 .displayName(user.getDisplayName())
                                 .email(user.getEmail())
                                 .customerId(user.getCustomerId())
+                                .tenantId(user.getTenantId())
                                 .roles(roles)
                                 .build()));
     }
@@ -75,11 +76,12 @@ public class AuthService {
                 .collectList()
                 .map(roles -> {
                     String token = jwtTokenProvider.generateToken(
-                            user.getId(), user.getUsername(), user.getCustomerId(), roles);
+                            user.getId(), user.getUsername(), user.getCustomerId(),
+                            user.getTenantId(), roles);
                     String refreshToken = jwtTokenProvider.generateRefreshToken(user.getUsername());
 
-                    log.info("Login successful: user={}, roles={}, customerId={}",
-                            user.getUsername(), roles, user.getCustomerId());
+                    log.info("Login successful: user={}, roles={}, customerId={}, tenantId={}",
+                            user.getUsername(), roles, user.getCustomerId(), user.getTenantId());
 
                     return LoginResponse.builder()
                             .token(token)
@@ -91,6 +93,7 @@ public class AuthService {
                                     .displayName(user.getDisplayName())
                                     .email(user.getEmail())
                                     .customerId(user.getCustomerId())
+                                    .tenantId(user.getTenantId())
                                     .roles(roles)
                                     .build())
                             .build();

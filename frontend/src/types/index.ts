@@ -507,6 +507,90 @@ export interface SmtpConfig {
 }
 
 // ============================================================
+// 多租户管理 (Multi-Tenant RBAC)
+// ============================================================
+
+/** 租户状态 */
+export enum TenantStatus {
+  ACTIVE = 'ACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  DISABLED = 'DISABLED',
+}
+
+/** 用户角色 */
+export enum UserRole {
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  TENANT_ADMIN = 'TENANT_ADMIN',
+  CUSTOMER_USER = 'CUSTOMER_USER',
+}
+
+/** 租户 */
+export interface Tenant {
+  id: number;
+  tenantId: string;
+  name: string;
+  description?: string;
+  contactEmail?: string;
+  status: TenantStatus;
+  maxCustomers: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 创建租户请求 */
+export interface CreateTenantRequest {
+  tenantId: string;
+  name: string;
+  description?: string;
+  contactEmail?: string;
+  maxCustomers?: number;
+}
+
+/** 更新租户请求 */
+export interface UpdateTenantRequest {
+  name?: string;
+  description?: string;
+  contactEmail?: string;
+  status?: TenantStatus;
+  maxCustomers?: number;
+}
+
+/** 用户管理 - 用户 */
+export interface ManagedUser {
+  id: number;
+  username: string;
+  displayName?: string;
+  email?: string;
+  customerId?: string;
+  tenantId?: number;
+  enabled: boolean;
+  roles: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 创建用户请求 */
+export interface CreateUserRequest {
+  username: string;
+  password: string;
+  displayName?: string;
+  email?: string;
+  customerId?: string;
+  tenantId?: number;
+  role: string;
+}
+
+/** 更新用户请求 */
+export interface UpdateUserRequest {
+  displayName?: string;
+  email?: string;
+  customerId?: string;
+  password?: string;
+  enabled?: boolean;
+  role?: string;
+}
+
+// ============================================================
 // 多区域部署 (Multi-Region)
 // ============================================================
 

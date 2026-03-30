@@ -47,17 +47,19 @@ public class JwtTokenProvider {
         this.signingKey = Keys.hmacShaKeyFor(keyBytes);
     }
 
-    public String generateToken(Long userId, String username, String customerId, List<String> roles) {
+    public String generateToken(Long userId, String username, String customerId, Long tenantId, List<String> roles) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
 
+        var claimsMap = new java.util.HashMap<String, Object>();
+        claimsMap.put("userId", userId);
+        claimsMap.put("roles", roles);
+        claimsMap.put("customerId", customerId != null ? customerId : "");
+        claimsMap.put("tenantId", tenantId != null ? tenantId : 0L);
+
         return Jwts.builder()
                 .setSubject(username)
-                .addClaims(Map.of(
-                        "userId", userId,
-                        "roles", roles,
-                        "customerId", customerId != null ? customerId : ""
-                ))
+                .addClaims(claimsMap)
                 .setIssuedAt(now)
                 .setExpiration(expiry)
                 .signWith(signingKey)
@@ -122,6 +124,14 @@ public class JwtTokenProvider {
     public Long getUserIdFromToken(String token) {
         Claims claims = parseToken(token);
         return ((Number) claims.get("userId")).longValue();
+    }
+
+    public Long getTenantIdFromToken(String token) {
+        Claims claims = parseToken(token);
+        Object tid = claims.get("tenantId");
+        if (tid == null) return null;
+        long val = ((Number) tid).longValue();
+        return val == 0L ? null : val;
     }
 
     public long getExpirationMs() {

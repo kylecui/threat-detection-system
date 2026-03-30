@@ -12,6 +12,8 @@ import {
   ExperimentOutlined,
   CloudServerOutlined,
   LogoutOutlined,
+  ApartmentOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
 import Dashboard from './pages/Dashboard';
 import ThreatList from './pages/ThreatList';
@@ -23,6 +25,8 @@ import ThreatIntel from './pages/ThreatIntel';
 import MlDetection from './pages/MlDetection';
 import SystemMonitor from './pages/SystemMonitor';
 import LoginPage from './pages/Login';
+import TenantMgmt from './pages/TenantMgmt';
+import UserMgmt from './pages/UserMgmt';
 
 function isAuthenticated(): boolean {
   return !!localStorage.getItem('token');
@@ -54,6 +58,24 @@ function getCurrentUser(): { displayName?: string; username?: string; roles?: st
 
 function AppLayout() {
   const user = getCurrentUser();
+  const roles = user?.roles || [];
+  const isSuperAdmin = roles.includes('SUPER_ADMIN');
+  const isTenantAdmin = roles.includes('TENANT_ADMIN');
+  const isAdminRole = isSuperAdmin || isTenantAdmin;
+
+  const menuRoutes = [
+    { path: '/dashboard', name: '仪表盘', icon: <DashboardOutlined /> },
+    { path: '/threats', name: '威胁列表', icon: <WarningOutlined /> },
+    { path: '/alerts', name: '告警中心', icon: <BellOutlined /> },
+    { path: '/analytics', name: '数据分析', icon: <BarChartOutlined /> },
+    { path: '/customers', name: '客户管理', icon: <TeamOutlined /> },
+    { path: '/threat-intel', name: '威胁情报', icon: <GlobalOutlined /> },
+    { path: '/ml', name: 'ML检测', icon: <ExperimentOutlined /> },
+    { path: '/system', name: '系统监控', icon: <CloudServerOutlined /> },
+    ...(isSuperAdmin ? [{ path: '/tenants', name: '租户管理', icon: <ApartmentOutlined /> }] : []),
+    ...(isAdminRole ? [{ path: '/users', name: '用户管理', icon: <UserOutlined /> }] : []),
+    { path: '/settings', name: '系统设置', icon: <SettingOutlined /> },
+  ];
 
   return (
     <ProLayout
@@ -80,17 +102,7 @@ function AppLayout() {
       }}
       route={{
         path: '/',
-        routes: [
-          { path: '/dashboard', name: '仪表盘', icon: <DashboardOutlined /> },
-          { path: '/threats', name: '威胁列表', icon: <WarningOutlined /> },
-          { path: '/alerts', name: '告警中心', icon: <BellOutlined /> },
-          { path: '/analytics', name: '数据分析', icon: <BarChartOutlined /> },
-          { path: '/customers', name: '客户管理', icon: <TeamOutlined /> },
-          { path: '/threat-intel', name: '威胁情报', icon: <GlobalOutlined /> },
-          { path: '/ml', name: 'ML检测', icon: <ExperimentOutlined /> },
-          { path: '/system', name: '系统监控', icon: <CloudServerOutlined /> },
-          { path: '/settings', name: '系统设置', icon: <SettingOutlined /> },
-        ],
+        routes: menuRoutes,
       }}
       menuItemRender={(item, dom) => (
         <a onClick={() => { window.location.href = item.path || '/'; }}>
@@ -108,6 +120,8 @@ function AppLayout() {
         <Route path="/threat-intel" element={<ThreatIntel />} />
         <Route path="/ml" element={<MlDetection />} />
         <Route path="/system" element={<SystemMonitor />} />
+        <Route path="/tenants" element={<TenantMgmt />} />
+        <Route path="/users" element={<UserMgmt />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
     </ProLayout>
