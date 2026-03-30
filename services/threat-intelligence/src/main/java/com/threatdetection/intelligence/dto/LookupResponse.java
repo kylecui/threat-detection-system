@@ -21,4 +21,12 @@ public class LookupResponse {
     private List<String> sources;
     private int indicatorCount;
     private Instant lastSeenAt;
+
+    // TIRE enrichment fields (populated when TIRE service is available)
+    /** TIRE composite reputation score (0-100) */
+    private Integer tireScore;
+    /** TIRE risk level: Low, Medium, High, Critical */
+    private String tireLevel;
+    /** TIRE human-readable verdict */
+    private String tireVerdict;
 }

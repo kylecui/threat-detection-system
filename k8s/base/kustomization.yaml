@@ -26,6 +26,8 @@ resources:
   - threat-intelligence.yaml
   - ml-detection.yaml
   - api-gateway.yaml
+  - tire.yaml
+  - tire-secret.yaml
   - postgres-schema-apply.yaml
   # Multi-region resources (enable in region overlays):
   # - kafka-mirrormaker.yaml
@@ -49,6 +51,8 @@ images:
   - name: threat-detection/threat-intelligence
     newTag: latest
   - name: threat-detection/ml-detection
+    newTag: latest
+  - name: threat-detection/tire
     newTag: latest
 
 configMapGenerator:

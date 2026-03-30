@@ -45,3 +45,6 @@ resilience4j:
         waitDurationInOpenState: 300s
         permittedNumberOfCallsInHalfOpenState: 3
         automaticTransitionFromOpenToHalfOpenEnabled: true
+
+tire:
+  base-url: ${TIRE_BASE_URL:http://tire:8000}

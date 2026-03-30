@@ -22,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>/api/notification-config/** → Alert Management (8082)</li>
  *   <li>/api/v1/threat-intel/** → Threat Intelligence (8085)</li>
  *   <li>/api/v1/ml/** → ML Detection (8086)</li>
+ *   <li>/api/v1/tire/** → TIRE Reputation Engine (8000)</li>
  * </ul>
  * 
  * <p>核心功能：
@@ -142,6 +143,14 @@ public class ApiGatewayApplication {
                     .stripPrefix(0)
                     .addRequestHeader("X-Gateway-Service", "threat-intelligence"))
                 .uri("http://threat-intelligence:8085"))
+
+            // TIRE - Threat Intelligence Reputation Engine (8000)
+            .route("tire", r -> r
+                .path("/api/v1/tire/**")
+                .filters(f -> f
+                    .rewritePath("/api/v1/tire/(?<segment>.*)", "/api/v1/${segment}")
+                    .addRequestHeader("X-Gateway-Service", "tire"))
+                .uri("http://tire:8000"))
 
             // ML Detection Service (8086) - health endpoint rewrite
             .route("ml-detection-health", r -> r

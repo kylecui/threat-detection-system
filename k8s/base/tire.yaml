@@ -1,0 +1,111 @@
+---
+# TIRE (Threat Intelligence Reputation Engine) - Python FastAPI service
+# Provides IP reputation lookup, context-aware analysis, and report generation
+# Source: https://github.com/kylecui/ipit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tire-cache-pvc
+  labels:
+    app: tire
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tire-data-pvc
+  labels:
+    app: tire
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tire
+  labels:
+    app: tire
+    component: threat-intelligence
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tire
+  template:
+    metadata:
+      labels:
+        app: tire
+        component: threat-intelligence
+    spec:
+      containers:
+        - name: tire
+          image: threat-detection/tire:latest
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - secretRef:
+                name: tire-secret
+          env:
+            - name: TIRE_PORT
+              value: "8000"
+            - name: CACHE_TTL_HOURS
+              value: "24"
+          volumeMounts:
+            - name: tire-cache
+              mountPath: /app/cache
+            - name: tire-data
+              mountPath: /app/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+      volumes:
+        - name: tire-cache
+          persistentVolumeClaim:
+            claimName: tire-cache-pvc
+        - name: tire-data
+          persistentVolumeClaim:
+            claimName: tire-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tire
+  labels:
+    app: tire
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: tire

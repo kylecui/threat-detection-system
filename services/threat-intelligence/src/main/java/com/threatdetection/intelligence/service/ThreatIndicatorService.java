@@ -1,10 +1,12 @@
 package com.threatdetection.intelligence.service;
 
+import com.threatdetection.intelligence.client.TireClient;
 import com.threatdetection.intelligence.dto.BulkUpsertRequest;
 import com.threatdetection.intelligence.dto.CreateIndicatorRequest;
 import com.threatdetection.intelligence.dto.IndicatorResponse;
 import com.threatdetection.intelligence.dto.LookupResponse;
 import com.threatdetection.intelligence.dto.StatisticsResponse;
+import com.threatdetection.intelligence.dto.TireLookupResult;
 import com.threatdetection.intelligence.dto.UpdateIndicatorRequest;
 import com.threatdetection.intelligence.exception.IndicatorNotFoundException;
 import com.threatdetection.intelligence.model.IocType;
@@ -38,13 +40,16 @@ public class ThreatIndicatorService {
 
     private final ThreatIndicatorRepository threatIndicatorRepository;
     private final ThreatIntelFeedRepository threatIntelFeedRepository;
+    private final TireClient tireClient;
 
     public ThreatIndicatorService(
             ThreatIndicatorRepository threatIndicatorRepository,
-            ThreatIntelFeedRepository threatIntelFeedRepository
+            ThreatIntelFeedRepository threatIntelFeedRepository,
+            TireClient tireClient
     ) {
         this.threatIndicatorRepository = threatIndicatorRepository;
         this.threatIntelFeedRepository = threatIntelFeedRepository;
+        this.tireClient = tireClient;
     }
 
     @Transactional(readOnly = true)
@@ -52,17 +57,20 @@ public class ThreatIndicatorService {
         Instant now = Instant.now();
         List<ThreatIndicator> indicators = threatIndicatorRepository.findActiveByIocValue(ip, now);
 
+        TireLookupResult tireResult = tireClient.lookupIp(ip);
+
         if (indicators.isEmpty()) {
-            return LookupResponse.builder()
+            LookupResponse.LookupResponseBuilder responseBuilder = LookupResponse.builder()
                     .ip(ip)
-                    .found(false)
+                    .found(tireResult != null)
                     .confidence(0)
                     .severity(Severity.INFO.name())
                     .intelWeight(1.0d)
                     .sources(Collections.emptyList())
                     .indicatorCount(0)
-                    .lastSeenAt(null)
-                    .build();
+                    .lastSeenAt(null);
+            enrichWithTire(responseBuilder, tireResult);
+            return responseBuilder.build();
         }
 
         int maxConfidence = indicators.stream()
@@ -93,7 +101,12 @@ public class ThreatIndicatorService {
 
         double intelWeight = calculateIntelWeight(boostedConfidence, highestSeverity);
 
-        return LookupResponse.builder()
+        if (tireResult != null && tireResult.getScore() != null) {
+            double tireBoost = tireResult.getScore() > 70 ? 1.3 : (tireResult.getScore() > 40 ? 1.1 : 1.0);
+            intelWeight = Math.max(1.0d, intelWeight * tireBoost);
+        }
+
+        LookupResponse.LookupResponseBuilder responseBuilder = LookupResponse.builder()
                 .ip(ip)
                 .found(true)
                 .confidence(boostedConfidence)
@@ -101,8 +114,17 @@ public class ThreatIndicatorService {
                 .intelWeight(intelWeight)
                 .sources(sources)
                 .indicatorCount(indicators.size())
-                .lastSeenAt(lastSeenAt)
-                .build();
+                .lastSeenAt(lastSeenAt);
+        enrichWithTire(responseBuilder, tireResult);
+        return responseBuilder.build();
+    }
+
+    private void enrichWithTire(LookupResponse.LookupResponseBuilder builder, TireLookupResult tireResult) {
+        if (tireResult != null) {
+            builder.tireScore(tireResult.getScore());
+            builder.tireLevel(tireResult.getLevel());
+            builder.tireVerdict(tireResult.getVerdict());
+        }
     }
 
     @Transactional
