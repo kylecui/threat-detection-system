@@ -46,7 +46,8 @@ const Dashboard = () => {
       const [stats, threats, trend, ports] = await Promise.all([
         threatService.getStatistics(customerId),
         threatService.getThreatList({
-          page: 0,  // Spring Data页码从0开始
+          customer_id: customerId,
+          page: 0,
           page_size: 10,
           sort_by: 'assessment_time',
           sort_order: 'desc',

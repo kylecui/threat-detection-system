@@ -23,8 +23,10 @@ const ThreatList = () => {
   const loadThreats = async () => {
     try {
       setLoading(true);
+      const customerId = localStorage.getItem('customer_id') || 'demo-customer';
       const response = await threatService.getThreatList({
-        page: page - 1,  // Spring Data页码从0开始
+        customer_id: customerId,
+        page: page - 1,
         page_size: pageSize,
         sort_by: 'assessmentTime',
         sort_order: 'desc',
