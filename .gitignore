@@ -21,6 +21,7 @@ build/
 .project
 .classpath
 .settings/
+.factorypath
 
 # IntelliJ IDEA
 .idea/
