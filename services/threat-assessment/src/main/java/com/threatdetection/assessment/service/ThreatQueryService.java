@@ -215,30 +215,30 @@ public class ThreatQueryService {
      * @param customerId 客户ID (必需)
      * @return 趋势数据点列表
      */
-    public List<TrendDataPoint> getThreatTrend(String customerId) {
-        log.info("Getting threat trend: customerId={}", customerId);
+    public List<TrendDataPoint> getThreatTrend(String customerId, int hours) {
+        log.info("Getting threat trend: customerId={}, hours={}", customerId, hours);
         
         Instant now = Instant.now();
-        Instant yesterday = now.minus(24, ChronoUnit.HOURS);
+        Instant since = now.minus(hours, ChronoUnit.HOURS);
         
-        List<Object[]> rawData = repository.getHourlyTrend(customerId, yesterday, now);
+        List<Object[]> rawData = repository.getHourlyTrend(customerId, since, now);
         
         return rawData.stream()
                 .map(this::convertToTrendDataPoint)
                 .collect(Collectors.toList());
     }
 
-    public List<TrendDataPoint> getTenantThreatTrend(List<String> customerIds) {
-        log.info("Getting tenant threat trend: customerIds={}", customerIds);
+    public List<TrendDataPoint> getTenantThreatTrend(List<String> customerIds, int hours) {
+        log.info("Getting tenant threat trend: customerIds={}, hours={}", customerIds, hours);
 
         if (customerIds == null || customerIds.isEmpty()) {
             return Collections.emptyList();
         }
 
         Instant now = Instant.now();
-        Instant yesterday = now.minus(24, ChronoUnit.HOURS);
+        Instant since = now.minus(hours, ChronoUnit.HOURS);
 
-        List<Object[]> rawData = repository.getHourlyTrendForCustomers(customerIds, yesterday, now);
+        List<Object[]> rawData = repository.getHourlyTrendForCustomers(customerIds, since, now);
 
         return rawData.stream()
                 .map(this::convertToTrendDataPoint)
@@ -251,11 +251,11 @@ public class ThreatQueryService {
      * @param customerId 客户ID (必需)
      * @return 端口分布列表 (TOP 10)
      */
-    public List<PortDistribution> getPortDistribution(String customerId) {
-        log.info("Getting port distribution: customerId={}", customerId);
+    public List<PortDistribution> getPortDistribution(String customerId, int hours) {
+        log.info("Getting port distribution: customerId={}, hours={}", customerId, hours);
         
-        // 查询最近24小时的威胁
-        Instant since = Instant.now().minus(24, ChronoUnit.HOURS);
+        // 查询指定时间范围的威胁
+        Instant since = Instant.now().minus(hours, ChronoUnit.HOURS);
         List<ThreatAssessment> recentThreats = repository.findRecent24Hours(customerId, since);
         
         // 解析portList字段,统计端口出现次数
@@ -304,14 +304,14 @@ public class ThreatQueryService {
                 .collect(Collectors.toList());
     }
 
-    public List<PortDistribution> getTenantPortDistribution(List<String> customerIds) {
-        log.info("Getting tenant port distribution: customerIds={}", customerIds);
+    public List<PortDistribution> getTenantPortDistribution(List<String> customerIds, int hours) {
+        log.info("Getting tenant port distribution: customerIds={}, hours={}", customerIds, hours);
 
         if (customerIds == null || customerIds.isEmpty()) {
             return Collections.emptyList();
         }
 
-        Instant since = Instant.now().minus(24, ChronoUnit.HOURS);
+        Instant since = Instant.now().minus(hours, ChronoUnit.HOURS);
         List<ThreatAssessment> recentThreats = repository.findRecent24HoursForCustomers(customerIds, since);
 
         Map<Integer, Long> portCountMap = new HashMap<>();

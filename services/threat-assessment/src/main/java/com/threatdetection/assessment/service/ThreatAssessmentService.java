@@ -138,6 +138,11 @@ public class ThreatAssessmentService {
         assessment.setUniquePorts(data.getUniquePorts());
         assessment.setUniqueDevices(data.getUniqueDevices());
         
+        // 设置端口列表 (用于端口攻击分布统计)
+        if (data.getPortList() != null && !data.getPortList().isEmpty()) {
+            assessment.setPortList(data.getPortList().toString());
+        }
+        
         // 设置权重因子
         assessment.setTimeWeight(timeWeight);
         assessment.setIpWeight(ipWeight);

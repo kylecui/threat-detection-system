@@ -97,6 +97,14 @@ public class ThreatAlertMessage {
     @JsonProperty(value = "detectionTier", access = JsonProperty.Access.WRITE_ONLY)
     @JsonAlias({"detection_tier", "detectionTier", "tier"})
     private Integer detectionTier;
+
+    /**
+     * 端口列表 (Flink输出的JSON数组, 如 [80, 443, 3389])
+     * V4.0 Phase 3新增字段 - 用于端口攻击分布统计
+     */
+    @JsonProperty(value = "portList", access = JsonProperty.Access.WRITE_ONLY)
+    @JsonAlias({"port_list", "portList"})
+    private java.util.List<Integer> portList;
     
     /**
      * 评估时间戳 (ISO8601格式 或 Unix时间戳)
@@ -112,12 +120,13 @@ public class ThreatAlertMessage {
             .customerId(customerId)
             .attackMac(attackMac)
             .attackIp(attackIp)
-            .mostAccessedHoneypotIp(mostAccessedHoneypotIp)  // V4.0 Phase 2
+            .mostAccessedHoneypotIp(mostAccessedHoneypotIp)
             .attackCount(attackCount)
             .uniqueIps(uniqueIps)
             .uniquePorts(uniquePorts)
             .uniqueDevices(uniqueDevices)
             .detectionTier(detectionTier)
+            .portList(portList)
             .timestamp(parseTimestamp(timestamp))
             .build();
     }

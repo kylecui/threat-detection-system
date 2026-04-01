@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.List;
@@ -163,6 +164,7 @@ public class TierWindowProcessor
                 .eventTimeSpan(eventTimeSpan)              // V4.0 Phase 3
                 .burstIntensity(burstIntensity)            // V4.0 Phase 3
                 .timeDistributionWeight(timeDistWeight)    // V4.0 Phase 3
+                .portList(new ArrayList<>(uniquePorts))
                 .tier(tier)
                 .windowType(windowType)
                 .windowStart(Instant.ofEpochMilli(context.window().getStart()))

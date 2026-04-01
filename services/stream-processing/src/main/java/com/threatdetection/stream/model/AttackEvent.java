@@ -11,7 +11,7 @@ import java.time.ZoneId;
 public class AttackEvent {
     private String id;
 
-    @JsonAlias("deviceSerial")
+    @JsonAlias({"deviceSerial", "dev_serial"})
     private String devSerial;
 
     @JsonAlias("log_type")
@@ -32,7 +32,7 @@ public class AttackEvent {
     private String description;
     private String rawLog;
 
-    @JsonAlias("company_obj_id")
+    @JsonAlias({"company_obj_id", "customer_id"})
     private String customerId;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'", timezone = "UTC")

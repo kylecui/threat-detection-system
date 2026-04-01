@@ -119,8 +119,8 @@ const Analytics = () => {
       if (useTenantAll && allCustomerIds.length > 0) {
         const tenantResults = await Promise.all([
           threatService.getTenantStatistics(allCustomerIds),
-          threatService.getTenantTrend(allCustomerIds).catch(() => []),
-          threatService.getTenantPortDistribution(allCustomerIds).catch(() => []),
+          threatService.getTenantTrend(allCustomerIds, hoursMap[trendRange]).catch(() => []),
+          threatService.getTenantPortDistribution(allCustomerIds, hoursMap[trendRange]).catch(() => []),
           threatService
             .getTenantThreatList(allCustomerIds, { page: 0, page_size: 200 })
             .then((res) => res.content || [])
@@ -139,8 +139,8 @@ const Analytics = () => {
 
         const customerResults = await Promise.all([
           threatService.getStatistics(targetCustomerId),
-          threatService.getThreatTrend(targetCustomerId).catch(() => []),
-          threatService.getPortDistribution(targetCustomerId).catch(() => []),
+          threatService.getThreatTrend(targetCustomerId, hoursMap[trendRange]).catch(() => []),
+          threatService.getPortDistribution(targetCustomerId, hoursMap[trendRange]).catch(() => []),
           threatService
             .getThreatList({ customer_id: targetCustomerId, page: 0, page_size: 200 })
             .then((res) => res.content || [])

@@ -234,15 +234,17 @@ public class AssessmentController {
      */
     @GetMapping("/trend")
     @Operation(summary = "Get threat trend",
-               description = "Get threat trend for the last 24 hours (hourly aggregation)")
+               description = "Get threat trend for the specified time range (hourly aggregation)")
     public ResponseEntity<List<TrendDataPoint>> getThreatTrend(
             @Parameter(description = "Customer ID", required = true)
-            @RequestParam(name = "customer_id") String customerId) {
+            @RequestParam(name = "customer_id") String customerId,
+            @Parameter(description = "Hours to look back (default 24)")
+            @RequestParam(name = "hours", defaultValue = "24") int hours) {
 
-        logger.info("Getting threat trend: customerId={}", customerId);
+        logger.info("Getting threat trend: customerId={}, hours={}", customerId, hours);
 
         try {
-            List<TrendDataPoint> trend = threatQueryService.getThreatTrend(customerId);
+            List<TrendDataPoint> trend = threatQueryService.getThreatTrend(customerId, hours);
             return ResponseEntity.ok(trend);
         } catch (Exception e) {
             logger.error("Error getting threat trend: customerId={}", customerId, e);
@@ -252,12 +254,13 @@ public class AssessmentController {
 
     @GetMapping("/trend/tenant")
     public ResponseEntity<List<TrendDataPoint>> getTenantThreatTrend(
-            @RequestParam(name = "customer_ids") List<String> customerIds) {
+            @RequestParam(name = "customer_ids") List<String> customerIds,
+            @RequestParam(name = "hours", defaultValue = "24") int hours) {
 
-        logger.info("Getting tenant threat trend: customerIds={}", customerIds);
+        logger.info("Getting tenant threat trend: customerIds={}, hours={}", customerIds, hours);
 
         try {
-            List<TrendDataPoint> trend = threatQueryService.getTenantThreatTrend(customerIds);
+            List<TrendDataPoint> trend = threatQueryService.getTenantThreatTrend(customerIds, hours);
             return ResponseEntity.ok(trend);
         } catch (Exception e) {
             logger.error("Error getting tenant threat trend: customerIds={}", customerIds, e);
@@ -278,12 +281,14 @@ public class AssessmentController {
                description = "Get top 10 attacked ports distribution")
     public ResponseEntity<List<PortDistribution>> getPortDistribution(
             @Parameter(description = "Customer ID", required = true)
-            @RequestParam(name = "customer_id") String customerId) {
+            @RequestParam(name = "customer_id") String customerId,
+            @Parameter(description = "Hours to look back (default 24)")
+            @RequestParam(name = "hours", defaultValue = "24") int hours) {
 
-        logger.info("Getting port distribution: customerId={}", customerId);
+        logger.info("Getting port distribution: customerId={}, hours={}", customerId, hours);
 
         try {
-            List<PortDistribution> distribution = threatQueryService.getPortDistribution(customerId);
+            List<PortDistribution> distribution = threatQueryService.getPortDistribution(customerId, hours);
             return ResponseEntity.ok(distribution);
         } catch (Exception e) {
             logger.error("Error getting port distribution: customerId={}", customerId, e);
@@ -293,12 +298,13 @@ public class AssessmentController {
 
     @GetMapping("/port-distribution/tenant")
     public ResponseEntity<List<PortDistribution>> getTenantPortDistribution(
-            @RequestParam(name = "customer_ids") List<String> customerIds) {
+            @RequestParam(name = "customer_ids") List<String> customerIds,
+            @RequestParam(name = "hours", defaultValue = "24") int hours) {
 
-        logger.info("Getting tenant port distribution: customerIds={}", customerIds);
+        logger.info("Getting tenant port distribution: customerIds={}, hours={}", customerIds, hours);
 
         try {
-            List<PortDistribution> distribution = threatQueryService.getTenantPortDistribution(customerIds);
+            List<PortDistribution> distribution = threatQueryService.getTenantPortDistribution(customerIds, hours);
             return ResponseEntity.ok(distribution);
         } catch (Exception e) {
             logger.error("Error getting tenant port distribution: customerIds={}", customerIds, e);

@@ -2,6 +2,7 @@ package com.threatdetection.stream.model;
 
 import java.io.Serializable;
 import java.time.Instant;
+import java.util.List;
 
 /**
  * 聚合攻击数据模型
@@ -39,6 +40,9 @@ public class AggregatedAttackData implements Serializable {
     private double burstIntensity;        // 爆发强度系数 [0, 1]
     private double timeDistributionWeight; // 时间分布权重 [1.0, 3.0]
     
+    // V4.0 Phase 4: 端口列表 - 用于端口攻击分布统计
+    private List<Integer> portList;       // 窗口内所有被攻击的端口列表
+    
     // Constructors
     public AggregatedAttackData() {}
     
@@ -50,7 +54,8 @@ public class AggregatedAttackData implements Serializable {
                                int tier, String windowType,
                                Instant windowStart, Instant windowEnd, Instant timestamp,
                                double threatScore, String threatLevel,
-                               long eventTimeSpan, double burstIntensity, double timeDistributionWeight) {
+                               long eventTimeSpan, double burstIntensity, double timeDistributionWeight,
+                               List<Integer> portList) {
         this.customerId = customerId;
         this.attackMac = attackMac;
         this.attackIp = attackIp;
@@ -73,6 +78,7 @@ public class AggregatedAttackData implements Serializable {
         this.eventTimeSpan = eventTimeSpan;
         this.burstIntensity = burstIntensity;
         this.timeDistributionWeight = timeDistributionWeight;
+        this.portList = portList;
     }
     
     // Builder pattern
@@ -103,6 +109,7 @@ public class AggregatedAttackData implements Serializable {
         private long eventTimeSpan;
         private double burstIntensity;
         private double timeDistributionWeight;
+        private List<Integer> portList;
         
         public Builder customerId(String customerId) {
             this.customerId = customerId;
@@ -214,13 +221,18 @@ public class AggregatedAttackData implements Serializable {
             return this;
         }
         
+        public Builder portList(List<Integer> portList) {
+            this.portList = portList;
+            return this;
+        }
+        
         public AggregatedAttackData build() {
             return new AggregatedAttackData(customerId, attackMac, attackIp,
                 mostAccessedHoneypotIp, attackCount, uniqueIps, uniquePorts, 
                 uniqueDevices, mixedPortWeight, netWeight, intelScore, intelWeight,
                 tier, windowType, windowStart,
                 windowEnd, timestamp, threatScore, threatLevel,
-                eventTimeSpan, burstIntensity, timeDistributionWeight);
+                eventTimeSpan, burstIntensity, timeDistributionWeight, portList);
         }
     }
     
@@ -294,4 +306,7 @@ public class AggregatedAttackData implements Serializable {
     public void setTimeDistributionWeight(double timeDistributionWeight) { 
         this.timeDistributionWeight = timeDistributionWeight; 
     }
+    
+    public List<Integer> getPortList() { return portList; }
+    public void setPortList(List<Integer> portList) { this.portList = portList; }
 }

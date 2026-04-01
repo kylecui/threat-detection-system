@@ -51,13 +51,13 @@ class ThreatService {
   /**
    * 获取威胁趋势数据 (24小时)
    */
-  async getThreatTrend(customerId: string): Promise<ChartDataPoint[]> {
+  async getThreatTrend(customerId: string, hours: number = 24): Promise<ChartDataPoint[]> {
     const response = await apiClient.get<ChartDataPoint[]>(
       '/api/v1/assessment/trend',
       {
         params: {
           customer_id: customerId,
-          hours: 24,
+          hours,
         },
       }
     );
@@ -67,12 +67,13 @@ class ThreatService {
   /**
    * 获取端口分布
    */
-  async getPortDistribution(customerId: string): Promise<ChartDataPoint[]> {
+  async getPortDistribution(customerId: string, hours: number = 24): Promise<ChartDataPoint[]> {
     const response = await apiClient.get<ChartDataPoint[]>(
       '/api/v1/assessment/port-distribution',
       {
         params: {
           customer_id: customerId,
+          hours,
         },
       }
     );
@@ -105,18 +106,18 @@ class ThreatService {
     return response.data;
   }
 
-  async getTenantTrend(customerIds: string[]): Promise<ChartDataPoint[]> {
+  async getTenantTrend(customerIds: string[], hours: number = 24): Promise<ChartDataPoint[]> {
     const response = await apiClient.get<ChartDataPoint[]>(
       '/api/v1/assessment/trend/tenant',
-      { params: { customer_ids: customerIds.join(',') } }
+      { params: { customer_ids: customerIds.join(','), hours } }
     );
     return response.data;
   }
 
-  async getTenantPortDistribution(customerIds: string[]): Promise<ChartDataPoint[]> {
+  async getTenantPortDistribution(customerIds: string[], hours: number = 24): Promise<ChartDataPoint[]> {
     const response = await apiClient.get<ChartDataPoint[]>(
       '/api/v1/assessment/port-distribution/tenant',
-      { params: { customer_ids: customerIds.join(',') } }
+      { params: { customer_ids: customerIds.join(','), hours } }
     );
     return response.data;
   }
