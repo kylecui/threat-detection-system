@@ -1,0 +1,100 @@
+sources:
+  abuseipdb:
+    rules:
+      - condition: abuse_confidence_score >= 90
+        score_delta: 30
+        severity: high
+        title: "High abuse confidence"
+        detail_template: "AbuseIPDB confidence score: {abuse_confidence_score}%"
+      - condition: abuse_confidence_score >= 70
+        score_delta: 20
+        severity: medium
+        title: "Moderate abuse confidence"
+        detail_template: "AbuseIPDB confidence score: {abuse_confidence_score}%"
+      - condition: abuse_confidence_score > 0
+        score_delta: 5
+        severity: low
+        title: "Low abuse confidence"
+        detail_template: "AbuseIPDB confidence score: {abuse_confidence_score}%"
+  otx:
+    rules:
+      - condition: pulse_count > 0
+        score_delta: min(20, pulse_count * 2)
+        severity: medium
+        title: "OTX pulse activity"
+        detail_template: "Found in {pulse_count} OTX pulses"
+  virustotal:
+    rules:
+      - condition: malicious_count > 0
+        score_delta: min(30, malicious_count * 5)
+        severity: high
+        title: "VirusTotal malicious detections"
+        detail_template: "VirusTotal detected {malicious_count} malicious engines"
+      - condition: suspicious_count > 0
+        score_delta: min(15, suspicious_count * 3)
+        severity: medium
+        title: "VirusTotal suspicious detections"
+        detail_template: "VirusTotal detected {suspicious_count} suspicious engines"
+  greynoise:
+    rules:
+      - condition: classification == "malicious"
+        score_delta: 20
+        severity: high
+        title: "GreyNoise malicious classification"
+        detail_template: "IP classified as malicious by GreyNoise"
+      - condition: noise or riot
+        score_delta: -15
+        severity: low
+        title: "GreyNoise benign activity"
+        detail_template: "IP classified as {activity_type} - benign background activity"
+  honeynet:
+    rules:
+      - condition: total_hits > 10
+        score_delta: min(40, total_hits * 2)
+        severity: high
+        title: "High honeynet activity"
+        detail_template: "IP triggered honeynet {total_hits} times"
+      - condition: total_hits > 0
+        score_delta: 15
+        severity: medium
+        title: "Honeynet detection"
+        detail_template: "IP detected by honeynet sensors"
+  internal_flow:
+    rules:
+      - condition: session_count > 100
+        score_delta: -10
+        severity: low
+        title: "High internal connectivity"
+        detail_template: "IP has {session_count} internal sessions - likely legitimate"
+      - condition: session_count > 10
+        score_delta: -5
+        severity: low
+        title: "Moderate internal activity"
+        detail_template: "IP has {session_count} internal sessions"
+
+semantic_adjustments:
+  cloud_provider:
+    score_delta: -15
+    severity: low
+    title: "Semantic adjustment: cloud_provider"
+    detail_template: "IP identified as cloud provider, reducing suspicion"
+  microsoft_service:
+    score_delta: -25
+    severity: low
+    title: "Semantic adjustment: microsoft_service"
+    detail_template: "IP identified as Microsoft service, reducing suspicion"
+  google_service:
+    score_delta: -25
+    severity: low
+    title: "Semantic adjustment: google_service"
+    detail_template: "IP identified as Google service, reducing suspicion"
+  official_service:
+    score_delta: -25
+    severity: low
+    title: "Semantic adjustment: official_service"
+    detail_template: "IP identified as official service, reducing suspicion"
+  shared_infrastructure:
+    score_delta: -10
+    severity: low
+    title: "Semantic adjustment: shared_infrastructure"
+    detail_template: "IP identified as shared infrastructure, reducing suspicion"

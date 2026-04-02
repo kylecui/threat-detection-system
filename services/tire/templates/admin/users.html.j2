@@ -1,0 +1,184 @@
+{% extends "admin/base_admin.html.j2" %}
+
+{% block title %}{{ t('admin.users') }}{% endblock %}
+{% block nav_users %}active{% endblock %}
+{% block page_title %}{{ t('admin.users') }}{% endblock %}
+
+{% block content %}
+{% if msg %}
+<div class="alert alert-info alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">{{ t('admin.create_user') }}</h6>
+        <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#createUserForm">+</button>
+    </div>
+    <div class="collapse" id="createUserForm">
+        <div class="card-body">
+            <form method="post" action="{{ root_path }}/admin/users/create" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">{{ t('admin.username') }}</label>
+                    <input type="text" class="form-control" name="username" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ t('admin.password') }}</label>
+                    <input type="password" class="form-control" name="password" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ t('admin.display_name') }}</label>
+                    <input type="text" class="form-control" name="display_name">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ t('admin.shared_llm_assignment') }}</label>
+                    <select class="form-select" name="shared_llm_config_id">
+                        <option value="">{{ t('admin.no_shared_llm') }}</option>
+                        {% for item in shared_llm_configs %}
+                        <option value="{{ item.id }}">{{ item.name }} — {{ item.model }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">{{ t('admin.policy_groups') }}</label>
+                    <select class="form-select" name="group_ids" multiple>
+                        {% for group in groups %}
+                        <option value="{{ group.id }}">{{ group.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 d-flex align-items-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="is_admin" name="is_admin" value="true">
+                        <label class="form-check-label" for="is_admin">{{ t('admin.is_admin') }}</label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">{{ t('admin.create_user') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>{{ t('admin.id') }}</th>
+                        <th>{{ t('admin.username') }}</th>
+                        <th>{{ t('admin.display_name') }}</th>
+                        <th>{{ t('admin.role') }}</th>
+                        <th>{{ t('admin.status') }}</th>
+                        <th>{{ t('admin.created_at') }}</th>
+                        <th>{{ t('admin.actions') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td>{{ u.id }}</td>
+                        <td><strong>{{ u.username }}</strong></td>
+                        <td>{{ u.display_name }}</td>
+                        <td>
+                            {% if u.is_admin %}
+                            <span class="badge bg-primary">{{ t('admin.admin') }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ t('admin.user_role') }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if u.is_active %}
+                            <span class="badge bg-success">{{ t('admin.active') }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ t('admin.disabled') }}</span>
+                            {% endif %}
+                        </td>
+                        <td><small class="text-muted">{{ u.created_at }}</small></td>
+                        <td style="min-width: 460px;">
+                            <form method="post" action="{{ root_path }}/admin/users/{{ u.id }}/edit" class="row g-2 mb-2">
+                                <div class="col-md-4">
+                                    <input class="form-control form-control-sm" name="display_name" value="{{ u.display_name }}">
+                                </div>
+                                <div class="col-md-4">
+                                    <select class="form-select form-select-sm" name="shared_llm_config_id">
+                                        <option value="">{{ t('admin.no_shared_llm') }}</option>
+                                        {% for item in shared_llm_configs %}
+                                        <option value="{{ item.id }}" {% if u.shared_llm_config_id == item.id %}selected{% endif %}>{{ item.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <select class="form-select form-select-sm" name="group_ids" multiple>
+                                        {% for group in groups %}
+                                        <option value="{{ group.id }}" {% if group.id in u.group_ids %}selected{% endif %}>{{ group.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <input type="hidden" name="is_admin" value="false">
+                                    <div class="form-check form-switch mt-1">
+                                        <input class="form-check-input" type="checkbox" name="is_admin" value="true" {% if u.is_admin %}checked{% endif %} {% if u.id == user.id and u.is_admin %}disabled{% endif %}>
+                                        <label class="form-check-label">{{ t('admin.is_admin') }}</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <input type="hidden" name="is_active" value="false">
+                                    <div class="form-check form-switch mt-1">
+                                        <input class="form-check-input" type="checkbox" name="is_active" value="true" {% if u.is_active %}checked{% endif %} {% if u.id == user.id %}disabled{% endif %}>
+                                        <label class="form-check-label">{{ t('admin.active') }}</label>
+                                    </div>
+                                    {% if u.id == user.id %}
+                                    <input type="hidden" name="is_active" value="true">
+                                    {% endif %}
+                                    {% if u.id == user.id and u.is_admin %}
+                                    <input type="hidden" name="is_admin" value="true">
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-6 d-flex gap-2 align-items-start">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">{{ t('admin.save') }}</button>
+                                </div>
+                            </form>
+
+                            <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <form method="post" action="{{ root_path }}/admin/users/{{ u.id }}/permissions" class="d-flex flex-wrap gap-2">
+                                <select class="form-select form-select-sm" name="personal_llm" style="width:auto; max-width: 260px;">
+                                    <option value="inherit" {% if user_personal_llm_permissions[u.id] is none %}selected{% endif %}>{{ t('admin.personal_llm_access') }}: {{ t('admin.inherit') }}</option>
+                                    <option value="true" {% if user_personal_llm_permissions[u.id] == true %}selected{% endif %}>{{ t('admin.personal_llm_access') }}: {{ t('admin.allowed') }}</option>
+                                    <option value="false" {% if user_personal_llm_permissions[u.id] == false %}selected{% endif %}>{{ t('admin.personal_llm_access') }}: {{ t('admin.denied') }}</option>
+                                </select>
+                                {% for plugin in plugins %}
+                                <select class="form-select form-select-sm" name="perm_{{ plugin.plugin_name }}" style="width:auto; max-width: 220px;">
+                                    <option value="inherit" {% if plugin_permissions[u.id].get(plugin.plugin_name) is none %}selected{% endif %}>{{ plugin.display_name }}: {{ t('admin.inherit') }}</option>
+                                    <option value="true" {% if plugin_permissions[u.id].get(plugin.plugin_name) == true %}selected{% endif %}>{{ plugin.display_name }}: {{ t('admin.shared_allowed') }}</option>
+                                    <option value="false" {% if plugin_permissions[u.id].get(plugin.plugin_name) == false %}selected{% endif %}>{{ plugin.display_name }}: {{ t('admin.shared_denied') }}</option>
+                                </select>
+                                {% endfor %}
+                                {% for item in shared_llm_configs %}
+                                <select class="form-select form-select-sm" name="llmperm_{{ item.id }}" style="width:auto; max-width: 240px;">
+                                    <option value="inherit" {% if llm_allowlists[u.id].get(item.id) is none %}selected{% endif %}>{{ item.name }}: {{ t('admin.inherit') }}</option>
+                                    <option value="true" {% if llm_allowlists[u.id].get(item.id) == true %}selected{% endif %}>{{ item.name }}: {{ t('admin.shared_allowed') }}</option>
+                                    <option value="false" {% if llm_allowlists[u.id].get(item.id) == false %}selected{% endif %}>{{ item.name }}: {{ t('admin.shared_denied') }}</option>
+                                </select>
+                                {% endfor %}
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">{{ t('admin.save') }}</button>
+                            </form>
+                            {% if u.id != user.id %}
+                            <form method="post" action="{{ root_path }}/admin/users/{{ u.id }}/delete" onsubmit="return confirm('{{ t('admin.confirm_delete') }}');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">{{ t('admin.delete') }}</button>
+                            </form>
+                            {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

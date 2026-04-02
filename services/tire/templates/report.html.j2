@@ -1,0 +1,165 @@
+<!-- Report fragment – rendered by HTMLReporter and embedded into dashboard via {{ html_report | safe }} -->
+<div class="card shadow mt-4">
+    <div class="card-header bg-primary text-white">
+        <h2 class="h4 mb-0">
+            {{ t('report.title') }}
+            <small class="text-primary-emphasis">{{ verdict.object_type.upper() }}: {{ verdict.object_value }}</small>
+        </h2>
+    </div>
+    <div class="card-body">
+        <style>
+            .evidence-item { margin-bottom: 0.5rem; }
+            .score-delta-positive { color: #dc3545; }
+            .score-delta-negative { color: #28a745; }
+            .severity-critical { border-left: 4px solid #dc3545; }
+            .severity-high { border-left: 4px solid #fd7e14; }
+            .severity-medium { border-left: 4px solid #ffc107; }
+            .severity-low { border-left: 4px solid #17a2b8; }
+        </style>
+
+        <!-- Summary Section -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h3>{{ t('report.verdict_summary') }}</h3>
+                <div class="alert alert-{{ level_colors.get(verdict.level, 'secondary') }} d-flex align-items-center">
+                    <div>
+                        <strong>{{ t('level.' + verdict.level) }}</strong>
+                        <p class="mb-1">{{ verdict.summary }}</p>
+                        <small>{{ t('report.confidence', value="%.1f"|format(verdict.confidence * 100)) }}</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h3>{{ t('report.score_breakdown') }}</h3>
+                <p class="text-muted small mb-2">{{ t('report.score_hint') }}</p>
+                <div class="row text-center">
+                    {% set rep_color = 'success' if verdict.reputation_score <= 20 else ('warning' if verdict.reputation_score <= 45 else 'danger') %}
+                    {% set ctx_color = 'success' if verdict.contextual_score <= 0 else ('warning' if verdict.contextual_score <= 10 else 'danger') %}
+                    {% set final_color = 'success' if verdict.final_score <= 20 else ('warning' if verdict.final_score <= 45 else ('danger' if verdict.final_score > 45 else 'warning')) %}
+                    <div class="col-4">
+                        <div class="border rounded p-2">
+                            <div class="h5 text-{{ rep_color }}">{{ verdict.reputation_score }}</div>
+                            <small>{{ t('report.reputation') }}</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border rounded p-2">
+                            <div class="h5 text-{{ ctx_color }}">{{ verdict.contextual_score }}</div>
+                            <small>{{ t('report.contextual') }}</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border rounded p-2">
+                            <div class="h5 text-{{ final_color }}">{{ verdict.final_score }}<small class="text-muted">/100</small></div>
+                            <small>{{ t('report.final') }}</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tags Section -->
+        {% if verdict.tags %}
+        <div class="mb-4">
+            <h3>{{ t('report.semantic_tags') }}</h3>
+            <div>
+                {% for tag in verdict.tags %}
+                <span class="badge bg-secondary me-1">{{ tag.replace('_', ' ') }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h3>{{ t('narrative.section_ownership') }}</h3>
+                <table class="table table-sm table-bordered align-middle mb-0">
+                    <tbody>
+                        {% for field in ownership_fields %}
+                        <tr>
+                            <th class="bg-light" style="width: 38%;">{{ t(field.label) }}</th>
+                            <td>
+                                {% if field.value %}
+                                {{ field.value }}
+                                {% else %}
+                                <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h3>{{ t('report.analysis_results') }}</h3>
+                <table class="table table-sm table-bordered align-middle mb-0">
+                    <tbody>
+                        {% for source in source_status %}
+                        <tr>
+                            <th class="bg-light" style="width: 38%;">{{ source.name }}</th>
+                            <td>
+                                {% if source.ok %}
+                                <span class="badge bg-success">OK</span>
+                                {% else %}
+                                <span class="badge bg-secondary">N/A</span>
+                                {% endif %}
+                                {% if source.message %}
+                                <div class="small text-muted mt-1">{{ source.message }}</div>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Evidence Section -->
+        <div class="mb-4">
+            <h3>{{ t('report.evidence_details') }}</h3>
+            {% for category, evidences in evidence_by_category.items() %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5 class="mb-0">{{ category.title() }} {{ t('report.evidence_suffix') }}</h5>
+                </div>
+                <div class="card-body">
+                    {% for evidence in evidences %}
+                    <div class="evidence-item severity-{{ evidence.severity }}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <strong>{{ evidence.title }}</strong>
+                                <p class="mb-1">{{ evidence.detail }}</p>
+                                <small class="text-muted">
+                                    {{ t('report.source') }} {{ evidence.source }} |
+                                    {{ t('report.severity') }} <span class="badge bg-{{ severity_colors.get(evidence.severity, 'secondary') }}">{{ evidence.severity }}</span> |
+                                    {{ t('report.confidence', value="%.1f"|format(evidence.confidence * 100)) }}
+                                </small>
+                            </div>
+                            <div class="text-end">
+                                <span class="h6 mb-0 score-delta-{{ 'positive' if evidence.score_delta > 0 else 'negative' if evidence.score_delta < 0 else 'neutral' }}">
+                                    {{ "%+d"|format(evidence.score_delta) }}
+                                </span>
+                            </div>
+                        </div>
+                        {% if not loop.last %}<hr>{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Decision Section -->
+        <div class="mb-4">
+            <h3>{{ t('report.recommended_action') }}</h3>
+            <div class="alert alert-info">
+                <strong>{{ t('decision.' + verdict.decision) }}</strong>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-muted text-center">
+            <small>{{ t('report.footer') }}</small>
+        </div>
+    </div>
+</div>

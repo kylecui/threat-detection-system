@@ -1,0 +1,109 @@
+{% extends "admin/base_admin.html.j2" %}
+
+{% block title %}{{ t('admin.dashboard') }}{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+{% block page_title %}{{ t('admin.dashboard') }}{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <!-- Plugins Card -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">🔌 {{ t('admin.plugins') }}</h6>
+                <h3 class="card-title">{{ enabled_count }}/{{ plugin_count }}</h3>
+                <p class="card-text text-muted">{{ t('admin.plugins_enabled') }}</p>
+                <a href="{{ root_path }}/admin/plugins" class="btn btn-sm btn-outline-primary">{{ t('admin.configure') }}</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- LLM Card -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">🤖 {{ t('admin.llm_status') }}</h6>
+                {% if llm_configured %}
+                <span class="badge bg-success fs-6">{{ t('admin.configured') }}</span>
+                {% else %}
+                <span class="badge bg-warning text-dark fs-6">{{ t('admin.not_configured') }}</span>
+                {% endif %}
+                <p class="card-text text-muted mt-2">{{ t('admin.llm_info') }}</p>
+                <a href="{{ root_path }}/admin/settings/llm" class="btn btn-sm btn-outline-primary">{{ t('admin.configure') }}</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Links Card -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">{{ t('admin.quick_links') }}</h6>
+                <div class="d-grid gap-2 mt-3">
+                    <a href="{{ root_path }}/" class="btn btn-outline-primary">{{ t('admin.go_analyze') }}</a>
+                    {% if user.is_admin %}
+                    <a href="{{ root_path }}/admin/groups" class="btn btn-outline-secondary">{{ t('admin.policy_groups') }}</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if usage_snapshot %}
+<div class="row g-4 mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">📡 {{ t('admin.api_usage') }}</h6>
+                <h3 class="card-title">{{ usage_snapshot.plugin_overview.calls }}</h3>
+                <p class="card-text text-muted mb-1">{{ t('admin.plugin_api_calls_30d') }}</p>
+                <small class="text-muted">{{ t('admin.success_rate_label') }}: {{ '%.0f'|format((usage_snapshot.plugin_overview.success_rate or 0) * 100) }}%</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">🤖 {{ t('admin.llm_usage') }}</h6>
+                <h3 class="card-title">{{ usage_snapshot.llm_overview.calls }}</h3>
+                <p class="card-text text-muted mb-1">{{ t('admin.llm_calls_30d') }}</p>
+                <small class="text-muted">{{ t('admin.total_tokens') }}: {{ usage_snapshot.llm_overview.total_tokens }}</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if user.is_admin and recent_logs %}
+<div class="card">
+    <div class="card-header">
+        <h6 class="mb-0">{{ t('admin.recent_activity') }}</h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>{{ t('admin.time') }}</th>
+                        <th>{{ t('admin.user') }}</th>
+                        <th>{{ t('admin.action') }}</th>
+                        <th>{{ t('admin.detail') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in recent_logs %}
+                    <tr>
+                        <td class="text-nowrap"><small class="text-muted">{{ log.created_at }}</small></td>
+                        <td>{{ log.username }}</td>
+                        <td><span class="badge bg-secondary">{{ log.action }}</span></td>
+                        <td><small>{{ log.detail }}</small></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

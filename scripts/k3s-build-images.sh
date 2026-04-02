@@ -24,6 +24,11 @@ ALL_JAVA_SERVICES=(
 
 ALL_PYTHON_SERVICES=(
   ml-detection
+  tire
+)
+
+ALL_SPECIAL_SERVICES=(
+  frontend
 )
 
 STREAM_PROCESSING_TAG="1.0"
@@ -122,11 +127,13 @@ resolve_services() {
   if [[ ${#requested[@]} -eq 0 ]]; then
     JAVA_TO_BUILD=("${ALL_JAVA_SERVICES[@]}")
     PYTHON_TO_BUILD=("${ALL_PYTHON_SERVICES[@]}")
+    SPECIAL_TO_BUILD=("${ALL_SPECIAL_SERVICES[@]}")
     return
   fi
 
   JAVA_TO_BUILD=()
   PYTHON_TO_BUILD=()
+  SPECIAL_TO_BUILD=()
 
   for svc in "${requested[@]}"; do
     local found=false
@@ -147,6 +154,15 @@ resolve_services() {
       done
     fi
     if ! $found; then
+      for s in "${ALL_SPECIAL_SERVICES[@]}"; do
+        if [[ "$svc" == "$s" ]]; then
+          SPECIAL_TO_BUILD+=("$svc")
+          found=true
+          break
+        fi
+      done
+    fi
+    if ! $found; then
       warn "Unknown service: $svc (skipped)"
     fi
   done
@@ -159,9 +175,10 @@ main() {
 
   JAVA_TO_BUILD=()
   PYTHON_TO_BUILD=()
+  SPECIAL_TO_BUILD=()
   resolve_services "$@"
 
-  local total=$(( ${#JAVA_TO_BUILD[@]} + ${#PYTHON_TO_BUILD[@]} ))
+  local total=$(( ${#JAVA_TO_BUILD[@]} + ${#PYTHON_TO_BUILD[@]} + ${#SPECIAL_TO_BUILD[@]} ))
   info "=== Building ${total} service(s) ==="
 
   for svc in "${JAVA_TO_BUILD[@]}"; do
@@ -174,6 +191,17 @@ main() {
 
   for svc in "${PYTHON_TO_BUILD[@]}"; do
     build_image "$svc" "services/${svc}" "services/${svc}/Dockerfile" "latest" || true
+  done
+
+  for svc in "${SPECIAL_TO_BUILD[@]}"; do
+    case "$svc" in
+      frontend)
+        build_image "$svc" "frontend" "frontend/Dockerfile" "latest" || true
+        ;;
+      *)
+        warn "No special build rule for $svc (skipped)"
+        ;;
+    esac
   done
 
   # ── summary ───────────────────────────────────────────────────

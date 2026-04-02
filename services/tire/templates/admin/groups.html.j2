@@ -1,0 +1,102 @@
+{% extends "admin/base_admin.html.j2" %}
+
+{% block title %}{{ t('admin.policy_groups') }}{% endblock %}
+{% block nav_groups %}active{% endblock %}
+{% block page_title %}{{ t('admin.policy_groups') }}{% endblock %}
+
+{% block content %}
+{% if msg %}
+<div class="alert alert-info alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header"><h6 class="mb-0">{{ t('admin.create_group') }}</h6></div>
+    <div class="card-body">
+        <form method="post" action="{{ root_path }}/admin/groups/create" class="row g-3">
+            <div class="col-md-4"><input class="form-control" name="name" placeholder="{{ t('admin.name') }}" required></div>
+            <div class="col-md-5"><input class="form-control" name="description" placeholder="{{ t('admin.description') }}"></div>
+            <div class="col-md-2"><input class="form-control" name="priority" type="number" value="100"></div>
+            <div class="col-md-1"><button class="btn btn-primary w-100" type="submit">{{ t('admin.save') }}</button></div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>{{ t('admin.name') }}</th>
+                        <th>{{ t('admin.description') }}</th>
+                        <th>{{ t('admin.priority') }}</th>
+                        <th>{{ t('admin.shared_llm_assignment') }}</th>
+                        <th>{{ t('admin.actions') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for group in groups %}
+                    <tr>
+                        <td>{{ group.id }}</td>
+                        <td>{{ group.name }}</td>
+                        <td>{{ group.description }}</td>
+                        <td>{{ group.priority }}</td>
+                        <td>
+                            {% for item in shared_llm_configs %}
+                                {% if group.llm_config_id == item.id %}
+                                    {{ item.name }}
+                                {% endif %}
+                            {% endfor %}
+                        </td>
+                        <td style="min-width: 520px;">
+                            <form method="post" action="{{ root_path }}/admin/groups/{{ group.id }}/edit" class="row g-2 mb-2">
+                                <div class="col-md-3"><input class="form-control form-control-sm" name="name" value="{{ group.name }}" required></div>
+                                <div class="col-md-3"><input class="form-control form-control-sm" name="description" value="{{ group.description }}"></div>
+                                <div class="col-md-2"><input class="form-control form-control-sm" name="priority" type="number" value="{{ group.priority }}"></div>
+                                <div class="col-md-4">
+                                    <select class="form-select form-select-sm" name="shared_llm_config_id">
+                                        <option value="">{{ t('admin.no_shared_llm') }}</option>
+                                        {% for item in shared_llm_configs %}
+                                        <option value="{{ item.id }}" {% if group.llm_config_id == item.id %}selected{% endif %}>{{ item.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 d-flex flex-wrap gap-2">
+                                    <select class="form-select form-select-sm" name="personal_llm" style="width:auto; max-width: 260px;">
+                                        <option value="inherit" {% if group_personal_llm_permissions[group.id] is none %}selected{% endif %}>{{ t('admin.personal_llm_access') }}: {{ t('admin.inherit') }}</option>
+                                        <option value="true" {% if group_personal_llm_permissions[group.id] == true %}selected{% endif %}>{{ t('admin.personal_llm_access') }}: {{ t('admin.allowed') }}</option>
+                                        <option value="false" {% if group_personal_llm_permissions[group.id] == false %}selected{% endif %}>{{ t('admin.personal_llm_access') }}: {{ t('admin.denied') }}</option>
+                                    </select>
+                                    {% for plugin in plugins %}
+                                    <select class="form-select form-select-sm" name="perm_{{ plugin.plugin_name }}" style="width:auto; max-width: 220px;">
+                                        <option value="inherit" {% if group.plugin_permissions.get(plugin.plugin_name) is none %}selected{% endif %}>{{ plugin.display_name }}: {{ t('admin.inherit') }}</option>
+                                        <option value="true" {% if group.plugin_permissions.get(plugin.plugin_name) == true %}selected{% endif %}>{{ plugin.display_name }}: {{ t('admin.shared_allowed') }}</option>
+                                        <option value="false" {% if group.plugin_permissions.get(plugin.plugin_name) == false %}selected{% endif %}>{{ plugin.display_name }}: {{ t('admin.shared_denied') }}</option>
+                                    </select>
+                                    {% endfor %}
+                                    {% for item in shared_llm_configs %}
+                                    <select class="form-select form-select-sm" name="llmperm_{{ item.id }}" style="width:auto; max-width: 240px;">
+                                        <option value="inherit" {% if group_llm_allowlists[group.id].get(item.id) is none %}selected{% endif %}>{{ item.name }}: {{ t('admin.inherit') }}</option>
+                                        <option value="true" {% if group_llm_allowlists[group.id].get(item.id) == true %}selected{% endif %}>{{ item.name }}: {{ t('admin.shared_allowed') }}</option>
+                                        <option value="false" {% if group_llm_allowlists[group.id].get(item.id) == false %}selected{% endif %}>{{ item.name }}: {{ t('admin.shared_denied') }}</option>
+                                    </select>
+                                    {% endfor %}
+                                    <button class="btn btn-sm btn-outline-primary" type="submit">{{ t('admin.save') }}</button>
+                                </div>
+                            </form>
+                            <form method="post" action="{{ root_path }}/admin/groups/{{ group.id }}/delete" onsubmit="return confirm('{{ t('admin.confirm_delete') }}');">
+                                <button class="btn btn-sm btn-outline-danger" type="submit">{{ t('admin.delete') }}</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

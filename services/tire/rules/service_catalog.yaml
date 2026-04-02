@@ -1,0 +1,630 @@
+# 二、`rules/service_catalog.yaml` 初稿
+
+version: 1
+description: >
+  Initial service catalog for semantic infrastructure identification.
+  This catalog is used to reduce false positives by tagging well-known
+  cloud providers, CDNs, enterprise services, email security providers,
+  and known scanner/measurement infrastructure.
+
+defaults:
+  match_mode: any
+  case_insensitive: true
+
+global_tags:
+  cloud_provider:
+    description: Public cloud or large-scale service infrastructure
+  cdn:
+    description: Content delivery network or edge delivery service
+  shared_infrastructure:
+    description: Shared frontend, anycast, CDN, or multi-tenant edge infrastructure
+  microsoft_service:
+    description: Microsoft-owned or Microsoft-operated service infrastructure
+  google_service:
+    description: Google-owned or Google-operated service infrastructure
+  email_security:
+    description: Email security / filtering / relay infrastructure
+  internet_scanner:
+    description: Internet-wide scanner or measurement infrastructure
+  security_vendor:
+    description: Security vendor infrastructure
+  enterprise_service:
+    description: Enterprise SaaS or common enterprise service
+  benign_scanner:
+    description: Benign or research/measurement scanner
+  hosting_provider:
+    description: Hosting provider or large hosting network
+  dns_provider:
+    description: DNS infrastructure or resolver service
+  edge_network:
+    description: Edge delivery or traffic acceleration network
+  vpn_or_proxy_service:
+    description: VPN / proxy / relay style infrastructure
+  measurement_infrastructure:
+    description: Research or Internet measurement infrastructure
+
+providers:
+
+  microsoft:
+    enabled: true
+    match:
+      organizations:
+        - microsoft
+        - microsoft corporation
+      asns:
+        - AS8075
+      hostname_keywords:
+        - microsoft
+        - office
+        - office365
+        - outlook
+        - teams
+        - sharepoint
+        - onedrive
+        - xbox
+        - msedge
+        - windowsupdate
+        - visualstudio
+        - defender
+        - ecs.office.com
+      rdns_keywords:
+        - microsoft
+        - msedge
+        - office
+        - outlook
+        - teams
+    tags:
+      - cloud_provider
+      - microsoft_service
+      - enterprise_service
+      - shared_infrastructure
+    confidence: 0.95
+    notes: >
+      Microsoft public cloud, enterprise SaaS, Office 365, Defender,
+      update, edge, and shared service infrastructure.
+
+  azure:
+    enabled: true
+    match:
+      organizations:
+        - microsoft azure
+        - azure
+      hostname_keywords:
+        - azure
+        - cloudapp.net
+        - trafficmanager.net
+        - azurefd.net
+        - windows.net
+      rdns_keywords:
+        - cloudapp
+        - azure
+    tags:
+      - cloud_provider
+      - microsoft_service
+      - shared_infrastructure
+    confidence: 0.90
+    notes: >
+      Azure cloud and Azure edge style infrastructure. Shared hosting and
+      shared service risk must be considered.
+
+  google:
+    enabled: true
+    match:
+      organizations:
+        - google
+        - google llc
+      asns:
+        - AS15169
+      hostname_keywords:
+        - google
+        - googleapis
+        - gstatic
+        - googleusercontent
+        - gvt1
+        - youtube
+        - 1e100.net
+      rdns_keywords:
+        - 1e100.net
+        - google
+        - gvt1
+    tags:
+      - cloud_provider
+      - google_service
+      - enterprise_service
+      - shared_infrastructure
+    confidence: 0.95
+    notes: >
+      Google cloud and Google service infrastructure, including common
+      shared frontend and Google API endpoints.
+
+  gcp:
+    enabled: true
+    match:
+      organizations:
+        - google cloud
+        - google cloud platform
+      hostname_keywords:
+        - googleusercontent
+        - cloud.google
+      rdns_keywords:
+        - googleusercontent
+    tags:
+      - cloud_provider
+      - google_service
+      - shared_infrastructure
+    confidence: 0.90
+
+  cloudflare:
+    enabled: true
+    match:
+      organizations:
+        - cloudflare
+        - cloudflare inc
+      asns:
+        - AS13335
+      hostname_keywords:
+        - cloudflare
+        - cloudflare-dns
+        - workers.dev
+        - pages.dev
+        - cloudflarenet
+      rdns_keywords:
+        - cloudflare
+    tags:
+      - cloud_provider
+      - cdn
+      - dns_provider
+      - edge_network
+      - shared_infrastructure
+    confidence: 0.95
+    notes: >
+      Cloudflare operates CDN, DNS, proxy, and shared edge infrastructure.
+      Reputation-only blocking should be avoided.
+
+  akamai:
+    enabled: true
+    match:
+      organizations:
+        - akamai
+        - akamai technologies
+      asns:
+        - AS20940
+      hostname_keywords:
+        - akamai
+        - akamaiedge
+        - akadns
+        - edgesuite
+        - edgekey
+      rdns_keywords:
+        - akamai
+        - edgekey
+        - edgesuite
+    tags:
+      - cdn
+      - edge_network
+      - shared_infrastructure
+    confidence: 0.95
+
+  amazon:
+    enabled: true
+    match:
+      organizations:
+        - amazon
+        - amazon technologies
+        - aws
+        - amazon web services
+      hostname_keywords:
+        - amazonaws
+        - cloudfront
+        - awsglobalaccelerator
+      rdns_keywords:
+        - amazonaws
+        - compute.amazonaws.com
+        - cloudfront
+    tags:
+      - cloud_provider
+      - cdn
+      - shared_infrastructure
+      - hosting_provider
+    confidence: 0.92
+    notes: >
+      AWS and CloudFront include a large amount of shared infrastructure.
+      Additional context is required before malicious classification.
+
+  fastly:
+    enabled: true
+    match:
+      organizations:
+        - fastly
+      hostname_keywords:
+        - fastly
+        - fastly.net
+      rdns_keywords:
+        - fastly
+    tags:
+      - cdn
+      - edge_network
+      - shared_infrastructure
+    confidence: 0.90
+
+  oracle:
+    enabled: true
+    match:
+      organizations:
+        - oracle
+        - oracle corporation
+        - oracle cloud
+      hostname_keywords:
+        - oraclecloud
+      rdns_keywords:
+        - oraclecloud
+    tags:
+      - cloud_provider
+      - hosting_provider
+      - shared_infrastructure
+    confidence: 0.85
+
+  ibm:
+    enabled: true
+    match:
+      organizations:
+        - ibm
+        - ibm cloud
+      hostname_keywords:
+        - softlayer
+        - ibm
+      rdns_keywords:
+        - softlayer
+    tags:
+      - cloud_provider
+      - hosting_provider
+    confidence: 0.80
+
+  digitalocean:
+    enabled: true
+    match:
+      organizations:
+        - digitalocean
+      hostname_keywords:
+        - digitalocean
+      rdns_keywords:
+        - digitalocean
+    tags:
+      - hosting_provider
+      - cloud_provider
+    confidence: 0.80
+
+  linode:
+    enabled: true
+    match:
+      organizations:
+        - linode
+        - akamai connected cloud
+      hostname_keywords:
+        - linode
+      rdns_keywords:
+        - linode
+    tags:
+      - hosting_provider
+      - cloud_provider
+    confidence: 0.80
+
+  vultr:
+    enabled: true
+    match:
+      organizations:
+        - vultr
+        - choopa
+      hostname_keywords:
+        - vultr
+      rdns_keywords:
+        - vultr
+    tags:
+      - hosting_provider
+      - cloud_provider
+    confidence: 0.78
+
+  hetzner:
+    enabled: true
+    match:
+      organizations:
+        - hetzner
+      hostname_keywords:
+        - hetzner
+      rdns_keywords:
+        - hetzner
+    tags:
+      - hosting_provider
+    confidence: 0.78
+
+  ovh:
+    enabled: true
+    match:
+      organizations:
+        - ovh
+        - ovh sas
+      hostname_keywords:
+        - ovh
+      rdns_keywords:
+        - ovh
+    tags:
+      - hosting_provider
+    confidence: 0.78
+
+  proofpoint:
+    enabled: true
+    match:
+      organizations:
+        - proofpoint
+      hostname_keywords:
+        - proofpoint
+        - pphosted
+      rdns_keywords:
+        - proofpoint
+        - pphosted
+    tags:
+      - email_security
+      - security_vendor
+      - enterprise_service
+    confidence: 0.93
+
+  mimecast:
+    enabled: true
+    match:
+      organizations:
+        - mimecast
+      hostname_keywords:
+        - mimecast
+      rdns_keywords:
+        - mimecast
+    tags:
+      - email_security
+      - security_vendor
+      - enterprise_service
+    confidence: 0.93
+
+  barracuda:
+    enabled: true
+    match:
+      organizations:
+        - barracuda
+      hostname_keywords:
+        - barracuda
+      rdns_keywords:
+        - barracuda
+    tags:
+      - email_security
+      - security_vendor
+      - enterprise_service
+    confidence: 0.88
+
+  zscaler:
+    enabled: true
+    match:
+      organizations:
+        - zscaler
+      hostname_keywords:
+        - zscaler
+      rdns_keywords:
+        - zscaler
+    tags:
+      - security_vendor
+      - enterprise_service
+      - shared_infrastructure
+    confidence: 0.90
+
+  paloalto:
+    enabled: true
+    match:
+      organizations:
+        - palo alto networks
+      hostname_keywords:
+        - paloaltonetworks
+        - cortex
+      rdns_keywords:
+        - paloaltonetworks
+    tags:
+      - security_vendor
+      - enterprise_service
+    confidence: 0.86
+
+  cisco:
+    enabled: true
+    match:
+      organizations:
+        - cisco
+        - cisco systems
+      hostname_keywords:
+        - umbrella
+        - cisco
+        - opendns
+      rdns_keywords:
+        - umbrella
+        - opendns
+    tags:
+      - security_vendor
+      - dns_provider
+      - enterprise_service
+    confidence: 0.88
+
+  quad9:
+    enabled: true
+    match:
+      organizations:
+        - quad9
+      hostname_keywords:
+        - quad9
+      rdns_keywords:
+        - quad9
+    tags:
+      - dns_provider
+      - security_vendor
+    confidence: 0.85
+
+  shodan:
+    enabled: true
+    match:
+      organizations:
+        - shodan
+      hostname_keywords:
+        - shodan
+        - census
+      rdns_keywords:
+        - shodan
+    tags:
+      - internet_scanner
+      - benign_scanner
+      - measurement_infrastructure
+    confidence: 0.92
+    notes: >
+      Internet measurement and scanning infrastructure. This should not be
+      treated the same as commodity malicious scanning by default.
+
+  censys:
+    enabled: true
+    match:
+      organizations:
+        - censys
+      hostname_keywords:
+        - censys
+      rdns_keywords:
+        - censys
+    tags:
+      - internet_scanner
+      - benign_scanner
+      - measurement_infrastructure
+    confidence: 0.92
+
+  rapid7:
+    enabled: true
+    match:
+      organizations:
+        - rapid7
+      hostname_keywords:
+        - rapid7
+      rdns_keywords:
+        - rapid7
+    tags:
+      - internet_scanner
+      - security_vendor
+      - measurement_infrastructure
+    confidence: 0.88
+
+  shadowserver:
+    enabled: true
+    match:
+      organizations:
+        - shadowserver
+      hostname_keywords:
+        - shadowserver
+      rdns_keywords:
+        - shadowserver
+    tags:
+      - benign_scanner
+      - measurement_infrastructure
+      - security_vendor
+    confidence: 0.90
+
+  github:
+    enabled: true
+    match:
+      organizations:
+        - github
+      hostname_keywords:
+        - github
+        - githubusercontent
+      rdns_keywords:
+        - github
+    tags:
+      - enterprise_service
+      - shared_infrastructure
+    confidence: 0.82
+
+  github_pages_fastly:
+    enabled: true
+    match:
+      hostname_keywords:
+        - github.io
+      rdns_keywords:
+        - fastly
+    tags:
+      - enterprise_service
+      - cdn
+      - shared_infrastructure
+    confidence: 0.78
+
+  openai_related:
+    enabled: true
+    match:
+      hostname_keywords:
+        - openai
+      rdns_keywords:
+        - openai
+    tags:
+      - enterprise_service
+    confidence: 0.70
+    notes: >
+      Kept intentionally conservative. Do not over-trust based on a loose hostname match.
+
+  generic_vpn_proxy_indicators:
+    enabled: true
+    match:
+      hostname_keywords:
+        - vpn
+        - proxy
+        - relay
+        - tunnel
+      rdns_keywords:
+        - vpn
+        - proxy
+        - relay
+        - tunnel
+    tags:
+      - vpn_or_proxy_service
+    confidence: 0.55
+    notes: >
+      Weak signal only. Must not be treated as definitive identification.
+
+  generic_measurement_indicators:
+    enabled: true
+    match:
+      hostname_keywords:
+        - scan
+        - scanner
+        - research
+        - measurement
+      rdns_keywords:
+        - scan
+        - scanner
+        - measurement
+    tags:
+      - measurement_infrastructure
+    confidence: 0.50
+    notes: >
+      Weak heuristic only. Use as enrichment, not as final classification.
+
+matching_logic:
+  organization_match_weight: 1.0
+  asn_match_weight: 1.0
+  hostname_keyword_match_weight: 0.7
+  rdns_keyword_match_weight: 0.7
+  multiple_match_bonus: 0.2
+
+thresholds:
+  min_confidence_to_apply: 0.70
+  min_match_score_to_apply: 1.0
+
+conflict_notes:
+  - >
+    A match to cloud_provider, cdn, shared_infrastructure, or enterprise_service
+    must reduce confidence of direct malicious attribution when only weak abuse
+    reports are present.
+  - >
+    internet_scanner and benign_scanner should not automatically reduce risk to zero;
+    they indicate a different class of activity and should be interpreted with context.
+  - >
+    hosting_provider alone is not proof of benignness or maliciousness. It only
+    indicates infrastructure type.
+  - >
+    Weak heuristic tags such as generic_vpn_proxy_indicators must not drive final
+    high-confidence decisions by themselves.

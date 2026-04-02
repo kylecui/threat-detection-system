@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="{{ lang|default('en') }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t('app.title') }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h1 class="h4 mb-0">{{ t('app.title') }}</h1>
+                            <div class="d-flex align-items-center">
+                                {% if user %}
+                                <span class="text-white-50 me-2">{{ user.display_name }}</span>
+                                <a href="{{ root_path }}/admin/" class="btn btn-sm btn-outline-light me-2">{{ t('admin.title') }}</a>
+                                <a href="{{ root_path }}/admin/logout" class="btn btn-sm btn-outline-light me-2">{{ t('admin.logout') }}</a>
+                                {% endif %}
+                                <a href="#" onclick="switchLang('en'); return false;" class="text-white text-decoration-none {% if lang|default('en') != 'zh' %}fw-bold{% endif %}">EN</a>
+                                <span class="text-white mx-1">|</span>
+                                <a href="#" onclick="switchLang('zh'); return false;" class="text-white text-decoration-none {% if lang|default('en') == 'zh' %}fw-bold{% endif %}">中文</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="lead">{{ t('app.description') }}</p>
+
+                        <form method="post" action="{{ root_path }}/analyze?lang={{ lang|default('en') }}">
+                            <div class="mb-3">
+                                <label for="ip" class="form-label">{{ t('form.ip_label') }}</label>
+                                <input type="text" class="form-control" id="ip" name="ip"
+                                       value="{{ ip or '' }}" placeholder="{{ t('form.ip_placeholder') }}"
+                                       required pattern="^(\d{1,3}\.){3}\d{1,3}$"
+                                       title="{{ t('form.ip_validation') }}">
+                            </div>
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="refresh" name="refresh" {% if refresh %}checked{% endif %}>
+                                <label class="form-check-label" for="refresh">
+                                    {{ t('form.refresh_label') }}
+                                </label>
+                            </div>
+                            <button type="submit" class="btn btn-primary">{{ t('form.submit') }}</button>
+                        </form>
+
+                        {% if html_report %}
+                        <div class="mt-4">
+                            {{ html_report | safe }}
+                        </div>
+                        <div class="mt-3 d-flex justify-content-between">
+                            <a href="{{ root_path }}/compare?ip={{ ip }}&lang={{ lang|default('en') }}" class="btn btn-outline-info">
+                                {{ t('compare.title') }}
+                            </a>
+                            <form id="reportForm" method="post" action="{{ root_path }}/api/v1/report/generate?lang={{ lang|default('en') }}" target="_blank">
+                                <input type="hidden" name="ip" value="{{ ip }}">
+                                <button type="submit" class="btn btn-outline-secondary" id="reportBtn">
+                                    {{ t('narrative.generate') }}
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
+
+                        <div class="row g-4 mt-1">
+                            <div class="col-lg-6">
+                                <div class="card border h-100">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <span>{{ t('dashboard.recent_queries') }}</span>
+                                        <span class="badge bg-secondary">{{ recent_queries|length if recent_queries else 0 }}</span>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        {% if recent_queries %}
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-hover mb-0 align-middle">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>{{ t('dashboard.ip') }}</th>
+                                                        <th>{{ t('dashboard.score') }}</th>
+                                                        <th>{{ t('dashboard.queried_at') }}</th>
+                                                        <th class="text-end">{{ t('dashboard.actions') }}</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for snapshot in recent_queries %}
+                                                    <tr>
+                                                        <td>
+                                                            <div class="fw-semibold">{{ snapshot.ip }}</div>
+                                                            <small class="text-muted">{{ snapshot.level }}</small>
+                                                        </td>
+                                                        <td>{{ snapshot.final_score }}</td>
+                                                        <td><small>{{ snapshot.queried_at }}</small></td>
+                                                        <td class="text-end">
+                                                            <div class="btn-group btn-group-sm">
+                                                                <a href="{{ root_path }}/compare?ip={{ snapshot.ip }}&lang={{ lang|default('en') }}" class="btn btn-outline-info">{{ t('dashboard.timeline') }}</a>
+                                                                <a href="{{ root_path }}/compare?ip={{ snapshot.ip }}&lang={{ lang|default('en') }}" class="btn btn-outline-secondary">{{ t('dashboard.compare') }}</a>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {% else %}
+                                        <div class="p-3 text-muted small">{{ t('dashboard.no_recent_queries') }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="card border h-100">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <span>{{ t('dashboard.recent_reports') }}</span>
+                                        <span class="badge bg-secondary">{{ recent_reports|length if recent_reports else 0 }}</span>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        {% if recent_reports %}
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-hover mb-0 align-middle">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>{{ t('dashboard.ip') }}</th>
+                                                        <th>{{ t('dashboard.report_type') }}</th>
+                                                        <th>{{ t('dashboard.generated_at') }}</th>
+                                                        <th class="text-end">{{ t('dashboard.actions') }}</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for report in recent_reports %}
+                                                    <tr>
+                                                        <td>
+                                                            <div class="fw-semibold">{{ report.ip }}</div>
+                                                            <small class="text-muted">#{{ report.id }}</small>
+                                                        </td>
+                                                        <td>
+                                                            {% if report.llm_enhanced %}
+                                                            <span class="badge bg-primary">LLM</span>
+                                                            {% else %}
+                                                            <span class="badge bg-secondary">{{ t('dashboard.template') }}</span>
+                                                            {% endif %}
+                                                        </td>
+                                                        <td><small>{{ report.generated_at }}</small></td>
+                                                        <td class="text-end">
+                                                            <div class="btn-group btn-group-sm">
+                                                                <a href="{{ root_path }}/reports/view/{{ report.id }}" target="_blank" class="btn btn-outline-secondary">{{ t('dashboard.view') }}</a>
+                                                                <a href="{{ root_path }}/reports/compare?report_a={{ report.id }}" class="btn btn-outline-primary">{{ t('dashboard.compare_reports') }}</a>
+                                                                {% if report.snapshot_id %}
+                                                                <a href="{{ root_path }}/compare?ip={{ report.ip }}&lang={{ lang|default('en') }}" class="btn btn-outline-info">{{ t('dashboard.compare_snapshot') }}</a>
+                                                                {% endif %}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {% else %}
+                                        <div class="p-3 text-muted small">{{ t('dashboard.no_recent_reports') }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if error %}
+                        <div class="alert alert-danger mt-4">
+                            <strong>{{ t('common.error') }}:</strong> {{ error }}
+                        </div>
+                        {% endif %}
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    function switchLang(lang) {
+        var rootPath = '{{ root_path }}';
+        var ipInput = document.getElementById('ip');
+        var form = ipInput.closest('form');
+        if (ipInput.value.trim()) {
+            form.action = rootPath + '/analyze?lang=' + lang;
+            form.submit();
+        } else {
+            window.location.href = rootPath + '/?lang=' + lang;
+        }
+    }
+    </script>
+</body>
+</html>

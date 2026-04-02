@@ -1,0 +1,280 @@
+{% extends "admin/base_admin.html.j2" %}
+
+{% block title %}{{ t('admin.logs') }}{% endblock %}
+{% block nav_logs %}active{% endblock %}
+{% block page_title %}{{ t('admin.logs') }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    #log-container {
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 0.82rem;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        border-radius: 6px;
+        padding: 0;
+        max-height: 70vh;
+        overflow-y: auto;
+        position: relative;
+    }
+    #log-container table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0;
+    }
+    #log-container th {
+        position: sticky;
+        top: 0;
+        background: #2d2d2d;
+        color: #ccc;
+        font-weight: 600;
+        padding: 6px 10px;
+        border-bottom: 1px solid #444;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        z-index: 1;
+    }
+    #log-container td {
+        padding: 3px 10px;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        vertical-align: top;
+        white-space: nowrap;
+    }
+    #log-container td.msg-col {
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-width: 0;
+        width: 100%;
+    }
+    .log-row { transition: background 0.15s; }
+    .log-row:hover { background: rgba(255,255,255,0.05); }
+    .log-DEBUG .level-badge { color: #9cdcfe; }
+    .log-INFO .level-badge { color: #4ec9b0; }
+    .log-WARNING .level-badge { color: #dcdcaa; }
+    .log-ERROR .level-badge { color: #f44747; font-weight: 700; }
+    .log-CRITICAL .level-badge { color: #ff0000; font-weight: 700; }
+    .log-ERROR td, .log-CRITICAL td { background: rgba(244,71,71,0.07); }
+    .log-WARNING td { background: rgba(220,220,170,0.05); }
+    .controls-bar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .status-dot {
+        display: inline-block;
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        margin-right: 4px;
+    }
+    .status-dot.connected { background: #4ec9b0; }
+    .status-dot.disconnected { background: #f44747; }
+    #log-count { font-size: 0.85rem; color: #6c757d; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="controls-bar">
+            <div>
+                <span class="status-dot" id="status-dot"></span>
+                <span id="status-text" class="text-muted small">{{ t('admin.log_connecting') }}</span>
+            </div>
+            <select class="form-select form-select-sm" id="level-filter" style="width:auto;">
+                <option value="">{{ t('admin.log_all_levels') }}</option>
+                <option value="DEBUG">DEBUG</option>
+                <option value="INFO">INFO</option>
+                <option value="WARNING">WARNING</option>
+                <option value="ERROR">ERROR</option>
+                <option value="CRITICAL">CRITICAL</option>
+            </select>
+            <input type="text" class="form-control form-control-sm" id="search-box"
+                   placeholder="{{ t('admin.log_search') }}" style="width:200px;">
+            <div class="form-check form-switch ms-2">
+                <input class="form-check-input" type="checkbox" id="auto-scroll" checked>
+                <label class="form-check-label small" for="auto-scroll">{{ t('admin.log_auto_scroll') }}</label>
+            </div>
+            <button class="btn btn-sm btn-outline-warning" id="btn-pause">{{ t('admin.log_pause') }}</button>
+            <button class="btn btn-sm btn-outline-danger" id="btn-clear">{{ t('admin.log_clear') }}</button>
+            <span id="log-count" class="ms-auto">0 {{ t('admin.log_entries') }}</span>
+        </div>
+    </div>
+</div>
+
+<div id="log-container">
+    <table>
+        <thead>
+            <tr>
+                <th style="width:155px;">{{ t('admin.log_time') }}</th>
+                <th style="width:75px;">{{ t('admin.log_level') }}</th>
+                <th style="width:180px;">{{ t('admin.log_logger') }}</th>
+                <th>{{ t('admin.log_message') }}</th>
+            </tr>
+        </thead>
+        <tbody id="log-body"></tbody>
+    </table>
+    <div id="log-empty" class="text-center text-muted py-5">{{ t('admin.log_no_entries') }}</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const rootPath = '{{ root_path }}';
+    const tbody = document.getElementById('log-body');
+    const container = document.getElementById('log-container');
+    const emptyMsg = document.getElementById('log-empty');
+    const countEl = document.getElementById('log-count');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const levelFilter = document.getElementById('level-filter');
+    const searchBox = document.getElementById('search-box');
+    const autoScroll = document.getElementById('auto-scroll');
+    const btnPause = document.getElementById('btn-pause');
+    const btnClear = document.getElementById('btn-clear');
+
+    let paused = false;
+    let evtSource = null;
+    let logCount = 0;
+    let lastSeenId = 0;
+    let reconnectTimer = null;
+    let reconnectDelayMs = 1000;
+    const MAX_ROWS = 1000;
+
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function matchesFilter(entry) {
+        const lv = levelFilter.value;
+        if (lv && entry.level !== lv) return false;
+        const q = searchBox.value.toLowerCase();
+        if (q && !entry.message.toLowerCase().includes(q) && !entry.logger.toLowerCase().includes(q)) return false;
+        return true;
+    }
+
+    function addRow(entry) {
+        if (!matchesFilter(entry)) return;
+        if (entry.id) {
+            lastSeenId = Math.max(lastSeenId, Number(entry.id) || 0);
+        }
+        emptyMsg.style.display = 'none';
+        const tr = document.createElement('tr');
+        tr.className = 'log-row log-' + entry.level;
+        tr.innerHTML =
+            '<td>' + escapeHtml(entry.timestamp) + '</td>' +
+            '<td><span class="level-badge">' + entry.level + '</span></td>' +
+            '<td>' + escapeHtml(entry.logger) + '</td>' +
+            '<td class="msg-col">' + escapeHtml(entry.message) + '</td>';
+        tbody.appendChild(tr);
+        logCount++;
+        // Trim old rows
+        while (tbody.children.length > MAX_ROWS) {
+            tbody.removeChild(tbody.firstChild);
+            logCount--;
+        }
+        countEl.textContent = logCount + ' {{ t("admin.log_entries") }}';
+        if (autoScroll.checked) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+
+    function connect() {
+        if (evtSource) { evtSource.close(); }
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+        const level = levelFilter.value;
+        let url = rootPath + '/admin/api/logs/stream';
+        const params = [];
+        if (level) params.push('level=' + encodeURIComponent(level));
+        if (lastSeenId > 0) params.push('since_id=' + encodeURIComponent(lastSeenId));
+        if (params.length) url += '?' + params.join('&');
+        evtSource = new EventSource(url);
+
+        evtSource.onopen = function() {
+            statusDot.className = 'status-dot connected';
+            statusText.textContent = '{{ t("admin.log_connected") }}';
+            reconnectDelayMs = 1000;
+        };
+        evtSource.addEventListener('log', function(e) {
+            if (paused) return;
+            try {
+                const entry = JSON.parse(e.data);
+                if (e.lastEventId) {
+                    lastSeenId = Math.max(lastSeenId, Number(e.lastEventId) || 0);
+                }
+                addRow(entry);
+            } catch(err) {}
+        });
+        evtSource.onerror = function() {
+            statusDot.className = 'status-dot disconnected';
+            statusText.textContent = '{{ t("admin.log_disconnected") }}';
+            if (evtSource) {
+                evtSource.close();
+            }
+            if (!reconnectTimer) {
+                reconnectTimer = setTimeout(function() {
+                    reconnectTimer = null;
+                    connect();
+                }, reconnectDelayMs);
+                reconnectDelayMs = Math.min(reconnectDelayMs * 2, 15000);
+            }
+        };
+    }
+
+    // Load initial batch
+    fetch(rootPath + '/admin/api/logs')
+        .then(r => r.json())
+        .then(data => {
+            if (data.entries) {
+                data.entries.forEach(addRow);
+            }
+            connect();
+        })
+        .catch(() => { connect(); });
+
+    // Controls
+    btnPause.addEventListener('click', function() {
+        paused = !paused;
+        btnPause.textContent = paused ? '{{ t("admin.log_resume") }}' : '{{ t("admin.log_pause") }}';
+        btnPause.className = paused
+            ? 'btn btn-sm btn-outline-success'
+            : 'btn btn-sm btn-outline-warning';
+    });
+
+    btnClear.addEventListener('click', function() {
+        tbody.innerHTML = '';
+        logCount = 0;
+        countEl.textContent = '0 {{ t("admin.log_entries") }}';
+        emptyMsg.style.display = '';
+    });
+
+    levelFilter.addEventListener('change', function() {
+        // Reconnect SSE with new level filter
+        tbody.innerHTML = '';
+        logCount = 0;
+        countEl.textContent = '0 {{ t("admin.log_entries") }}';
+        emptyMsg.style.display = '';
+        connect();
+    });
+
+    // Client-side search (filters existing rows)
+    searchBox.addEventListener('input', function() {
+        const q = searchBox.value.toLowerCase();
+        let visible = 0;
+        for (const tr of tbody.children) {
+            const text = tr.textContent.toLowerCase();
+            const show = !q || text.includes(q);
+            tr.style.display = show ? '' : 'none';
+            if (show) visible++;
+        }
+        countEl.textContent = visible + ' {{ t("admin.log_entries") }}';
+    });
+})();
+</script>
+{% endblock %}

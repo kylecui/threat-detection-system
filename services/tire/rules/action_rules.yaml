@@ -1,0 +1,19 @@
+score_thresholds:
+  Low: [0, 20]
+  Medium: [21, 45]
+  High: [46, 75]
+  Critical: [76, 100]
+
+decisions:
+  Low: allow_with_monitoring
+  Medium: investigate
+  High: alert_and_review
+  Critical: contain_or_block
+  Inconclusive: collect_more_context
+
+summaries:
+  Low: "{object_type} {object_value} shows minimal threat indicators. Final score: {final_score}/100. Safe for normal operations with monitoring."
+  Medium: "{object_type} {object_value} has moderate threat indicators. Final score: {final_score}/100. Recommend investigation before allowing."
+  High: "{object_type} {object_value} shows significant malicious activity. Final score: {final_score}/100. Alert and review required."
+  Critical: "{object_type} {object_value} shows critical threat indicators. Final score: {final_score}/100. Immediate containment recommended."
+  Inconclusive: "{object_type} {object_value} has conflicting evidence. Final score: {final_score}/100. More context needed for accurate assessment."

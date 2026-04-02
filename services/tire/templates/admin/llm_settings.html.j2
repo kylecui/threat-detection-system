@@ -1,0 +1,379 @@
+{% extends "admin/base_admin.html.j2" %}
+
+{% block title %}{{ t('admin.llm_settings') }}{% endblock %}
+{% block nav_llm %}active{% endblock %}
+{% block page_title %}{{ t('admin.llm_settings') }}{% endblock %}
+
+{% block content %}
+{% if msg %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="post" action="{{ root_path }}/admin/settings/llm" id="llmForm">
+                    {% if user.is_admin %}
+                    <div class="mb-3">
+                        <label for="shared_llm_config_id" class="form-label">{{ t('admin.shared_llm_assignment') }}</label>
+                        <select class="form-select" id="shared_llm_config_id" name="shared_llm_config_id">
+                            <option value="">{{ t('admin.no_shared_llm') }}</option>
+                            {% for item in shared_llm_configs %}
+                            <option value="{{ item.id }}" {% if selected_shared_llm_id == item.id %}selected{% endif %}>
+                                {{ item.name }} — {{ item.model }}{% if not item.is_active %} ({{ t('admin.disabled') }}){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">{{ t('admin.shared_llm_assignment_hint') }}</small>
+                    </div>
+                    {% elif llm.source.startswith('shared') %}
+                    <div class="mb-3">
+                        <label class="form-label">{{ t('admin.shared_llm_assignment') }}</label>
+                        <div class="form-control bg-light">{{ llm.shared_config_name }} — {{ llm.model }}</div>
+                        <small class="text-muted">{{ t('admin.shared_llm_assignment_hint') }}</small>
+                    </div>
+                    {% endif %}
+
+                    {% if user.is_admin or can_use_personal_llm %}
+                    <div class="mb-3">
+                        <label for="api_key" class="form-label">{{ t('admin.api_key') }}</label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="api_key" name="api_key"
+                                   value="{{ llm.api_key }}">
+                            <button class="btn btn-outline-secondary" type="button" onclick="togglePassword()">
+                                <span id="toggleLabel">{{ t('admin.show') }}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="base_url" class="form-label">{{ t('admin.base_url') }}</label>
+                        <input type="text" class="form-control" id="base_url" name="base_url"
+                               value="{{ llm.base_url }}" placeholder="https://api.openai.com/v1">
+                    </div>
+
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-outline-info" id="validateBtn" onclick="validateLLM()">
+                            {{ t('admin.validate_connection') }}
+                        </button>
+                        <span id="validateStatus" class="ms-2"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="model" class="form-label">{{ t('admin.model') }}</label>
+                        <div id="modelInputWrap">
+                            <input type="text" class="form-control" id="modelText" name="model"
+                                   value="{{ llm.model }}" placeholder="gpt-4o">
+                        </div>
+                        <div id="modelSelectWrap" style="display:none;">
+                            <div class="input-group">
+                                <select class="form-select" id="modelSelect" name="model_select">
+                                    <option value="">-- {{ t('admin.select_model') }} --</option>
+                                </select>
+                                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="switchToManual()">
+                                    {{ t('admin.manual_input') }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        {{ t('admin.personal_llm_disabled') }}
+                    </div>
+                    {% if llm.source == 'template' %}
+                    <div class="alert alert-secondary mb-3">
+                        {{ t('admin.no_shared_llm') }}
+                    </div>
+                    {% endif %}
+                    {% endif %}
+
+                    <button type="submit" class="btn btn-primary">{{ t('admin.save') }}</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card border-info">
+            <div class="card-body">
+                <p class="text-muted mb-2">{{ t('admin.llm_info') }}</p>
+                <hr>
+                <p class="text-muted mb-0"><small>{{ t('admin.llm_validate_hint') }}</small></p>
+                {% if llm_usage_snapshot %}
+                <hr>
+                <p class="mb-1"><strong>{{ t('admin.llm_calls_30d') }}:</strong> {{ llm_usage_snapshot.llm_overview.calls }}</p>
+                <p class="mb-0"><small class="text-muted">{{ t('admin.total_tokens') }}: {{ llm_usage_snapshot.llm_overview.total_tokens }}</small></p>
+                {% endif %}
+            </div>
+        </div>
+        {% if user.is_admin %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0">{{ t('admin.shared_llm_configs') }}</h6>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ root_path }}/admin/settings/llm/shared" class="mb-4" id="sharedLlmForm">
+                    <div class="mb-2">
+                        <input class="form-control" name="name" placeholder="{{ t('admin.name') }}" required>
+                    </div>
+                    <div class="mb-2">
+                        <input class="form-control" id="shared_base_url" name="base_url" placeholder="https://api.openai.com/v1" required>
+                    </div>
+                    <div class="mb-2">
+                        <div id="sharedModelInputWrap">
+                            <input class="form-control" id="shared_model_text" name="model" placeholder="gpt-4o" required>
+                        </div>
+                        <div id="sharedModelSelectWrap" style="display:none;">
+                            <div class="input-group">
+                                <select class="form-select" id="shared_model_select" name="shared_model_select">
+                                    <option value="">-- {{ t('admin.select_model') }} --</option>
+                                </select>
+                                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="switchSharedToManual()">
+                                    {{ t('admin.manual_input') }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <div class="input-group">
+                            <input class="form-control" id="shared_api_key" name="api_key" placeholder="{{ t('admin.api_key') }}" type="password">
+                            <button class="btn btn-outline-secondary" type="button" onclick="toggleSharedPassword()">
+                                <span id="sharedToggleLabel">{{ t('admin.show') }}</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-info" id="sharedValidateBtn" onclick="validateSharedLLM()">
+                            {{ t('admin.validate_connection') }}
+                        </button>
+                        <span id="sharedValidateStatus" class="ms-2"></span>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary">{{ t('admin.save') }}</button>
+                </form>
+                <div class="list-group list-group-flush">
+                    {% for item in shared_llm_configs %}
+                    <div class="list-group-item px-0">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div>
+                                <strong>{{ item.name }}</strong><br>
+                                <small class="text-muted">{{ item.model }} · {{ item.base_url }}</small>
+                                {% set usage = shared_usage_by_config.get(item.id) %}
+                                {% if usage %}
+                                <br><small class="text-muted">{{ usage.calls }} {{ t('admin.calls') }} · {{ t('admin.total_tokens') }} {{ usage.total_tokens }}</small>
+                                {% endif %}
+                            </div>
+                            <form method="post" action="{{ root_path }}/admin/settings/llm/shared/{{ item.id }}/delete"
+                                  onsubmit="return confirm('{{ t('admin.confirm_delete') }}');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">{{ t('admin.delete') }}</button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var currentModel = '{{ llm.model }}';
+
+function togglePassword() {
+    var input = document.getElementById('api_key');
+    var label = document.getElementById('toggleLabel');
+    if (input.type === 'password') {
+        input.type = 'text';
+        label.textContent = '{{ t("admin.hide") }}';
+    } else {
+        input.type = 'password';
+        label.textContent = '{{ t("admin.show") }}';
+    }
+}
+
+function validateLLM() {
+    var btn = document.getElementById('validateBtn');
+    var status = document.getElementById('validateStatus');
+    var apiKey = document.getElementById('api_key').value.trim();
+    var baseUrl = document.getElementById('base_url').value.trim();
+
+    if (!apiKey || !baseUrl) {
+        status.innerHTML = '<span class="text-warning">{{ t("admin.fill_key_url") }}</span>';
+        return;
+    }
+
+    btn.disabled = true;
+    status.innerHTML = '<span class="text-muted">{{ t("admin.validating") }}</span>';
+
+    fetch('{{ root_path }}/admin/api/llm/validate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({api_key: apiKey, base_url: baseUrl})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.disabled = false;
+        if (data.ok) {
+            status.innerHTML = '<span class="text-success">✓ {{ t("admin.connection_ok") }}</span>';
+            if (data.models && data.models.length > 0) {
+                populateModels(data.models);
+            }
+        } else {
+            status.innerHTML = '<span class="text-danger">✗ ' + (data.error || 'Failed') + '</span>';
+        }
+    })
+    .catch(function(err) {
+        btn.disabled = false;
+        status.innerHTML = '<span class="text-danger">✗ ' + err + '</span>';
+    });
+}
+
+function populateModels(models) {
+    var select = document.getElementById('modelSelect');
+    var textInput = document.getElementById('modelText');
+    select.innerHTML = '<option value="">-- {{ t("admin.select_model") }} --</option>';
+
+    models.forEach(function(m) {
+        var opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        if (m === currentModel || m === textInput.value) {
+            opt.selected = true;
+        }
+        select.appendChild(opt);
+    });
+
+    // Switch to dropdown mode
+    document.getElementById('modelInputWrap').style.display = 'none';
+    document.getElementById('modelSelectWrap').style.display = 'block';
+    textInput.name = '';
+    select.name = 'model';
+
+    // Sync select back to hidden text for form submit
+    select.addEventListener('change', function() {
+        textInput.value = this.value;
+    });
+
+    // If a model was pre-selected, sync it
+    if (select.value) {
+        textInput.value = select.value;
+    }
+}
+
+function switchToManual() {
+    var textInput = document.getElementById('modelText');
+    var select = document.getElementById('modelSelect');
+    document.getElementById('modelInputWrap').style.display = 'block';
+    document.getElementById('modelSelectWrap').style.display = 'none';
+    textInput.name = 'model';
+    select.name = '';
+}
+
+function toggleSharedPassword() {
+    var input = document.getElementById('shared_api_key');
+    var label = document.getElementById('sharedToggleLabel');
+    if (input.type === 'password') {
+        input.type = 'text';
+        label.textContent = '{{ t("admin.hide") }}';
+    } else {
+        input.type = 'password';
+        label.textContent = '{{ t("admin.show") }}';
+    }
+}
+
+function populateSharedModels(models) {
+    var select = document.getElementById('shared_model_select');
+    var textInput = document.getElementById('shared_model_text');
+    select.innerHTML = '<option value="">-- {{ t("admin.select_model") }} --</option>';
+    models.forEach(function(m) {
+        var opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        if (m === textInput.value) {
+            opt.selected = true;
+        }
+        select.appendChild(opt);
+    });
+    document.getElementById('sharedModelInputWrap').style.display = 'none';
+    document.getElementById('sharedModelSelectWrap').style.display = 'block';
+    textInput.name = '';
+    select.name = 'model';
+    select.addEventListener('change', function() {
+        textInput.value = this.value;
+    });
+    if (select.value) {
+        textInput.value = select.value;
+    }
+}
+
+function switchSharedToManual() {
+    var textInput = document.getElementById('shared_model_text');
+    var select = document.getElementById('shared_model_select');
+    document.getElementById('sharedModelInputWrap').style.display = 'block';
+    document.getElementById('sharedModelSelectWrap').style.display = 'none';
+    textInput.name = 'model';
+    select.name = '';
+}
+
+function validateSharedLLM() {
+    var btn = document.getElementById('sharedValidateBtn');
+    var status = document.getElementById('sharedValidateStatus');
+    var apiKey = document.getElementById('shared_api_key').value.trim();
+    var baseUrl = document.getElementById('shared_base_url').value.trim();
+    if (!apiKey || !baseUrl) {
+        status.innerHTML = '<span class="text-warning">{{ t("admin.fill_key_url") }}</span>';
+        return;
+    }
+    btn.disabled = true;
+    status.innerHTML = '<span class="text-muted">{{ t("admin.validating") }}</span>';
+    fetch('{{ root_path }}/admin/api/llm/validate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({api_key: apiKey, base_url: baseUrl})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.disabled = false;
+        if (data.ok) {
+            status.innerHTML = '<span class="text-success">✓ {{ t("admin.connection_ok") }}</span>';
+            if (data.models && data.models.length > 0) {
+                populateSharedModels(data.models);
+            }
+        } else {
+            status.innerHTML = '<span class="text-danger">✗ ' + (data.error || 'Failed') + '</span>';
+        }
+    })
+    .catch(function(err) {
+        btn.disabled = false;
+        status.innerHTML = '<span class="text-danger">✗ ' + err + '</span>';
+    });
+}
+
+// On form submit, ensure the correct model value is sent
+document.getElementById('llmForm').addEventListener('submit', function() {
+    var textInput = document.getElementById('modelText');
+    var select = document.getElementById('modelSelect');
+    if (document.getElementById('modelSelectWrap').style.display !== 'none' && select.value) {
+        textInput.value = select.value;
+    }
+    // Ensure name is set on the text input for submission
+    textInput.name = 'model';
+    select.name = '';
+});
+
+document.getElementById('sharedLlmForm').addEventListener('submit', function() {
+    var textInput = document.getElementById('shared_model_text');
+    var select = document.getElementById('shared_model_select');
+    if (document.getElementById('sharedModelSelectWrap').style.display !== 'none' && select.value) {
+        textInput.value = select.value;
+    }
+    textInput.name = 'model';
+    select.name = '';
+});
+</script>
+{% endblock %}

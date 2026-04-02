@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="{{ lang|default('en') }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t('narrative.title') }} — {{ source_data.ip }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --level-low: #198754;
+            --level-medium: #fd7e14;
+            --level-high: #dc3545;
+            --level-critical: #721c24;
+            --level-inconclusive: #6c757d;
+            --navy: #1a237e;
+            --section-alt: #f8f9fa;
+        }
+        body {
+            font-family: Georgia, 'Times New Roman', serif;
+            color: #212529;
+            background: #fff;
+        }
+        h1, h2, h3, h4, h5, h6, .heading-font {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .report-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        /* Header */
+        .report-header {
+            background: var(--navy);
+            color: #fff;
+            padding: 2.5rem 0 2rem;
+            margin-bottom: 2rem;
+        }
+        .report-header h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+        .report-header .subtitle { opacity: 0.85; font-size: 1.1rem; }
+        .report-header .meta { opacity: 0.7; font-size: 0.85rem; margin-top: 0.5rem; }
+        .badge-llm, .badge-template {
+            display: inline-block; padding: 0.3rem 0.75rem; border-radius: 0.25rem;
+            color: #fff; font-weight: 600; font-size: 0.85rem; vertical-align: middle;
+            cursor: help;
+        }
+        .badge-llm { background: #198754; }
+        .badge-template { background: #0d6efd; }
+        /* Section numbering */
+        .section-block { position: relative; padding: 2rem 0 1.5rem; }
+        .section-block:nth-child(even) { background: var(--section-alt); }
+        .section-num {
+            position: absolute; top: 0.5rem; right: 1rem;
+            font-size: 4rem; font-weight: 800; color: rgba(0,0,0,0.05);
+            line-height: 1; pointer-events: none;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .section-title {
+            font-size: 1.25rem; font-weight: 700; color: var(--navy);
+            border-bottom: 2px solid var(--navy); padding-bottom: 0.4rem; margin-bottom: 1rem;
+        }
+        /* Score cards */
+        .score-card {
+            text-align: center; padding: 1rem; border-radius: 0.5rem;
+            background: #fff; border: 1px solid #dee2e6;
+        }
+        .score-card .score-value { font-size: 2rem; font-weight: 700; }
+        .score-card .score-label { font-size: 0.8rem; text-transform: uppercase; color: #6c757d; }
+        .level-Low .score-value { color: var(--level-low); }
+        .level-Medium .score-value { color: var(--level-medium); }
+        .level-High .score-value { color: var(--level-high); }
+        .level-Critical .score-value { color: var(--level-critical); }
+        .level-Inconclusive .score-value { color: var(--level-inconclusive); }
+        .level-badge {
+            display: inline-block; padding: 0.35rem 1rem; border-radius: 0.25rem;
+            color: #fff; font-weight: 600; font-size: 0.9rem;
+        }
+        .level-badge-Low { background: var(--level-low); }
+        .level-badge-Medium { background: var(--level-medium); }
+        .level-badge-High { background: var(--level-high); }
+        .level-badge-Critical { background: var(--level-critical); }
+        .level-badge-Inconclusive { background: var(--level-inconclusive); }
+        /* Source cards */
+        .source-card {
+            border: 1px solid #dee2e6; border-radius: 0.5rem;
+            padding: 1rem; margin-bottom: 1rem; background: #fff;
+        }
+        .source-card h5 { font-size: 1rem; color: var(--navy); margin-bottom: 0.75rem; border-bottom: 1px solid #eee; padding-bottom: 0.4rem; }
+        .source-card .metric { display: flex; justify-content: space-between; padding: 0.2rem 0; font-size: 0.9rem; }
+        .source-card .metric .label { color: #6c757d; }
+        .source-card .metric .value { font-weight: 600; }
+        /* Evidence table */
+        .evidence-table { font-size: 0.85rem; }
+        .evidence-table th { background: var(--navy); color: #fff; font-weight: 600; }
+        .evidence-table tbody tr:nth-child(even) { background: #f8f9fa; }
+        .evidence-table .delta-pos { color: var(--level-high); }
+        .evidence-table .delta-neg { color: var(--level-low); }
+        /* Narrative blocks */
+        .narrative-block {
+            background: #f0f4ff; border-left: 3px solid var(--navy);
+            padding: 1rem 1.25rem; margin: 1rem 0; border-radius: 0 0.25rem 0.25rem 0;
+            font-size: 0.95rem; line-height: 1.7; white-space: pre-line;
+        }
+        /* Tags */
+        .tag-badge {
+            display: inline-block; background: #e8eaf6; color: var(--navy);
+            padding: 0.2rem 0.6rem; border-radius: 1rem; font-size: 0.8rem;
+            margin: 0.15rem; font-family: monospace;
+        }
+        /* Reference links */
+        .ref-link {
+            display: block; padding: 0.4rem 0; font-size: 0.9rem;
+            border-bottom: 1px solid #eee;
+        }
+        .ref-link:last-child { border-bottom: none; }
+        /* Info table */
+        .info-table td { padding: 0.35rem 0.75rem; font-size: 0.9rem; }
+        .info-table td:first-child { color: #6c757d; white-space: nowrap; width: 35%; }
+        /* AIGC Disclaimer */
+        .aigc-disclaimer {
+            background: #fff3cd; border: 1px solid #ffc107; border-radius: 0.5rem;
+            padding: 1rem 1.25rem; margin: 2rem 0 0; font-size: 0.85rem;
+            color: #664d03; line-height: 1.6;
+        }
+        .aigc-disclaimer strong { color: #664d03; }
+        .aigc-disclaimer .aigc-icon { font-size: 1.1rem; margin-right: 0.3rem; }
+        /* Staleness Warning */
+        .staleness-warning {
+            background: #f8d7da; border: 1px solid #f5c2c7; border-radius: 0.5rem;
+            padding: 1rem 1.25rem; margin: 1rem 0; font-size: 0.85rem;
+            color: #842029; line-height: 1.6;
+        }
+        /* Footer */
+        .report-footer {
+            text-align: center; padding: 2rem 0; margin-top: 2rem;
+            border-top: 2px solid var(--navy); color: #6c757d; font-size: 0.8rem;
+        }
+        /* Print */
+        .btn-print { position: fixed; top: 1rem; right: 1rem; z-index: 1000; }
+        @media print {
+            .btn-print { display: none !important; }
+            .report-header { background: var(--navy) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .section-block:nth-child(even) { background: #fff !important; }
+            .level-badge, .score-card .score-value { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .section-block { page-break-inside: avoid; }
+            body { font-size: 11pt; }
+        }
+    </style>
+</head>
+<body>
+
+<button class="btn btn-outline-secondary btn-sm btn-print heading-font" onclick="window.print()">{{ t('narrative.print') }}</button>
+
+<!-- ===== HEADER ===== -->
+<div class="report-header">
+    <div class="report-container">
+        <h1>{{ t('narrative.title') }}</h1>
+        <div class="subtitle">{{ source_data.ip }}</div>
+        <div class="meta">
+            {% if query_date %}
+            {{ t('narrative.query_date') }}: {{ query_date }}
+            &nbsp;|&nbsp;
+            {% endif %}
+            {{ t('narrative.report_generated_at') }}: {{ report_generated_at|default(timestamp) }}
+            &nbsp;|&nbsp;
+            {% if llm_enhanced %}
+            <span class="badge badge-llm" title="{{ t('narrative.llm_badge_tip') }}">&#x2728; {{ t('narrative.llm_badge') }}</span>
+            {% else %}
+            <span class="badge badge-template" title="{{ t('narrative.template_badge_tip') }}">&#x1F4CB; {{ t('narrative.template_badge') }}</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="report-container">
+
+{% if llm_fallback %}
+<div class="alert alert-info mt-3" role="alert">
+    <strong>{{ t('narrative.llm_fallback_title') }}</strong> — {{ t('narrative.llm_fallback_message') }}
+</div>
+{% endif %}
+
+<!-- ===== STALENESS WARNING (data older than threshold) ===== -->
+{% if is_stale %}
+<div class="staleness-warning">
+    &#x23F0; {{ t('narrative.staleness_warning').replace('{days}', days_old|string) }}
+</div>
+{% endif %}
+
+<!-- ===== SECTION 1: Scope & Methodology ===== -->
+<div class="section-block">
+    <div class="section-num">01</div>
+    <div class="report-container">
+        <div class="section-title">{{ t('narrative.section_methodology') }}</div>
+        <table class="table table-borderless info-table mb-3">
+            <tr><td>{{ t('report.type') }}</td><td>{{ verdict.object_type | upper }}</td></tr>
+            <tr><td>{{ t('report.value') }}</td><td><strong>{{ source_data.ip }}</strong></td></tr>
+            {% if query_date %}
+            <tr><td>{{ t('narrative.query_date') }}</td><td>{{ query_date }}</td></tr>
+            {% endif %}
+            <tr><td>{{ t('narrative.report_generated_at') }}</td><td>{{ report_generated_at|default(timestamp) }}</td></tr>
+        </table>
+        <p><strong>{{ t('narrative.sources_queried') }}:</strong></p>
+        <div class="mb-2">
+            {% for src in source_data.available_sources %}
+            <span class="tag-badge">{{ src }}</span>
+            {% endfor %}
+        </div>
+        {% if llm_enhanced and llm_sections.get('executive_summary') %}
+        <div class="narrative-block">{{ llm_sections['executive_summary'] }}</div>
+        {% else %}
+        <div class="narrative-block">{{ fallback_sections['executive_summary'] }}</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ===== SECTION 2: Ownership Analysis ===== -->
+<div class="section-block">
+    <div class="section-num">02</div>
+    <div class="report-container">
+        <div class="section-title">{{ t('narrative.section_ownership') }}</div>
+        <table class="table table-borderless info-table">
+            {% if source_data.asn %}
+            <tr><td>{{ t('narrative.asn') }}</td><td>{{ source_data.asn }}</td></tr>
+            {% endif %}
+            {% if source_data.organization %}
+            <tr><td>{{ t('narrative.organization') }}</td><td>{{ source_data.organization }}</td></tr>
+            {% endif %}
+            {% if source_data.country %}
+            <tr><td>{{ t('narrative.country') }}</td><td>{{ source_data.country }}</td></tr>
+            {% endif %}
+            {% if source_data.network %}
+            <tr><td>{{ t('narrative.network') }}</td><td>{{ source_data.network }}</td></tr>
+            {% endif %}
+            {% if source_data.rdns_hostname %}
+            <tr><td>{{ t('narrative.reverse_dns') }}</td><td>{{ source_data.rdns_hostname }}</td></tr>
+            {% endif %}
+            {% if source_data.rdns_aliases %}
+            <tr><td>{{ t('narrative.aliases') }}</td><td>{{ source_data.rdns_aliases | join(', ') }}</td></tr>
+            {% endif %}
+            {% if not source_data.ownership_available %}
+            <tr><td colspan="2" class="text-muted">{{ t('narrative.no_data') }}</td></tr>
+            {% endif %}
+        </table>
+        {% if source_data.rdap_entities %}
+        <p class="text-muted" style="font-size:0.85rem;">RDAP Entities: {{ source_data.rdap_entities | join(', ') }}</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ===== SECTION 3: Domain Correlation ===== -->
+<div class="section-block">
+    <div class="section-num">03</div>
+    <div class="report-container">
+        <div class="section-title">{{ t('narrative.section_domain') }}</div>
+
+        {% set has_rdns = source_data.rdns_domains | length > 0 %}
+        {% set has_vt = source_data.vt_resolutions | length > 0 %}
+
+        {% if has_rdns %}
+        <p><strong>{{ t('narrative.rdns_records') }}:</strong></p>
+        <div class="mb-3">
+            {% for domain in source_data.rdns_domains %}
+            <span class="tag-badge">{{ domain }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if has_vt %}
+        <p><strong>{{ t('narrative.passive_dns') }}:</strong></p>
+        <div class="mb-3">
+            {% for domain in source_data.vt_resolutions[:20] %}
+            <span class="tag-badge">{{ domain }}</span>
+            {% endfor %}
+            {% if source_data.vt_resolutions | length > 20 %}
+            <span class="text-muted" style="font-size:0.8rem;">+{{ source_data.vt_resolutions | length - 20 }} more</span>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if not has_rdns and not has_vt %}
+        <p class="text-muted">{{ t('narrative.no_data') }}</p>
+        {% endif %}
+
+        {% if llm_enhanced and llm_sections.get('cross_reference') %}
+        <div class="narrative-block">{{ llm_sections['cross_reference'] }}</div>
+        {% else %}
+        <div class="narrative-block">{{ fallback_sections['cross_reference'] }}</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ===== SECTION 4: TI Platform Observations ===== -->
+<div class="section-block">
+    <div class="section-num">04</div>
+    <div class="report-container">
+        <div class="section-title">{{ t('narrative.section_ti') }}</div>
+        <div class="row">
+            {# AbuseIPDB #}
+            {% if source_data.abuseipdb %}
+            <div class="col-md-6">
+                <div class="source-card">
+                    <h5 class="heading-font">AbuseIPDB</h5>
+                    <div class="metric"><span class="label">{{ t('narrative.abuse_score') }}</span><span class="value">{{ source_data.abuseipdb.abuse_confidence_score | default('N/A') }}/100</span></div>
+                    <div class="metric"><span class="label">{{ t('narrative.total_reports') }}</span><span class="value">{{ source_data.abuseipdb.total_reports | default(0) }}</span></div>
+                    {% if source_data.abuseipdb.isp %}
+                    <div class="metric"><span class="label">{{ t('narrative.isp') }}</span><span class="value">{{ source_data.abuseipdb.isp }}</span></div>
+                    {% endif %}
+                    {% if source_data.abuseipdb.usage_type %}
+                    <div class="metric"><span class="label">{{ t('narrative.usage_type') }}</span><span class="value">{{ source_data.abuseipdb.usage_type }}</span></div>
+                    {% endif %}
+                    <div class="metric"><span class="label">{{ t('narrative.whitelisted') }}</span><span class="value">{{ t('narrative.yes') if source_data.abuseipdb.is_whitelisted else t('narrative.no') }}</span></div>
+                </div>
+            </div>
+            {% endif %}
+
+            {# VirusTotal #}
+            {% if source_data.virustotal %}
+            <div class="col-md-6">
+                <div class="source-card">
+                    <h5 class="heading-font">VirusTotal</h5>
+                    <div class="metric"><span class="label">{{ t('narrative.malicious') }}</span><span class="value" style="color:var(--level-high)">{{ source_data.virustotal.malicious_count | default(0) }}</span></div>
+                    <div class="metric"><span class="label">{{ t('narrative.suspicious') }}</span><span class="value" style="color:var(--level-medium)">{{ source_data.virustotal.suspicious_count | default(0) }}</span></div>
+                    <div class="metric"><span class="label">{{ t('narrative.harmless') }}</span><span class="value" style="color:var(--level-low)">{{ source_data.virustotal.harmless_count | default(0) }}</span></div>
+                    <div class="metric"><span class="label">{{ t('narrative.undetected') }}</span><span class="value">{{ source_data.virustotal.undetected_count | default(0) }}</span></div>
+                    {% if source_data.virustotal.as_owner %}
+                    <div class="metric"><span class="label">AS Owner</span><span class="value">{{ source_data.virustotal.as_owner }}</span></div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {# OTX #}
+            {% if source_data.otx %}
+            <div class="col-md-6">
+                <div class="source-card">
+                    <h5 class="heading-font">AlienVault OTX</h5>
+                    <div class="metric"><span class="label">{{ t('narrative.pulse_count') }}</span><span class="value">{{ source_data.otx.pulse_count | default(0) }}</span></div>
+                    <div class="metric"><span class="label">{{ t('narrative.reputation') }}</span><span class="value">{{ source_data.otx.reputation | default(0) }}</span></div>
+                </div>
+            </div>
+            {% endif %}
+
+            {# GreyNoise #}
+            {% if source_data.greynoise %}
+            <div class="col-md-6">
+                <div class="source-card">
+                    <h5 class="heading-font">GreyNoise</h5>
+                    <div class="metric"><span class="label">{{ t('narrative.classification') }}</span><span class="value">{{ source_data.greynoise.classification | default('unknown') }}</span></div>
+                    <div class="metric"><span class="label">{{ t('narrative.noise') }}</span><span class="value">{{ t('narrative.yes') if source_data.greynoise.noise else t('narrative.no') }}</span></div>
+                    <div class="metric"><span class="label">{{ t('narrative.riot') }}</span><span class="value">{{ t('narrative.yes') if source_data.greynoise.riot else t('narrative.no') }}</span></div>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Shodan #}
+            {% if source_data.shodan %}
+            <div class="col-md-6">
+                <div class="source-card">
+                    <h5 class="heading-font">Shodan</h5>
+                    {% if source_data.shodan.ports %}
+                    <div class="metric"><span class="label">{{ t('narrative.ports') }}</span><span class="value">{{ source_data.shodan.ports | join(', ') }}</span></div>
+                    {% endif %}
+                    {% if source_data.shodan.vulns_count %}
+                    <div class="metric"><span class="label">{{ t('narrative.vulns') }}</span><span class="value" style="color:var(--level-high)">{{ source_data.shodan.vulns_count }}</span></div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ===== SECTION 5: AbuseIPDB Community Analysis ===== -->
+<div class="section-block">
+    <div class="section-num">05</div>
+    <div class="report-container">
+        <div class="section-title">{{ t('narrative.section_abuseipdb') }}</div>
+        {% if source_data.abuseipdb %}
+        <div class="row mb-3">
+            <div class="col-6 col-md-3">
+                <div class="score-card">
+                    <div class="score-value" style="color: {% if source_data.abuseipdb.abuse_confidence_score|default(0) > 75 %}var(--level-critical){% elif source_data.abuseipdb.abuse_confidence_score|default(0) > 45 %}var(--level-high){% elif source_data.abuseipdb.abuse_confidence_score|default(0) > 20 %}var(--level-medium){% else %}var(--level-low){% endif %};">{{ source_data.abuseipdb.abuse_confidence_score | default(0) }}</div>
+                    <div class="score-label">{{ t('narrative.abuse_score') }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="score-card">
+                    <div class="score-value">{{ source_data.abuseipdb.total_reports | default(0) }}</div>
+                    <div class="score-label">{{ t('narrative.total_reports') }}</div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <p class="text-muted">{{ t('narrative.no_data') }}</p>
+        {% endif %}
+        {% if llm_enhanced and llm_sections.get('noise_analysis') %}
+        <div class="narrative-block">{{ llm_sections['noise_analysis'] }}</div>
+        {% else %}
+        <div class="narrative-block">{{ fallback_sections['noise_analysis'] }}</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ===== SECTION 6: Risk Assessment ===== -->
+<div class="section-block">
+    <div class="section-num">06</div>
+    <div class="report-container">
+        <div class="section-title">{{ t('narrative.section_risk') }}</div>
+        <div class="row mb-3">
+            <div class="col-6 col-md-3">
+                <div class="score-card level-{{ verdict.level }}">
+                    <div class="score-value">{{ verdict.reputation_score }}</div>
+                    <div class="score-label">{{ t('narrative.reputation') }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="score-card level-{{ verdict.level }}">
+                    <div class="score-value">{{ verdict.contextual_score }}</div>
+                    <div class="score-label">{{ t('narrative.contextual') }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="score-card level-{{ verdict.level }}">
+                    <div class="score-value">{{ verdict.final_score }}</div>
+                    <div class="score-label">{{ t('narrative.final_score') }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="score-card">
+                    <div class="score-value" style="font-size:1.5rem;">{{ (verdict.confidence * 100) | round(1) }}%</div>
+                    <div class="score-label">{{ t('narrative.confidence') }}</div>
+                </div>
+            </div>
+        </div>
+        <p>
+            {{ t('narrative.verdict_level') }}:
+            <span class="level-badge level-badge-{{ verdict.level }}">{{ t('level.' + verdict.level) }}</span>
+        </p>
+        {% if llm_enhanced and llm_sections.get('risk_assessment') %}
+        <div class="narrative-block">{{ llm_sections['risk_assessment'] }}</div>
+        {% else %}
+        <div class="narrative-block">{{ fallback_sections['risk_assessment'] }}</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ===== SECTION 7: Handling Recommendations ===== -->
+<div class="section-block">
+    <div class="section-num">07</div>
+    <div class="report-container">
+        <div class="section-title">{{ t('narrative.section_recommendations') }}</div>
+        <p>
+            {{ t('narrative.decision') }}:
+            <span class="level-badge level-badge-{{ verdict.level }}">{{ t('decision.' + verdict.decision) }}</span>
+        </p>
+        {% if llm_enhanced and llm_sections.get('recommendations') %}
+        <div class="narrative-block">{{ llm_sections['recommendations'] }}</div>
+        {% else %}
+        <div class="narrative-block">{{ fallback_sections['recommendations'] }}</div>
+        {% endif %}
+
+        {# Evidence Table #}
+        {% if verdict.evidence %}
+        <h5 class="heading-font mt-4 mb-3" style="font-size:1rem;">{{ t('narrative.evidence_table') }}</h5>
+        <div class="table-responsive">
+            <table class="table table-sm evidence-table">
+                <thead>
+                    <tr>
+                        <th>{{ t('narrative.source') }}</th>
+                        <th>{{ t('narrative.detail') }}</th>
+                        <th>{{ t('narrative.severity') }}</th>
+                        <th>{{ t('narrative.score_impact') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for e in verdict.evidence %}
+                    <tr>
+                        <td>{{ e.source }}</td>
+                        <td>{{ e.title }} — {{ e.detail }}</td>
+                        <td>{{ e.severity }}</td>
+                        <td class="{{ 'delta-pos' if e.score_delta > 0 else 'delta-neg' if e.score_delta < 0 else '' }}">{{ '%+d' | format(e.score_delta) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ===== SECTION 8: Conclusion & References ===== -->
+<div class="section-block">
+    <div class="section-num">08</div>
+    <div class="report-container">
+        <div class="section-title">{{ t('narrative.section_conclusion') }}</div>
+        {% if llm_enhanced and llm_sections.get('conclusion') %}
+        <div class="narrative-block">{{ llm_sections['conclusion'] }}</div>
+        {% else %}
+        <div class="narrative-block">{{ fallback_sections['conclusion'] }}</div>
+        {% endif %}
+
+        {# Tags #}
+        {% if verdict.tags %}
+        <h5 class="heading-font mt-4 mb-2" style="font-size:1rem;">{{ t('narrative.tags') }}</h5>
+        <div class="mb-3">
+            {% for tag in verdict.tags %}
+            <span class="tag-badge">{{ tag }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# External References #}
+        <h5 class="heading-font mt-4 mb-2" style="font-size:1rem;">{{ t('narrative.ext_references') }}</h5>
+        <div class="ps-2">
+            <a class="ref-link" href="https://www.abuseipdb.com/check/{{ source_data.ip }}" target="_blank" rel="noopener">AbuseIPDB &mdash; {{ source_data.ip }}</a>
+            <a class="ref-link" href="https://www.virustotal.com/gui/ip-address/{{ source_data.ip }}" target="_blank" rel="noopener">VirusTotal &mdash; {{ source_data.ip }}</a>
+            <a class="ref-link" href="https://otx.alienvault.com/indicator/ip/{{ source_data.ip }}" target="_blank" rel="noopener">AlienVault OTX &mdash; {{ source_data.ip }}</a>
+            <a class="ref-link" href="https://viz.greynoise.io/ip/{{ source_data.ip }}" target="_blank" rel="noopener">GreyNoise &mdash; {{ source_data.ip }}</a>
+            <a class="ref-link" href="https://www.shodan.io/host/{{ source_data.ip }}" target="_blank" rel="noopener">Shodan &mdash; {{ source_data.ip }}</a>
+        </div>
+    </div>
+</div>
+
+</div><!-- /report-container -->
+
+<!-- ===== AIGC DISCLAIMER (LLM-enhanced reports only) ===== -->
+{% if llm_enhanced %}
+<div class="report-container">
+    <div class="aigc-disclaimer">
+        <span class="aigc-icon">&#x26A0;&#xFE0F;</span>
+        <strong>{{ t('narrative.aigc_disclaimer_short') }}</strong><br>
+        {{ t('narrative.aigc_disclaimer') }}
+    </div>
+</div>
+{% endif %}
+
+<!-- ===== FOOTER ===== -->
+<div class="report-footer">
+    <div class="report-container">
+        {{ t('narrative.footer') }}<br>
+        {{ t('narrative.report_generated_at') }}: {{ report_generated_at|default(timestamp) }}
+    </div>
+</div>
+
+</body>
+</html>

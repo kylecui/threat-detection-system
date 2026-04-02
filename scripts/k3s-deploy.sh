@@ -230,10 +230,13 @@ kubectl apply -f "$K8S_BASE/threat-assessment.yaml"
 kubectl apply -f "$K8S_BASE/alert-management.yaml"
 kubectl apply -f "$K8S_BASE/threat-intelligence.yaml"
 kubectl apply -f "$K8S_BASE/ml-detection.yaml"
+kubectl apply -f "$K8S_BASE/tire-secret.yaml"
+kubectl apply -f "$K8S_BASE/tire.yaml"
+kubectl apply -f "$K8S_BASE/frontend.yaml"
 kubectl apply -f "$K8S_BASE/api-gateway.yaml"
 
 log "Waiting for application services..."
-for svc in data-ingestion customer-management threat-assessment alert-management threat-intelligence ml-detection api-gateway; do
+for svc in data-ingestion customer-management threat-assessment alert-management threat-intelligence ml-detection tire frontend api-gateway; do
   wait_for_pod "app=$svc" "$TIMEOUT_APP" && ok "$svc ready" || warn "$svc NOT ready (will check later)"
 done
 

@@ -1,0 +1,121 @@
+# ============================================================
+# TIRE v2.0 — Plugin Configuration
+# ============================================================
+# Each plugin declares its settings here. The PluginRegistry
+# reads this file at startup and passes the relevant section
+# to each plugin via plugin.configure().
+#
+# API keys are resolved from environment variables at runtime.
+# Set api_key_env to the environment variable name, or null
+# if the plugin does not need an API key.
+#
+# Sandbox settings (per-plugin):
+#   sandboxed:        true/false — run in isolated subprocess?
+#                     Default: false for plugins/builtin/, true for plugins/community/
+#   timeout:          seconds before the sandbox kills the plugin (default: 30)
+#   memory_limit_mb:  max memory in MB, Linux only (default: 512)
+#
+# To add a new plugin:
+#   1. Drop a .py file into plugins/builtin/ or plugins/community/
+#   2. Add a config entry below
+#   3. Restart TIRE
+# ============================================================
+
+plugins:
+  abuseipdb:
+    enabled: true
+    api_key_env: ABUSEIPDB_API_KEY
+    priority: 10
+    # sandboxed: false  # builtin default — runs in-process
+    config:
+      max_age_days: 90
+      min_confidence: 25
+
+  virustotal:
+    enabled: true
+    api_key_env: VT_API_KEY
+    priority: 10
+    timeout: 60  # VirusTotal passive DNS can be slow
+    config:
+      include_passive_dns: true
+      max_resolutions: 20
+
+  otx:
+    enabled: true
+    api_key_env: OTX_API_KEY
+    priority: 20
+    config: {}
+
+  greynoise:
+    enabled: true
+    api_key_env: GREYNOISE_API_KEY
+    priority: 20
+    config: {}
+
+  shodan:
+    enabled: true
+    api_key_env: SHODAN_API_KEY
+    priority: 30
+    config: {}
+
+  rdap:
+    enabled: true
+    api_key_env: null
+    priority: 5
+    config: {}
+
+  reverse_dns:
+    enabled: true
+    api_key_env: null
+    priority: 5
+    config: {}
+
+  honeynet:
+    enabled: true
+    api_key_env: null
+    priority: 40
+    config:
+      data_path: data/honeynet.json
+
+  internal_flow:
+    enabled: true
+    api_key_env: null
+    priority: 40
+    config:
+      data_path: data/internal_flows.json
+
+  threatbook:
+    enabled: true
+    api_key_env: THREATBOOK_API_KEY
+    priority: 15
+    config:
+      lang: zh  # Response language: zh or en
+
+  tianjiyoumeng:
+    enabled: true
+    api_key_env: TIANJIYOUMENG_API_KEY
+    priority: 15
+    config:
+      timeout: 20  # Enterprise API may be slower
+
+  # ── Example: adding a new source ──────────────────────────
+  # threatfox:
+  #   enabled: true
+  #   api_key_env: null
+  #   priority: 50
+  #   config:
+  #     max_results: 100
+
+  # ── Example community plugin (ThreatFox) ─────────────────
+  # This is a fully working demo plugin using the free ThreatFox API.
+  # Enable it to see how community plugins integrate with TIRE.
+  # Source: plugins/community/example_plugin.py
+  # Community plugins are sandboxed by default (no need to set sandboxed: true).
+  example_threatfox:
+    enabled: false
+    api_key_env: null
+    priority: 99
+    timeout: 15
+    memory_limit_mb: 256
+    config:
+      timeout_seconds: 10

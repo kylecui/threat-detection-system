@@ -1,0 +1,105 @@
+{% extends "admin/base_admin.html.j2" %}
+
+{% block title %}{{ t('admin.plugins') }}{% endblock %}
+{% block nav_plugins %}active{% endblock %}
+{% block page_title %}{{ t('admin.plugins') }}{% endblock %}
+
+{% block content %}
+{% if msg %}
+<div class="alert alert-info alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>{{ t('admin.name') }}</th>
+                        <th>{{ t('admin.description') }}</th>
+                        <th>{{ t('admin.status') }}</th>
+                        <th>{{ t('admin.api_key') }}</th>
+                        <th>{{ t('admin.source') }}</th>
+                        <th>{{ t('admin.actions') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in plugins %}
+                    <tr>
+                        <td>
+                            <strong>{{ p.display_name }}</strong>
+                            <br><small class="text-muted">v{{ p.version }}</small>
+                        </td>
+                        <td><small>{{ p.description }}</small></td>
+                        <td>
+                            {% if p.enabled %}
+                            <span class="badge bg-success">{{ t('admin.enabled') }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ t('admin.disabled') }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if p.requires_api_key %}
+                                {% if p.api_key_configured %}
+                                <span class="text-success">✓</span>
+                                {% else %}
+                                <span class="text-warning">⚠</span>
+                                {% endif %}
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if p.is_community %}
+                            <span class="badge bg-info text-dark">{{ t('admin.community') }}</span>
+                            {% else %}
+                            <span class="badge bg-dark">{{ t('admin.builtin') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-nowrap">
+                            <form method="post" action="{{ root_path }}/admin/plugins/{{ p.name }}/toggle" class="d-inline">
+                                {% if p.enabled %}
+                                <button type="submit" class="btn btn-sm btn-outline-warning">{{ t('admin.disable') }}</button>
+                                {% else %}
+                                <button type="submit" class="btn btn-sm btn-outline-success">{{ t('admin.enable') }}</button>
+                                {% endif %}
+                            </form>
+                            <a href="{{ root_path }}/admin/plugins/{{ p.name }}/config" class="btn btn-sm btn-outline-secondary ms-1">{{ t('admin.configure') }}</a>
+                            {% if p.is_community %}
+                            <form method="post" action="{{ root_path }}/admin/plugins/{{ p.name }}/delete" class="d-inline ms-1"
+                                  onsubmit="return confirm('{{ t('admin.confirm_delete_plugin') }}');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">{{ t('admin.delete') }}</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h6 class="mb-0">{{ t('admin.upload_plugin') }}</h6>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{{ root_path }}/admin/plugins/upload" enctype="multipart/form-data">
+            <div class="row align-items-end">
+                <div class="col-md-6">
+                    <label for="plugin_file" class="form-label">{{ t('admin.plugin_file') }}</label>
+                    <input type="file" class="form-control" id="plugin_file" name="plugin_file" accept=".py" required>
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary mt-2">{{ t('admin.upload') }}</button>
+                </div>
+            </div>
+            <small class="text-muted mt-2 d-block">{{ t('admin.upload_hint') }}</small>
+        </form>
+    </div>
+</div>
+{% endblock %}

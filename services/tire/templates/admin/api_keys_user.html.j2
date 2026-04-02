@@ -1,0 +1,164 @@
+{% extends "admin/base_admin.html.j2" %}
+
+{% block title %}{{ t('admin.my_api_keys') }}{% endblock %}
+{% block nav_my_api_keys %}active{% endblock %}
+{% block page_title %}{{ t('admin.my_api_keys') }}{% endblock %}
+
+{% block content %}
+{% if msg %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row mb-4">
+    <div class="col-lg-8">
+        <div class="card border-info">
+            <div class="card-body">
+                <p class="text-muted mb-2">{{ t('admin.personal_keys_info') }}</p>
+                <hr>
+                <p class="text-muted mb-0"><small>{{ t('admin.configured_key_info') }}</small></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Personal Plugin API Keys Table -->
+<div class="card">
+    <div class="card-header">
+        <h6 class="mb-0">{{ t('admin.my_api_keys') }}</h6>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>{{ t('admin.plugin_name') }}</th>
+                        <th>{{ t('admin.key_status') }}</th>
+                        <th class="text-center" style="min-width: 120px;">{{ t('admin.status') }}</th>
+                        <th>{{ t('admin.shared_access') }}</th>
+                        <th>{{ t('admin.usage_30d') }}</th>
+                        <th style="min-width: 320px;">{{ t('admin.api_key') }}</th>
+                        <th>{{ t('admin.actions') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for plugin in registry %}
+                    {% set has_key = plugin.plugin_name in user_keys | map(attribute='plugin_name') | list %}
+                    <tr>
+                        <td>
+                            <strong>{{ plugin.display_name }}</strong>
+                            {% if plugin.free_tier %}
+                            <span class="badge bg-success ms-1">{{ t('admin.free_tier') }}</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark ms-1">{{ t('admin.enterprise_only') }}</span>
+                            {% endif %}
+                            {% if plugin.note %}
+                            <br><small class="text-muted">{{ plugin.note }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if has_key %}
+                            <span class="badge bg-success">{{ t('admin.set') }}</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ t('admin.not_set') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if has_key %}
+                            <span class="text-success">&#10003;</span>
+                            {% else %}
+                            <span class="text-muted">&#8212;</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if shared_access.get(plugin.plugin_name) == true %}
+                            <span class="badge bg-info text-dark">{{ t('admin.shared_allowed') }}</span>
+                            {% elif shared_access.get(plugin.plugin_name) == false %}
+                            <span class="badge bg-secondary">{{ t('admin.shared_denied') }}</span>
+                            {% else %}
+                            <span class="text-muted">{{ t('admin.inherit') }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% set usage = plugin_usage_by_name.get(plugin.plugin_name) %}
+                            {% if usage %}
+                            <small>
+                                {{ usage.calls }} {{ t('admin.calls') }}<br>
+                                {{ t('admin.success_rate_label') }}: {{ '%.0f'|format((usage.success_rate or 0) * 100) }}%
+                            </small>
+                            {% else %}
+                            <small class="text-muted">{{ t('admin.no_usage_yet') }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form method="post" action="{{ root_path }}/admin/settings/my-api-keys" class="d-flex gap-2">
+                                <input type="hidden" name="plugin_name" value="{{ plugin.plugin_name }}">
+                                <div class="input-group input-group-sm">
+                                    <input type="password" class="form-control" name="api_key"
+                                           placeholder="{% if has_key %}••••••••{% else %}Enter API key{% endif %}"
+                                           id="key_{{ plugin.plugin_name }}">
+                                    <button class="btn btn-outline-secondary" type="button"
+                                            onclick="toggleKeyVisibility('{{ plugin.plugin_name }}')">
+                                        <span id="toggleLabel_{{ plugin.plugin_name }}">{{ t('admin.show') }}</span>
+                                    </button>
+                                </div>
+                                <button type="submit" class="btn btn-sm btn-primary">
+                                    {% if has_key %}{{ t('admin.update_key') }}{% else %}{{ t('admin.set_key') }}{% endif %}
+                                </button>
+                            </form>
+                        </td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                {% if plugin.apply_url %}
+                                <a href="{{ plugin.apply_url }}" target="_blank" class="btn btn-sm btn-outline-info" title="{{ t('admin.apply_key') }}">
+                                    {{ t('admin.apply_key') }}
+                                </a>
+                                {% endif %}
+                                {% if has_key %}
+                                <form method="post" action="{{ root_path }}/admin/settings/my-api-keys/{{ plugin.plugin_name }}/delete"
+                                      onsubmit="return confirm('{{ t('admin.confirm_delete_key') }}')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">{{ t('admin.remove_key') }}</button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% if usage_snapshot %}
+<div class="card mt-4">
+    <div class="card-header">
+        <h6 class="mb-0">{{ t('admin.api_usage') }} · 30d</h6>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6"><strong>{{ t('admin.calls') }}:</strong> {{ usage_snapshot.plugin_overview.calls }}</div>
+            <div class="col-md-6"><strong>{{ t('admin.success_rate_label') }}:</strong> {{ '%.0f'|format((usage_snapshot.plugin_overview.success_rate or 0) * 100) }}%</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleKeyVisibility(pluginName) {
+    var input = document.getElementById('key_' + pluginName);
+    var label = document.getElementById('toggleLabel_' + pluginName);
+    if (input.type === 'password') {
+        input.type = 'text';
+        label.textContent = '{{ t("admin.hide") }}';
+    } else {
+        input.type = 'password';
+        label.textContent = '{{ t("admin.show") }}';
+    }
+}
+</script>
+{% endblock %}
