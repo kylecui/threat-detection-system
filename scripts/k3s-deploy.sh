@@ -181,18 +181,21 @@ ok "Kafka ready"
 # PHASE 4: Init jobs (need Kafka + PG)
 # =============================================================================
 log "=========================================="
-log "PHASE 4: Kafka topic init + PG schema"
+log "PHASE 4: Kafka topic init (CronJob) + PG schema"
 log "=========================================="
 
-# Delete old jobs if they exist (Jobs are immutable)
+# Delete old resources if they exist (Jobs/CronJobs are immutable)
 kubectl delete job kafka-topic-init -n "$NAMESPACE" --ignore-not-found=true
+kubectl delete cronjob kafka-topic-init -n "$NAMESPACE" --ignore-not-found=true
+kubectl delete job kafka-topic-init-manual -n "$NAMESPACE" --ignore-not-found=true
 kubectl delete job postgres-schema-apply -n "$NAMESPACE" --ignore-not-found=true
 
 kubectl apply -f "$K8S_BASE/kafka-topic-init.yaml"
 kubectl apply -f "$K8S_BASE/postgres-schema-apply.yaml"
 
-log "Waiting for Kafka topic init..."
-wait_for_job "kafka-topic-init" 120
+log "Triggering immediate Kafka topic init..."
+kubectl create job --from=cronjob/kafka-topic-init kafka-topic-init-manual -n "$NAMESPACE"
+wait_for_job "kafka-topic-init-manual" 120
 ok "Kafka topics created"
 
 log "Waiting for PG schema apply..."

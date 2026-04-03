@@ -1,33 +1,45 @@
 apiVersion: batch/v1
-kind: Job
+kind: CronJob
 metadata:
   name: kafka-topic-init
   namespace: threat-detection
 spec:
-  template:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
     spec:
-      containers:
-      - name: kafka-topic-init
-        image: confluentinc/cp-kafka:7.4.0
-        command:
-        - /bin/bash
-        - -c
-        - |
-          kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic attack-events
-          kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic status-events
-          kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic threat-alerts
-          kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic minute-aggregations
-          kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic device-health-alerts
-          kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic sniffer-events
-          kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic threat-detection-events
-          kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic policy-events
-          kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic bg-traffic-events
-          kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic audit-events
-          echo "Kafka topics initialized successfully"
-        env:
-        - name: KAFKA_BROKER_ID
-          value: "1"
-        - name: KAFKA_ZOOKEEPER_CONNECT
-          value: "zookeeper:2181"
-      restartPolicy: Never
-  backoffLimit: 3
+      template:
+        spec:
+          containers:
+          - name: kafka-topic-init
+            image: confluentinc/cp-kafka:7.4.0
+            command:
+            - /bin/bash
+            - -c
+            - |
+              # Wait for Kafka to be ready
+              echo "Waiting for Kafka to be ready..."
+              until kafka-broker-api-versions --bootstrap-server kafka:9092 >/dev/null 2>&1; do
+                echo "Kafka not ready yet, retrying in 3s..."
+                sleep 3
+              done
+              echo "Kafka is ready. Creating topics..."
+
+              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic attack-events
+              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic status-events
+              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic threat-alerts
+              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic minute-aggregations
+              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic device-health-alerts
+              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic sniffer-events
+              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic threat-detection-events
+              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic policy-events
+              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic bg-traffic-events
+              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic audit-events
+              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic ml-threat-detections
+
+              echo "All Kafka topics initialized successfully."
+              kafka-topics --bootstrap-server kafka:9092 --list
+          restartPolicy: Never
+      backoffLimit: 3

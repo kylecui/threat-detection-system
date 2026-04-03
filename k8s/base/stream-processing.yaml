@@ -49,7 +49,7 @@ spec:
             rest.port: 8081
             rest.bind-address: 0.0.0.0
         - name: KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:29092"
+          value: "kafka:9092"
         - name: INPUT_TOPIC
           value: "attack-events"
         - name: STATUS_TOPIC
@@ -129,7 +129,7 @@ spec:
             taskmanager.memory.process.size: 1728m
             taskmanager.bind-host: 0.0.0.0
         - name: KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:29092"
+          value: "kafka:9092"
         resources:
           requests:
             memory: "1Gi"

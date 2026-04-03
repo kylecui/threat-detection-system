@@ -199,6 +199,18 @@ spec:
         app: logstash
     spec:
       enableServiceLinks: false
+      initContainers:
+      - name: wait-for-kafka
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z kafka 9092; do
+            echo "Waiting for Kafka..."
+            sleep 2
+          done
+          echo "Kafka is ready!"
       containers:
       - name: logstash
         image: docker.elastic.co/logstash/logstash:8.11.0
@@ -212,7 +224,7 @@ spec:
           protocol: TCP
         env:
         - name: KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:29092"
+          value: "kafka:9092"
         - name: LS_JAVA_OPTS
           value: "-Xmx512m -Xms512m"
         volumeMounts:

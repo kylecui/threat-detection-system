@@ -14,6 +14,40 @@ spec:
         app: data-ingestion
     spec:
       enableServiceLinks: false
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z postgres 5432; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL is ready!"
+      - name: wait-for-kafka
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z kafka 9092; do
+            echo "Waiting for Kafka..."
+            sleep 2
+          done
+          echo "Kafka is ready!"
+      - name: wait-for-redis
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z redis 6379; do
+            echo "Waiting for Redis..."
+            sleep 2
+          done
+          echo "Redis is ready!"
       containers:
       - name: data-ingestion
         image: threat-detection/data-ingestion:latest
@@ -38,7 +72,7 @@ spec:
         - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
           value: "org.postgresql.Driver"
         - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:29092"
+          value: "kafka:9092"
         - name: SPRING_DATA_REDIS_HOST
           value: "redis"
         - name: SPRING_DATA_REDIS_PORT

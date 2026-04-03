@@ -72,7 +72,7 @@ spec:
           protocol: TCP
         env:
         - name: KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:29092"
+          value: "kafka:9092"
         - name: KAFKA_CONSUMER_GROUP
           value: "ml-detection-group-v3"
         - name: KAFKA_INPUT_TOPIC

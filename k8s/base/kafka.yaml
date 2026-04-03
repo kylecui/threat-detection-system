@@ -14,6 +14,30 @@ spec:
         app: kafka
     spec:
       enableServiceLinks: false
+      initContainers:
+      - name: wait-for-zookeeper
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z zookeeper 2181; do
+            echo "Waiting for Zookeeper..."
+            sleep 2
+          done
+          echo "Zookeeper is ready!"
+      - name: clean-kafka-meta
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          echo "Cleaning stale meta.properties to prevent InconsistentClusterIdException..."
+          rm -f /var/lib/kafka/data/meta.properties
+          echo "Kafka data directory cleaned."
+        volumeMounts:
+        - name: kafka-data
+          mountPath: /var/lib/kafka/data
       containers:
       - name: kafka
         image: confluentinc/cp-kafka:7.4.0
@@ -94,9 +118,6 @@ spec:
   - port: 9092
     targetPort: 9092
     name: kafka
-  - port: 29092
-    targetPort: 9092
-    name: kafka-compat
   - port: 9101
     targetPort: 9101
     name: jmx

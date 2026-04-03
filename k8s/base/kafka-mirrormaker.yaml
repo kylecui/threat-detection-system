@@ -14,8 +14,8 @@ data:
 
     # Cluster aliases
     clusters = source, local
-    source.bootstrap.servers = ${SOURCE_KAFKA_BOOTSTRAP:kafka:29092}
-    local.bootstrap.servers = kafka:29092
+    source.bootstrap.servers = ${SOURCE_KAFKA_BOOTSTRAP:kafka:9092}
+    local.bootstrap.servers = kafka:9092
 
     # Replication flows: source -> local
     source->local.enabled = true
@@ -89,19 +89,19 @@ spec:
         - |
           echo "Starting Kafka MirrorMaker 2..."
           # Only start if SOURCE_KAFKA_BOOTSTRAP is configured (cross-region mode)
-          if [ -z "$SOURCE_KAFKA_BOOTSTRAP" ] || [ "$SOURCE_KAFKA_BOOTSTRAP" = "kafka:29092" ]; then
+          if [ -z "$SOURCE_KAFKA_BOOTSTRAP" ] || [ "$SOURCE_KAFKA_BOOTSTRAP" = "kafka:9092" ]; then
             echo "No remote source configured (SOURCE_KAFKA_BOOTSTRAP=$SOURCE_KAFKA_BOOTSTRAP). MM2 idle."
             # Keep container alive for health checks but do nothing
             while true; do sleep 3600; done
           fi
           # Replace env vars in config
-          sed "s|\${SOURCE_KAFKA_BOOTSTRAP:kafka:29092}|${SOURCE_KAFKA_BOOTSTRAP}|g" \
+          sed "s|\${SOURCE_KAFKA_BOOTSTRAP:kafka:9092}|${SOURCE_KAFKA_BOOTSTRAP}|g" \
             /etc/mirrormaker/mm2.properties > /tmp/mm2.properties
           # Start Connect-based MirrorMaker 2
           connect-mirror-maker /tmp/mm2.properties
         env:
         - name: SOURCE_KAFKA_BOOTSTRAP
-          value: "kafka:29092"  # Override in region overlays to point to remote Kafka
+          value: "kafka:9092"  # Override in region overlays to point to remote Kafka
         - name: REGION
           value: "east"
         - name: KAFKA_HEAP_OPTS

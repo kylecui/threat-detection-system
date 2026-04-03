@@ -84,7 +84,7 @@ spec:
               name: postgres-secret
               key: POSTGRES_PASSWORD
         - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-          value: "kafka:29092"
+          value: "kafka:9092"
         - name: SPRING_KAFKA_CONSUMER_GROUP_ID
           value: "threat-assessment-group"
         - name: LOGGING_LEVEL_ROOT
