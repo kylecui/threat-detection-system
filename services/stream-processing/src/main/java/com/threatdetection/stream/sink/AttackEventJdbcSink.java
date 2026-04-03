@@ -62,8 +62,15 @@ public class AttackEventJdbcSink {
             insertSQL,
             (JdbcStatementBuilder<AttackEvent>) (statement, event) -> {
                 try {
-                    // 设置参数
-                    statement.setString(1, event.getCustomerId());
+                    // 设置参数 — customerId may be null for V1 syslog events via Logstash
+                    // (Logstash does not resolve customerId from devSerial)
+                    String customerId = event.getCustomerId();
+                    if (customerId == null || customerId.isEmpty()) {
+                        customerId = "unknown";
+                        logger.warn("AttackEvent missing customerId, defaulting to 'unknown': devSerial={}, attackMac={}",
+                            event.getDevSerial(), event.getAttackMac());
+                    }
+                    statement.setString(1, customerId);
                     statement.setString(2, event.getDevSerial());
                     statement.setString(3, event.getAttackMac());
                     statement.setString(4, event.getAttackIp());
