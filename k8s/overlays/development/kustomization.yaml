@@ -25,5 +25,5 @@ configMapGenerator:
     literals:
       - ENVIRONMENT=development
       - LOG_LEVEL=DEBUG
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - ZOOKEEPER_CONNECT=zookeeper:2181

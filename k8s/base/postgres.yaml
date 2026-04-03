@@ -1409,9 +1409,9 @@ data:
     );
 
     INSERT INTO regions (region_id, region_label, api_endpoint, kafka_bootstrap, postgres_role) VALUES
-      ('east', 'US East', 'https://east.threat-detection.io', 'kafka.threat-detection-east:29092', 'primary'),
-      ('west', 'US West', 'https://west.threat-detection.io', 'kafka.threat-detection-west:29092', 'standby'),
-      ('cn', 'China', 'https://cn.threat-detection.io', 'kafka.threat-detection-cn:29092', 'primary')
+      ('east', 'US East', 'https://east.threat-detection.io', 'kafka.threat-detection-east:9092', 'primary'),
+      ('west', 'US West', 'https://west.threat-detection.io', 'kafka.threat-detection-west:9092', 'standby'),
+      ('cn', 'China', 'https://cn.threat-detection.io', 'kafka.threat-detection-cn:9092', 'primary')
     ON CONFLICT (region_id) DO NOTHING;
 
 ---
