@@ -71,6 +71,7 @@ spec:
       initContainers:
       - name: wait-for-kafka
         image: busybox:1.35
+        imagePullPolicy: IfNotPresent
         command:
         - sh
         - -c
@@ -83,6 +84,7 @@ spec:
       containers:
       - name: mirrormaker
         image: confluentinc/cp-kafka:7.4.0
+        imagePullPolicy: IfNotPresent
         command:
         - /bin/bash
         - -c

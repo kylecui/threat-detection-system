@@ -17,6 +17,7 @@ spec:
       initContainers:
       - name: wait-for-postgres
         image: busybox:1.35
+        imagePullPolicy: IfNotPresent
         command:
         - sh
         - -c
@@ -28,6 +29,7 @@ spec:
           echo "PostgreSQL is ready!"
       - name: wait-for-kafka
         image: busybox:1.35
+        imagePullPolicy: IfNotPresent
         command:
         - sh
         - -c
@@ -39,6 +41,7 @@ spec:
           echo "Kafka is ready!"
       - name: wait-for-redis
         image: busybox:1.35
+        imagePullPolicy: IfNotPresent
         command:
         - sh
         - -c

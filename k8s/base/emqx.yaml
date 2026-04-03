@@ -42,6 +42,7 @@ spec:
       containers:
         - name: emqx
           image: emqx/emqx:5.5.1
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 1883
             - containerPort: 8883

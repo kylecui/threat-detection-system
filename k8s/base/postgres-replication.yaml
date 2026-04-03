@@ -202,6 +202,7 @@ spec:
       # PgBouncer sidecar for connection pooling
       - name: pgbouncer
         image: edoburu/pgbouncer:1.21.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6432
           name: pgbouncer

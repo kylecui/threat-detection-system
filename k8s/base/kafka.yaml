@@ -17,6 +17,7 @@ spec:
       initContainers:
       - name: wait-for-zookeeper
         image: busybox:1.35
+        imagePullPolicy: IfNotPresent
         command:
         - sh
         - -c
@@ -28,6 +29,7 @@ spec:
           echo "Zookeeper is ready!"
       - name: clean-kafka-meta
         image: busybox:1.35
+        imagePullPolicy: IfNotPresent
         command:
         - sh
         - -c
@@ -41,6 +43,7 @@ spec:
       containers:
       - name: kafka
         image: confluentinc/cp-kafka:7.4.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9092
           name: kafka

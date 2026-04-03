@@ -202,6 +202,7 @@ spec:
       initContainers:
       - name: wait-for-kafka
         image: busybox:1.35
+        imagePullPolicy: IfNotPresent
         command:
         - sh
         - -c

@@ -43,6 +43,7 @@ spec:
       # 等待JobManager (stream-processing)启动
       - name: wait-for-jobmanager
         image: busybox:1.35
+        imagePullPolicy: IfNotPresent
         command:
         - sh
         - -c
@@ -56,6 +57,7 @@ spec:
       # 等待Kafka启动
       - name: wait-for-kafka
         image: busybox:1.35
+        imagePullPolicy: IfNotPresent
         command:
         - sh
         - -c
@@ -69,6 +71,7 @@ spec:
       containers:
       - name: taskmanager
         image: flink:1.17-scala_2.12-java11
+        imagePullPolicy: IfNotPresent
         command:
         - /bin/bash
         - -c

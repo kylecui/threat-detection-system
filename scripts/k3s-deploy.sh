@@ -99,10 +99,66 @@ wait_for_job() {
 }
 
 # =============================================================================
-# PHASE 0: Nuke existing namespace
+# PHASE 0a: Pre-flight image check
 # =============================================================================
 log "=========================================="
-log "PHASE 0: Clean slate"
+log "PHASE 0a: Image pre-flight check"
+log "=========================================="
+
+REQUIRED_IMAGES=(
+  "postgres:15-alpine"
+  "redis:7-alpine"
+  "busybox:1.35"
+  "confluentinc/cp-zookeeper:7.4.0"
+  "confluentinc/cp-kafka:7.4.0"
+  "docker.elastic.co/logstash/logstash:8.11.0"
+  "emqx/emqx:5.5.1"
+  "threat-detection/data-ingestion:latest"
+  "threat-detection/stream-processing:1.0"
+  "threat-detection/threat-assessment:latest"
+  "threat-detection/alert-management:latest"
+  "threat-detection/customer-management:latest"
+  "threat-detection/threat-intelligence:latest"
+  "threat-detection/api-gateway:latest"
+  "threat-detection/config-server:latest"
+  "threat-detection/ml-detection:latest"
+  "threat-detection/tire:latest"
+  "threat-detection/frontend:latest"
+)
+
+MISSING_IMAGES=()
+for img in "${REQUIRED_IMAGES[@]}"; do
+  if ! crictl images 2>/dev/null | grep -q "$(echo "$img" | cut -d: -f1)"; then
+    MISSING_IMAGES+=("$img")
+  fi
+done
+
+if [ ${#MISSING_IMAGES[@]} -gt 0 ]; then
+  warn "Missing ${#MISSING_IMAGES[@]} images in K3s containerd:"
+  for img in "${MISSING_IMAGES[@]}"; do
+    err "  - $img"
+  done
+  echo ""
+  log "To fix:"
+  log "  Option A: Import from archive:"
+  log "    sudo bash scripts/k3s-import-images.sh threat-detection-images.tar.gz"
+  log "  Option B: Build app images + pull infra images:"
+  log "    sudo bash scripts/k3s-build-images.sh"
+  log "    sudo docker pull <missing-infra-image> && docker save ... | k3s ctr images import -"
+  echo ""
+  read -p "Continue anyway? (y/N) " -r REPLY
+  if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+    err "Aborted. Import missing images first."
+    exit 1
+  fi
+fi
+ok "Image pre-flight check complete"
+
+# =============================================================================
+# PHASE 0b: Nuke existing namespace
+# =============================================================================
+log "=========================================="
+log "PHASE 0b: Clean slate"
 log "=========================================="
 
 if kubectl get namespace "$NAMESPACE" &>/dev/null; then
