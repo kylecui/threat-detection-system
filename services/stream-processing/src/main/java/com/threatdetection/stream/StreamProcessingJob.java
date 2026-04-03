@@ -93,7 +93,7 @@ public class StreamProcessingJob {
         
         // Read configuration from environment variables
     String bootstrapServers = System.getenv("KAFKA_BOOTSTRAP_SERVERS") != null ?
-        System.getenv("KAFKA_BOOTSTRAP_SERVERS") : "kafka:29092";
+        System.getenv("KAFKA_BOOTSTRAP_SERVERS") : "kafka:9092";
     String inputTopic = System.getenv("INPUT_TOPIC") != null ?
         System.getenv("INPUT_TOPIC") : "attack-events";
     String outputTopic = System.getenv("OUTPUT_TOPIC") != null ?

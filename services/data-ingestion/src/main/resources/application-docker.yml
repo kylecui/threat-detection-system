@@ -27,16 +27,16 @@ spring:
 # Kafka Configuration (Docker network)
 # 必须覆盖application.properties中的localhost:9092设置
   kafka:
-    bootstrap-servers: kafka:29092
+    bootstrap-servers: kafka:9092
     consumer:
-      bootstrap-servers: kafka:29092  # 明确覆盖consumer设置
+      bootstrap-servers: kafka:9092  # 明确覆盖consumer设置
       group-id: data-ingestion-persistence
       auto-offset-reset: earliest
       enable-auto-commit: true
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     producer:
-      bootstrap-servers: kafka:29092  # 明确覆盖producer设置
+      bootstrap-servers: kafka:9092  # 明确覆盖producer设置
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       acks: all

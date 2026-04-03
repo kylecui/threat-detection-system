@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     ml_service_port: int = 8086
-    kafka_bootstrap_servers: str = "kafka:29092"
+    kafka_bootstrap_servers: str = "kafka:9092"
     kafka_input_topic: str = "threat-alerts"
     kafka_output_topic: str = "ml-threat-detections"
     kafka_consumer_group: str = "ml-detection-consumer"
