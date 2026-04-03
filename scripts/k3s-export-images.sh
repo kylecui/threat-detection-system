@@ -79,8 +79,10 @@ main() {
     log "  Exporting: $img"
 
     # Try k3s ctr first (containerd native), then docker
+    # Library images (postgres, redis, busybox) are stored as docker.io/library/<image>
     if command -v k3s &>/dev/null; then
-      if k3s ctr images export "$tar_file" "docker.io/${img}" 2>/dev/null || \
+      if k3s ctr images export "$tar_file" "docker.io/library/${img}" 2>/dev/null || \
+         k3s ctr images export "$tar_file" "docker.io/${img}" 2>/dev/null || \
          k3s ctr images export "$tar_file" "${img}" 2>/dev/null; then
         ok "    Exported: $img ($(du -sh "$tar_file" | awk '{print $1}'))"
         exported=$((exported + 1))
