@@ -1,8 +1,8 @@
-# 威胁检测系统 操作手册 v3.1.3
+# 威胁检测系统 操作手册 v3.1.5
 
 | 项目 | 内容 |
 |------|------|
-| 版本 | v3.1.3 |
+| 版本 | v3.1.5 |
 | 发布日期 | 2026-04-03 |
 | 适用环境 | K3s 单节点 (10.174.1.222) |
 | 编写目的 | 供测试人员验证系统全功能运行状态 |
@@ -588,68 +588,171 @@ sudo kubectl run -n threat-detection curl-test --image=curlimages/curl --rm -it 
 
 ## 13. 测试数据发送
 
-### 13.1 数据格式
+### 13.1 V1 数据格式 (syslog KV)
 
-系统接受syslog KV格式的攻击日志，通过TCP发送到 `10.174.1.222:32318` (Logstash端口)。
+系统接受syslog KV格式的攻击日志，通过TCP发送到 `<服务器IP>:32318` (Logstash NodePort)。
 
-格式:
+> **注意**: V1 syslog格式中**不包含** `customer_id` 字段。customerId由data-ingestion服务根据 `dev_serial` 自动解析 (设备→客户映射)。
+
+格式 (字段顺序必须严格匹配):
 ```
-log_type=1,customer_id=<客户ID>,dev_serial=<设备序列号>,attack_mac=<攻击MAC>,attack_ip=<攻击IP>,response_ip=<响应IP>,response_port=<端口>,log_time=<Unix时间戳>
+syslog_version=1.0,dev_serial=<设备序列号>,log_type=1,sub_type=4,attack_mac=<攻击MAC>,attack_ip=<攻击IP>,response_ip=<响应IP>,response_port=<端口>,line_id=1,Iface_type=1,Vlan_id=0,log_time=<Unix时间戳>
 ```
 
 **字段说明:**
 
 | 字段 | 说明 | 示例 |
 |------|------|------|
-| log_type | 日志类型，固定为1 | 1 |
-| customer_id | 客户ID，必须是已注册的客户 | demo-customer |
-| dev_serial | 设备序列号，必须绑定到该客户 | 9d262111f2476d34 |
-| attack_mac | 攻击者MAC地址 | aa:bb:cc:dd:ee:10 |
-| attack_ip | 攻击者IP地址 | 192.168.1.50 |
-| response_ip | 被攻击的蜜罐IP | 10.0.1.1 |
-| response_port | 被攻击的端口 | 3389 |
+| syslog_version | 协议版本，固定为1.0 | 1.0 |
+| dev_serial | 设备序列号，必须绑定到某个客户 | 9d262111f2476d34 |
+| log_type | 日志类型，固定为1 (攻击日志) | 1 |
+| sub_type | 子类型，固定为4 | 4 |
+| attack_mac | 被诱捕的内网主机MAC地址 | aa:bb:cc:dd:ee:10 |
+| attack_ip | 被诱捕的内网主机IP地址 | 192.168.1.50 |
+| response_ip | 蜜罐/诱饵IP | 10.0.1.1 |
+| response_port | 攻击者尝试访问的端口 | 3389 |
+| line_id | 行ID，固定为1 | 1 |
+| Iface_type | 接口类型，固定为1 | 1 |
+| Vlan_id | VLAN ID，通常为0 | 0 |
 | log_time | Unix秒级时间戳 | 1743562800 |
+| eth_type | (可选) 以太网类型 | 2048 |
+| ip_type | (可选) IP协议类型 | 6 |
 
 **可用的客户和设备:**
 
-| customer_id | 设备序列号 |
-|---|---|
-| demo-customer | 9d262111f2476d34 |
-| customer_a | DEV-001 至 DEV-016 |
+| customer_id | 设备序列号 | 说明 |
+|---|---|---|
+| demo-customer | 9d262111f2476d34 | 演示客户 |
+| customer_a | DEV-001 至 DEV-016 | Acme Corporation (16个蜜罐设备) |
 
-### 13.2 发送单条测试数据
+### 13.2 V1 发送单条测试数据
 
 ```bash
-echo "log_type=1,customer_id=demo-customer,dev_serial=9d262111f2476d34,attack_mac=aa:bb:cc:dd:ee:10,attack_ip=192.168.1.50,response_ip=10.0.1.1,response_port=3389,log_time=$(date +%s)" | nc -q0 10.174.1.222 32318
+# 先在本地展开时间戳，再发送 (避免远程shell变量展开问题)
+TIMESTAMP=$(date +%s) && echo "syslog_version=1.0,dev_serial=9d262111f2476d34,log_type=1,sub_type=4,attack_mac=aa:bb:cc:dd:ee:10,attack_ip=192.168.1.50,response_ip=10.0.1.1,response_port=3389,line_id=1,Iface_type=1,Vlan_id=0,log_time=${TIMESTAMP}" | nc -q1 <服务器IP> 32318
 ```
 
-### 13.3 批量发送测试数据
+### 13.3 V1 批量发送测试数据
 
 以下脚本发送50条测试数据，使用不同的端口和时间戳:
 
 ```bash
+SERVER_IP="<服务器IP>"
 PORTS=(22 80 443 3389 8080 21 25 53 3306 5432)
 for i in $(seq 1 50); do
   PORT=${PORTS[$((RANDOM % 10))]}
   TS=$(($(date +%s) - RANDOM % 3600))
   MAC_SUFFIX=$((RANDOM % 90 + 10))
   IP_LAST=$((RANDOM % 254 + 1))
-  echo "log_type=1,customer_id=demo-customer,dev_serial=9d262111f2476d34,attack_mac=aa:bb:cc:dd:ee:${MAC_SUFFIX},attack_ip=192.168.1.${IP_LAST},response_ip=10.0.1.1,response_port=${PORT},log_time=${TS}" | nc -q0 10.174.1.222 32318
+  echo "syslog_version=1.0,dev_serial=9d262111f2476d34,log_type=1,sub_type=4,attack_mac=aa:bb:cc:dd:ee:${MAC_SUFFIX},attack_ip=192.168.1.${IP_LAST},response_ip=10.0.1.1,response_port=${PORT},line_id=1,Iface_type=1,Vlan_id=0,log_time=${TS}" | nc -q1 $SERVER_IP 32318
   sleep 0.1
 done
 echo "发送完毕，共50条"
 ```
 
-### 13.4 重要提示
+### 13.4 V1 重要提示
 
-- **customer_id 必须匹配**: 只能使用已注册的客户ID (demo-customer 或 customer_a)
-- **dev_serial 必须匹配**: 设备序列号必须绑定到对应客户
+- **无需 customer_id**: V1 syslog格式中不包含customer_id字段。系统根据 `dev_serial` 自动查找绑定的客户
+- **dev_serial 必须匹配**: 设备序列号必须在客户管理中绑定到某个客户，否则customerId默认为"unknown"
+- **字段顺序严格**: data-ingestion的正则解析器要求字段严格按 `syslog_version, dev_serial, log_type, sub_type, attack_mac, attack_ip, response_ip, response_port, line_id, Iface_type, Vlan_id, log_time` 顺序排列
+- **TCP协议 (非UDP)**: Logstash配置为TCP输入，使用 `nc` (不加 `-u` 参数)。UDP发送会静默丢失
 - **时间戳要分散**: 建议使用不同的 log_time 值，确保Flink的事件时间窗口能正常关闭并触发计算。如果所有事件使用相同时间戳，Flink窗口可能不会触发
 - **等待时间**: 发送后请等待30-60秒，Flink的30秒窗口关闭后数据才会进入threat-alerts，再经过处理后出现在Dashboard
 - **数据流向确认**: 发送数据后可通过以下命令确认Kafka收到消息:
   ```bash
   sudo kubectl exec -n threat-detection deploy/kafka -- kafka-console-consumer --bootstrap-server localhost:9092 --topic threat-alerts --from-beginning --max-messages 3 --timeout-ms 10000
   ```
+
+### 13.5 V2 MQTT测试 (V2哨兵)
+
+V2哨兵设备通过MQTT协议发送JSON格式的攻击事件，连接到EMQX Broker的NodePort 31883。
+
+#### MQTT Topic格式
+
+```
+jz/<deviceId>/logs/attack
+```
+
+其中 `<deviceId>` 为设备序列号 (如 `9d262111f2476d34`)。data-ingestion服务订阅 `jz/+/logs/#` 并从topic路径中提取deviceId，自动解析对应的customerId。
+
+#### V2 JSON事件格式
+
+```json
+{
+  "v": 2,
+  "device_id": "9d262111f2476d34",
+  "seq": 1001,
+  "ts": "2026-04-04T10:30:00+08:00",
+  "type": "attack",
+  "data": {
+    "src_ip": "10.0.1.200",
+    "src_mac": "aa:bb:cc:11:22:33",
+    "guard_ip": "10.0.1.50",
+    "dst_port": 8080,
+    "ifindex": 1,
+    "vlan_id": 100,
+    "ethertype": 2048,
+    "ip_proto": 6
+  }
+}
+```
+
+**V2字段说明:**
+
+| JSON字段 | 说明 | 映射到 |
+|----------|------|--------|
+| v | 协议版本，必须为2 | — |
+| device_id | 设备序列号 | deviceSerial |
+| seq | 序列号 | — |
+| ts | ISO 8601时间戳 (必须包含时区偏移) | timestamp / logTime |
+| type | 事件类型，"attack" | — |
+| data.src_ip | 被诱捕的内网主机IP | attackIp |
+| data.src_mac | 被诱捕的内网主机MAC | attackMac |
+| data.guard_ip | 蜜罐/诱饵IP | responseIp |
+| data.dst_port | 攻击者尝试访问的端口 | responsePort |
+| data.ifindex | 接口索引 | — |
+| data.vlan_id | VLAN ID | — |
+| data.ethertype | 以太网类型 (2048=IPv4) | — |
+| data.ip_proto | IP协议 (6=TCP, 17=UDP) | — |
+
+#### 发送单条V2测试数据
+
+```bash
+# 使用 mosquitto_pub 发送 (服务器上已安装)
+TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S+00:00) && \
+mosquitto_pub -h <服务器IP> -p 31883 \
+  -t 'jz/9d262111f2476d34/logs/attack' \
+  -m "{\"v\":2,\"device_id\":\"9d262111f2476d34\",\"seq\":1001,\"ts\":\"${TIMESTAMP}\",\"type\":\"attack\",\"data\":{\"src_ip\":\"10.0.1.200\",\"src_mac\":\"aa:bb:cc:11:22:33\",\"guard_ip\":\"10.0.1.50\",\"dst_port\":8080,\"ifindex\":1,\"vlan_id\":100,\"ethertype\":2048,\"ip_proto\":6}}"
+```
+
+#### 批量发送V2测试数据
+
+```bash
+SERVER_IP="<服务器IP>"
+PORTS=(22 80 443 3389 8080 445 21 25 3306 5432)
+for i in $(seq 1 20); do
+  PORT=${PORTS[$((RANDOM % 10))]}
+  SEQ=$((1000 + i))
+  MAC_SUFFIX=$(printf "%02x" $((RANDOM % 256)))
+  IP_LAST=$((RANDOM % 254 + 1))
+  TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S+00:00)
+  mosquitto_pub -h $SERVER_IP -p 31883 \
+    -t 'jz/9d262111f2476d34/logs/attack' \
+    -m "{\"v\":2,\"device_id\":\"9d262111f2476d34\",\"seq\":${SEQ},\"ts\":\"${TIMESTAMP}\",\"type\":\"attack\",\"data\":{\"src_ip\":\"10.0.1.${IP_LAST}\",\"src_mac\":\"aa:bb:cc:dd:ee:${MAC_SUFFIX}\",\"guard_ip\":\"10.0.1.50\",\"dst_port\":${PORT},\"ifindex\":1,\"vlan_id\":100,\"ethertype\":2048,\"ip_proto\":6}}"
+  sleep 0.2
+done
+echo "V2 MQTT测试数据发送完毕，共20条"
+```
+
+#### ⚠️ V2时间戳注意事项 (关键!)
+
+**时区偏移必须正确**，否则事件会被Flink的watermark机制丢弃为"迟到事件"：
+
+- ✅ `date -u +%Y-%m-%dT%H:%M:%S+00:00` — UTC时间配 `+00:00` 偏移 (推荐)
+- ✅ `date +%Y-%m-%dT%H:%M:%S+08:00` — 本地时间 (北京时区) 配 `+08:00` 偏移
+- ❌ `date -u +%Y-%m-%dT%H:%M:%S+08:00` — **错误!** UTC时间配了+08:00偏移，实际epoch时间会比当前时间早8小时，Flink会认为是迟到事件而丢弃
+
+**原理**: Flink使用事件时间 (event time) 的watermark机制。如果V2事件的时间戳解析后epoch值远早于当前watermark (通常由V1事件或其他正常事件推进)，该事件会被当作迟到事件丢弃，不参与窗口计算。
 
 ---
 
@@ -1026,15 +1129,17 @@ curl -s http://localhost:30080/api/v1/auth/login \
   -d '{"username":"admin","password":"admin123"}' | head -c 100
 # 期望: 返回包含 "token" 的JSON
 
-# 发送测试syslog验证E2E数据流
+# 发送测试syslog验证E2E数据流 (V1)
 LOGSTASH_PORT=$(sudo kubectl get svc -n threat-detection logstash -o jsonpath='{.spec.ports[0].nodePort}')
-echo "log_type=1,syslog_version=1.0,customer_id=demo-customer,dev_serial=9d262111f2476d34,attack_mac=aa:bb:cc:dd:ee:01,attack_ip=192.168.1.100,response_ip=10.0.1.1,response_port=3389,log_time=$(date +%s),sub_type=4" | nc -q0 localhost $LOGSTASH_PORT
+TIMESTAMP=$(date +%s)
+echo "syslog_version=1.0,dev_serial=9d262111f2476d34,log_type=1,sub_type=4,attack_mac=aa:bb:cc:dd:ee:01,attack_ip=192.168.1.100,response_ip=10.0.1.1,response_port=3389,line_id=1,Iface_type=1,Vlan_id=0,log_time=${TIMESTAMP}" | nc -q1 localhost $LOGSTASH_PORT
 echo "等待60秒让Flink窗口关闭..."
 sleep 60
 # 然后在前端 Dashboard 或 Analytics 页面查看数据
 
-# V2 MQTT测试 (如有MQTT客户端)
-# mosquitto_pub -h <目标IP> -p 31883 -t "honeypot/events/attack" -m '{"event_type":"attack","dev_serial":"9d262111f2476d34","attack_mac":"aa:bb:cc:dd:ee:02","attack_ip":"192.168.1.200","response_ip":"10.0.1.5","response_port":445,"timestamp":"'$(date -Iseconds)'"}'
+# V2 MQTT测试 (mosquitto_pub已预装)
+TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%S+00:00)
+mosquitto_pub -h localhost -p 31883 -t 'jz/9d262111f2476d34/logs/attack' -m "{\"v\":2,\"device_id\":\"9d262111f2476d34\",\"seq\":1001,\"ts\":\"${TIMESTAMP}\",\"type\":\"attack\",\"data\":{\"src_ip\":\"10.0.1.200\",\"src_mac\":\"aa:bb:cc:11:22:33\",\"guard_ip\":\"10.0.1.50\",\"dst_port\":8080,\"ifindex\":1,\"vlan_id\":100,\"ethertype\":2048,\"ip_proto\":6}}"
 ```
 
 #### 常见问题速查
@@ -1150,6 +1255,7 @@ sudo kubectl delete pod -n threat-detection -l app=stream-processing,component=t
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v3.1.5 | 2026-04-04 | V2 MQTT端到端验证通过。操作手册全面修正：V1 syslog格式去除错误的customer_id字段、补充完整字段列表和顺序要求；新增V2 MQTT测试章节 (topic格式、JSON事件格式、mosquitto_pub命令、时区注意事项)；修正快速部署清单中的测试命令。data-ingestion调试日志清理。 |
 | v3.1.4 | 2026-04-04 | Logstash输出从Kafka直连改为HTTP到data-ingestion (修复V1 syslog customerId解析)。EMQX添加NodePort 31883支持集群外MQTT设备。Logstash添加wait-for-data-ingestion initContainer。操作手册增加测试人员快速部署清单。 |
 | v3.1.3 | 2026-04-03 | 离线部署支持：所有K8s清单添加 `imagePullPolicy: IfNotPresent`，新增镜像导出/导入脚本，部署预检查。修复Flink因V1 syslog事件customerId为空导致的CrashLoopBackOff。修复镜像导出脚本对Docker Hub library镜像的兼容性。 |
 | v3.1.2 | 2026-04-03 | K8s稳定性加固：Kafka init容器、topic-init转CronJob、端口统一为9092、ZooKeeper版本对齐7.4.0、各服务init容器添加依赖等待。 |
@@ -1158,5 +1264,5 @@ sudo kubectl delete pod -n threat-detection -l app=stream-processing,component=t
 
 ---
 
-*本手册基于 v3.1.3 版本编写，适用于 K3s 单节点测试环境。*
+*本手册基于 v3.1.5 版本编写，适用于 K3s 单节点测试环境。*
 *如有问题请联系系统管理员。*

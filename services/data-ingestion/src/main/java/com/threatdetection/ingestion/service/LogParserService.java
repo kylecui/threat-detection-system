@@ -77,7 +77,7 @@ public class LogParserService {
             incrementStat("invalid_input");
             return Optional.empty();
         }
-        logger.info("Starting to parse log: {}", rawLog.substring(0, Math.min(100, rawLog.length())));
+        logger.debug("Starting to parse log: {}", rawLog.substring(0, Math.min(100, rawLog.length())));
         try {
             // Phase 1A: 增强数据验证和错误处理
             if (!isValidLogInput(rawLog)) {
@@ -88,7 +88,7 @@ public class LogParserService {
 
             // 提取日志内容
             String logContent = extractLogContent(rawLog);
-            logger.info("Extracted log content: {}", logContent);
+            logger.debug("Extracted log content: {}", logContent);
             if (logContent == null || logContent.trim().isEmpty()) {
                 logger.warn("Failed to extract log content from: {}", rawLog);
                 incrementStat("extraction_failed");
@@ -104,7 +104,7 @@ public class LogParserService {
 
             // 确定日志类型
             int logType = extractLogType(logContent);
-            logger.info("Extracted log type: {}", logType);
+            logger.debug("Extracted log type: {}", logType);
             if (logType == -1) {
                 logger.warn("Unable to determine log type from: {}", logContent);
                 incrementStat("unknown_log_type");
@@ -113,14 +113,14 @@ public class LogParserService {
 
             // 根据类型解析
             if (logType == 1) {
-                logger.info("About to parse as attack log (logType={})", logType);
+                logger.debug("Parsing as attack log (logType={})", logType);
                 Optional<AttackEvent> attackEvent = parseAttackLog(logContent);
                 if (attackEvent.isPresent()) {
                     incrementStat("attack_events_parsed");
                     return Optional.of(attackEvent.get());
                 } else {
                     incrementStat("attack_parse_failed");
-                    logger.info("Attack log parsing failed");
+                    logger.debug("Attack log parsing failed for content: {}", logContent.substring(0, Math.min(100, logContent.length())));
                 }
             } else if (logType == 2) {
                 logger.debug("Parsing as status log");
@@ -152,7 +152,7 @@ public class LogParserService {
      */
     private boolean isValidLogInput(String rawLog) {
         if (rawLog == null || rawLog.trim().isEmpty()) {
-            logger.info("Log input is null or empty");
+            logger.debug("Log input is null or empty");
             return false;
         }
 
@@ -166,7 +166,7 @@ public class LogParserService {
         boolean containsSyslogVersion = rawLog.contains("syslog_version");
         boolean containsJsonMessage = rawLog.contains("\"message\":\"syslog_version");
         boolean isJsonFormat = rawLog.trim().startsWith("{") && rawLog.contains("syslog_version");
-        logger.info("Log validation: contains syslog_version={}, contains json message={}, is json format={}",
+        logger.debug("Log validation: syslog_version={}, json_message={}, json_format={}",
                    containsSyslogVersion, containsJsonMessage, isJsonFormat);
         return containsSyslogVersion || containsJsonMessage || isJsonFormat;
     }
@@ -265,7 +265,7 @@ public class LogParserService {
             Matcher matcher = typePattern.matcher(logContent);
             if (matcher.find()) {
                 int logType = Integer.parseInt(matcher.group(1));
-                logger.info("Extracted log type from '{}': {}", logContent.substring(0, Math.min(50, logContent.length())), logType);
+                logger.debug("Extracted log type {} from: {}", logType, logContent.substring(0, Math.min(50, logContent.length())));
                 return logType;
             } else {
                 logger.warn("log_type pattern not found in: {}", logContent.substring(0, Math.min(100, logContent.length())));
@@ -282,38 +282,32 @@ public class LogParserService {
      */
     private Optional<AttackEvent> parseAttackLog(String logContent) {
         try {
-            System.out.println("DEBUG: Attempting to match attack log pattern");
-            System.out.println("DEBUG: Log content: " + logContent);
-            System.out.println("DEBUG: Pattern: " + ATTACK_LOG_PATTERN.pattern());
+            logger.debug("Attempting to match attack log pattern against: {}", logContent.substring(0, Math.min(100, logContent.length())));
 
             String contentToParse = logContent;
 
             // 处理"message repeated"格式的日志
             if (logContent.contains("message repeated")) {
-                System.out.println("DEBUG: Detected 'message repeated' format, extracting content");
+                logger.debug("Detected 'message repeated' format, extracting content");
                 // 提取方括号内的内容
                 int bracketStart = logContent.indexOf('[');
                 int bracketEnd = logContent.lastIndexOf(']');
                 if (bracketStart != -1 && bracketEnd != -1 && bracketEnd > bracketStart) {
                     contentToParse = logContent.substring(bracketStart + 1, bracketEnd).trim();
-                    System.out.println("DEBUG: Extracted content from brackets: " + contentToParse);
+                    logger.debug("Extracted content from brackets: {}", contentToParse.substring(0, Math.min(100, contentToParse.length())));
                 } else {
-                    System.out.println("DEBUG: Failed to extract content from 'message repeated' format - no valid brackets found");
-                    System.out.println("DEBUG: Original logContent: " + logContent);
+                    logger.warn("Failed to extract content from 'message repeated' format - no valid brackets found");
                     return Optional.empty();
                 }
             }
 
             Matcher matcher = ATTACK_LOG_PATTERN.matcher(contentToParse);
             if (!matcher.find()) {
-                System.out.println("DEBUG: Pattern did NOT match!");
-                logger.error("Attack log pattern did NOT match. Pattern: {}", ATTACK_LOG_PATTERN.pattern());
-                logger.error("Log content: {}", logContent);
+                logger.warn("Attack log pattern did NOT match for content: {}", logContent.substring(0, Math.min(200, logContent.length())));
                 return Optional.empty();
             }
 
-            System.out.println("DEBUG: Pattern matched successfully!");
-            logger.info("Attack log pattern matched successfully, extracting fields from: {}", logContent);
+            logger.debug("Attack log pattern matched successfully");
 
             // 提取和验证字段
             String devSerial = validateDevSerial(matcher.group(2));
@@ -321,18 +315,15 @@ public class LogParserService {
                 logger.warn("Invalid dev_serial: {}", matcher.group(2));
                 return Optional.empty();
             }
-            logger.info("dev_serial validated: {}", devSerial);
 
             int logType = Integer.parseInt(matcher.group(3));
             int subType = Integer.parseInt(matcher.group(4));
-            logger.info("logType: {}, subType: {}", logType, subType);
 
             String attackMac = validateMacAddress(matcher.group(5));
             if (attackMac == null) {
                 logger.warn("Invalid attack_mac: {}", matcher.group(5));
                 return Optional.empty();
             }
-            logger.info("attack_mac validated: {}", attackMac);
 
             String attackIp = validateIpAddress(matcher.group(6));
             if (attackIp == null) {
@@ -451,14 +442,13 @@ public class LogParserService {
         
         // 使用可配置的正则表达式验证设备序列号
         String pattern = System.getenv().getOrDefault("DEV_SERIAL_PATTERN", "[0-9A-Za-z]+");
-        logger.info("Validating dev_serial '{}' with pattern '{}'", devSerial, pattern);
+        logger.debug("Validating dev_serial '{}' with pattern '{}'", devSerial, pattern);
         
         if (!DEV_SERIAL_PATTERN.matcher(devSerial).matches()) {
             logger.warn("Invalid dev_serial format: {} (pattern: {})", devSerial, DEV_SERIAL_PATTERN.pattern());
             return null;
         }
         
-        logger.info("dev_serial '{}' validation passed", devSerial);
         // 转换为大写以保持一致性
         return devSerial.toUpperCase();
     }
