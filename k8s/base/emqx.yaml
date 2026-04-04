@@ -6,10 +6,12 @@ metadata:
   labels:
     app: emqx
 spec:
+  type: NodePort
   ports:
     - name: mqtt
       port: 1883
       targetPort: 1883
+      nodePort: 31883
     - name: mqtt-tls
       port: 8883
       targetPort: 8883

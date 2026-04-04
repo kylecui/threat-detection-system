@@ -16,8 +16,10 @@ data:
     log.level: info
     
   attack-events.conf: |
-    # Logstash Pipeline配置 - 威胁检测系统
-    # 完整配置见: infrastructure/logging/logstash/pipeline/attack-events.conf
+    # Logstash Pipeline配置 - 威胁检测系统 (K8s)
+    # 接收rsyslog日志，基础解析后通过HTTP发送到data-ingestion服务
+    # data-ingestion负责customerId解析、业务验证、Kafka发布
+    # 参考: infrastructure/logging/logstash/pipeline/attack-events-optimized.conf
     
     input {
       tcp {
@@ -29,6 +31,7 @@ data:
     }
     
     filter {
+      # 阶段1: 基础KV解析 (保留原始message字段供data-ingestion使用)
       if [type] == "syslog-raw" {
         kv {
           source => "message"
@@ -37,50 +40,42 @@ data:
           trim_key => " "
           trim_value => " "
         }
-        mutate {
-          remove_field => ["message"]
-        }
+        # NOTE: 不删除message字段 — data-ingestion需要它来解析和验证
       }
+      
+      # 阶段2: 轻量级标签分类 (保持snake_case，不做camelCase转换)
       
       # 攻击日志处理 (log_type=1)
       if [log_type] == "1" {
         mutate {
           add_tag => ["attack-log"]
-          rename => {
-            "dev_serial" => "deviceSerial"
-            "attack_mac" => "attackMac"
-            "attack_ip" => "attackIp"
-            "response_ip" => "responseIp"
-            "response_port" => "responsePort"
-            "log_time" => "logTime"
-            "sub_type" => "subType"
-            "line_id" => "lineId"
-            "Iface_type" => "ifaceType"
-            "Vlan_id" => "vlanId"
-            "syslog_version" => "syslogVersion"
-          }
         }
         
-        if [logTime] {
+        if [log_time] {
           date {
-            match => ["logTime", "UNIX"]
+            match => ["log_time", "UNIX"]
             target => "@timestamp"
           }
           ruby {
-            code => "event.set('timestamp', Time.at(event.get('logTime').to_i).utc.iso8601)"
+            code => "event.set('timestamp', Time.at(event.get('log_time').to_i).utc.iso8601)"
           }
         }
         
-        if [attackMac] {
+        if [attack_mac] {
           mutate {
-            uppercase => ["attackMac"]
-            gsub => ["attackMac", "-", ":"]
+            uppercase => ["attack_mac"]
+            gsub => ["attack_mac", "-", ":"]
           }
         }
         
-        if [responsePort] {
-          mutate {
-            convert => { "responsePort" => "integer" }
+        mutate {
+          convert => {
+            "response_port" => "integer"
+            "log_time" => "integer"
+            "sub_type" => "integer"
+            "line_id" => "integer"
+            "Iface_type" => "integer"
+            "Vlan_id" => "integer"
           }
         }
       }
@@ -89,14 +84,6 @@ data:
       else if [log_type] == "2" {
         mutate {
           add_tag => ["heartbeat-log"]
-          rename => {
-            "dev_serial" => "deviceSerial"
-            "sentry_count" => "sentryCount"
-            "real_host_count" => "realHostCount"
-            "dev_start_time" => "devStartTime"
-            "dev_end_time" => "devEndTime"
-            "syslog_version" => "syslogVersion"
-          }
         }
         
         if [time] {
@@ -104,56 +91,43 @@ data:
             match => ["time", "yyyy-MM-dd HH:mm:ss"]
             target => "@timestamp"
           }
-          mutate {
-            rename => { "time" => "heartbeatTime" }
-          }
         }
         
         mutate {
           convert => {
-            "sentryCount" => "integer"
-            "realHostCount" => "integer"
-            "devStartTime" => "integer"
-            "devEndTime" => "integer"
+            "sentry_count" => "integer"
+            "real_host_count" => "integer"
+            "dev_start_time" => "integer"
+            "dev_end_time" => "integer"
           }
         }
       }
       
+      # 添加处理时间戳
       ruby {
-        code => "event.set('logstashProcessedAt', Time.now.iso8601)"
+        code => "event.set('logstash_processed_at', Time.now.utc.iso8601)"
       }
     }
     
     output {
-      # 攻击日志 → attack-events topic
-      if "attack-log" in [tags] {
-        kafka {
-          bootstrap_servers => "${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}"
-          topic_id => "attack-events"
-          codec => json
-          compression_type => "snappy"
-          message_key => "%{deviceSerial}"
-          batch_size => 16384
-          linger_ms => 10
-          acks => "1"
-          retries => 3
-          client_id => "logstash-attack-events"
+      # 有效日志 → HTTP到data-ingestion服务 (customerId解析 + Kafka发布)
+      if ("attack-log" in [tags] or "heartbeat-log" in [tags]) {
+        http {
+          url => "http://data-ingestion:8080/api/v1/logs/ingest"
+          http_method => "post"
+          format => "json"
+          content_type => "application/json"
+          retry_failed => true
+          socket_timeout => 30
+          connect_timeout => 10
         }
       }
       
-      # 心跳日志 → status-events topic
-      if "heartbeat-log" in [tags] {
-        kafka {
-          bootstrap_servers => "${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}"
-          topic_id => "status-events"
-          codec => json
-          compression_type => "snappy"
-          message_key => "%{deviceSerial}"
-          batch_size => 16384
-          linger_ms => 10
-          acks => "1"
-          retries => 3
-          client_id => "logstash-status-events"
+      # 备用文件输出 (如果HTTP失败，用于排查)
+      if ("attack-log" in [tags] or "heartbeat-log" in [tags]) {
+        file {
+          path => "/tmp/production_test_logs/http_output_%{+YYYY-MM-dd}.log"
+          codec => json_lines
         }
       }
     }
@@ -212,6 +186,19 @@ spec:
             sleep 2
           done
           echo "Kafka is ready!"
+      - name: wait-for-data-ingestion
+        image: busybox:1.35
+        imagePullPolicy: IfNotPresent
+        command:
+        - sh
+        - -c
+        - |
+          echo "Waiting for data-ingestion service..."
+          until nc -z data-ingestion 8080; do
+            echo "data-ingestion not ready, retrying in 3s..."
+            sleep 3
+          done
+          echo "data-ingestion is ready!"
       containers:
       - name: logstash
         image: docker.elastic.co/logstash/logstash:8.11.0

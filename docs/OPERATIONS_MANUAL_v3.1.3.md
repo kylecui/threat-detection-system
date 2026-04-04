@@ -1,4 +1,4 @@
-# 威胁检测系统 操作手册 v3.1.0
+# 威胁检测系统 操作手册 v3.1.3
 
 | 项目 | 内容 |
 |------|------|
@@ -58,7 +58,7 @@
 | config-server | 配置服务器 | Spring Cloud Config | 8899 | — |
 | postgres-0 | 数据库 | PostgreSQL主存储 | 5432 | — |
 | redis | 缓存 | Redis缓存 | 6379 | — |
-| emqx | MQTT代理 | EMQX物联网消息代理 | 1883 | — |
+| emqx | MQTT代理 | EMQX物联网消息代理 | 1883 | **31883** (NodePort) |
 
 ### 1.2 数据流
 
@@ -67,9 +67,9 @@
     |
     v
 Logstash (10.174.1.222:32318, TCP)
-    |
+    | (HTTP POST to data-ingestion)
     v
-Data Ingestion (解析syslog KV格式)
+Data Ingestion (解析syslog KV格式, 解析customerId)
     |
     v
 Kafka (attack-events topic)
@@ -953,6 +953,100 @@ echo "log_type=1,customer_id=demo-customer,dev_serial=9d262111f2476d34,attack_ma
 | threat-detection/tire:latest | TIRE引擎 | ~173M |
 | threat-detection/frontend:latest | 前端界面 | ~52M |
 
+### 17.9 测试人员快速部署清单 (Fresh Machine)
+
+以下为**完整的离线部署步骤**，适合测试人员在全新机器上从零开始部署。
+
+#### 准备阶段（在源机器上操作）
+
+1. **导出镜像包**:
+   ```bash
+   cd ~/threat-detection-system
+   sudo bash scripts/k3s-export-images.sh
+   # 生成: threat-detection-images.tar.gz (~3.7 GB)
+   ```
+
+2. **准备传输文件清单**:
+   - `threat-detection-images.tar.gz` — 全部19个镜像
+   - `threat-detection-system/` — 项目源码 (包含K8s清单和部署脚本)
+
+3. **拷贝到目标机器**:
+   ```bash
+   scp threat-detection-images.tar.gz user@目标IP:/home/user/
+   scp -r threat-detection-system/ user@目标IP:/home/user/
+   ```
+
+#### 部署阶段（在目标机器上操作）
+
+**第一步: 安装K3s** (如果尚未安装)
+
+对于有网络的机器:
+```bash
+curl -sfL https://get.k3s.io | sh -
+```
+
+对于无网络的机器，参考 [17.7节](#177-离线安装k3s-可选)。
+
+**第二步: 导入镜像**
+```bash
+cd ~/threat-detection-system
+sudo bash scripts/k3s-import-images.sh /home/user/threat-detection-images.tar.gz
+```
+
+验证镜像已导入:
+```bash
+sudo crictl images | grep -c -v rancher
+# 应输出 19 (或更多)
+```
+
+**第三步: 部署**
+```bash
+sudo bash scripts/k3s-deploy.sh
+# 脚本会自动:
+# 1. 预检查19个镜像是否全部存在
+# 2. 创建 threat-detection 命名空间
+# 3. 按依赖顺序部署所有18个Pod
+# 4. 等待全部Pod就绪
+# 总耗时约 5-10 分钟
+```
+
+**第四步: 验证**
+```bash
+# 确认全部Pod为Running
+sudo kubectl get pods -n threat-detection
+# 期望: 全部18个Pod均为 Running / 1/1 Ready
+
+# 检查前端可访问
+curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:30080
+# 期望: HTTP 200
+
+# 检查API网关
+curl -s http://localhost:30080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' | head -c 100
+# 期望: 返回包含 "token" 的JSON
+
+# 发送测试syslog验证E2E数据流
+LOGSTASH_PORT=$(sudo kubectl get svc -n threat-detection logstash -o jsonpath='{.spec.ports[0].nodePort}')
+echo "log_type=1,syslog_version=1.0,customer_id=demo-customer,dev_serial=9d262111f2476d34,attack_mac=aa:bb:cc:dd:ee:01,attack_ip=192.168.1.100,response_ip=10.0.1.1,response_port=3389,log_time=$(date +%s),sub_type=4" | nc -q0 localhost $LOGSTASH_PORT
+echo "等待60秒让Flink窗口关闭..."
+sleep 60
+# 然后在前端 Dashboard 或 Analytics 页面查看数据
+
+# V2 MQTT测试 (如有MQTT客户端)
+# mosquitto_pub -h <目标IP> -p 31883 -t "honeypot/events/attack" -m '{"event_type":"attack","dev_serial":"9d262111f2476d34","attack_mac":"aa:bb:cc:dd:ee:02","attack_ip":"192.168.1.200","response_ip":"10.0.1.5","response_port":445,"timestamp":"'$(date -Iseconds)'"}'
+```
+
+#### 常见问题速查
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| `ImagePullBackOff` | 镜像未导入 | `sudo bash scripts/k3s-import-images.sh <tar.gz路径>` |
+| Pod一直`Pending` | 资源不足 | 检查 `free -h`，至少需要8GB RAM |
+| 前端打不开 | api-gateway未启动 | `sudo kubectl logs -n threat-detection -l app=api-gateway --tail=30` |
+| 发送测试数据无效果 | Logstash未就绪 | 确认logstash Pod为Running后重试 |
+| Flink窗口不关闭 | 只发了1条数据 | 多发几条不同时间戳的数据触发watermark推进 |
+
 ---
 
 ## 18. 常见问题排查
@@ -1056,6 +1150,7 @@ sudo kubectl delete pod -n threat-detection -l app=stream-processing,component=t
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v3.1.4 | 2026-04-04 | Logstash输出从Kafka直连改为HTTP到data-ingestion (修复V1 syslog customerId解析)。EMQX添加NodePort 31883支持集群外MQTT设备。Logstash添加wait-for-data-ingestion initContainer。操作手册增加测试人员快速部署清单。 |
 | v3.1.3 | 2026-04-03 | 离线部署支持：所有K8s清单添加 `imagePullPolicy: IfNotPresent`，新增镜像导出/导入脚本，部署预检查。修复Flink因V1 syslog事件customerId为空导致的CrashLoopBackOff。修复镜像导出脚本对Docker Hub library镜像的兼容性。 |
 | v3.1.2 | 2026-04-03 | K8s稳定性加固：Kafka init容器、topic-init转CronJob、端口统一为9092、ZooKeeper版本对齐7.4.0、各服务init容器添加依赖等待。 |
 | v3.1.1 | 2026-04-02 | UI图表修复：端口攻击分布、威胁趋势24小时图表数据链路修复。TIRE源代码提取。部署工具链 (k3s-build-images.sh, k3s-deploy.sh)。 |
