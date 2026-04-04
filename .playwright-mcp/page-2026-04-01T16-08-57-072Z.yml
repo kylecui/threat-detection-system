@@ -1,0 +1,263 @@
+- generic [ref=e4]:
+  - complementary [ref=e6]:
+    - generic [ref=e7]:
+      - menu [ref=e9]:
+        - menuitem "dashboard 仪表盘" [ref=e10] [cursor=pointer]:
+          - generic [ref=e13]:
+            - img "dashboard" [ref=e15]:
+              - img [ref=e16]
+            - generic [ref=e18]: 仪表盘
+        - menuitem "warning 威胁列表" [ref=e19] [cursor=pointer]:
+          - generic [ref=e22]:
+            - img "warning" [ref=e24]:
+              - img [ref=e25]
+            - generic [ref=e27]: 威胁列表
+        - menuitem "bell 告警中心" [ref=e28] [cursor=pointer]:
+          - generic [ref=e31]:
+            - img "bell" [ref=e33]:
+              - img [ref=e34]
+            - generic [ref=e36]: 告警中心
+        - menuitem "bar-chart 数据分析" [ref=e37] [cursor=pointer]:
+          - generic [ref=e40]:
+            - img "bar-chart" [ref=e42]:
+              - img [ref=e43]
+            - generic [ref=e45]: 数据分析
+        - menuitem "team 客户管理" [ref=e46] [cursor=pointer]:
+          - generic [ref=e49]:
+            - img "team" [ref=e51]:
+              - img [ref=e52]
+            - generic [ref=e54]: 客户管理
+        - menuitem "global 威胁情报" [ref=e55] [cursor=pointer]:
+          - generic [ref=e58]:
+            - img "global" [ref=e60]:
+              - img [ref=e61]
+            - generic [ref=e63]: 威胁情报
+        - menuitem "experiment ML检测" [ref=e64] [cursor=pointer]:
+          - generic [ref=e67]:
+            - img "experiment" [ref=e69]:
+              - img [ref=e70]
+            - generic [ref=e72]: ML检测
+        - menuitem "cloud-server 系统监控" [ref=e73] [cursor=pointer]:
+          - generic [ref=e76]:
+            - img "cloud-server" [ref=e78]:
+              - img [ref=e79]
+            - generic [ref=e83]: 系统监控
+        - menuitem "apartment 租户管理" [ref=e84] [cursor=pointer]:
+          - generic [ref=e87]:
+            - img "apartment" [ref=e89]:
+              - img [ref=e90]
+            - generic [ref=e92]: 租户管理
+        - menuitem "user 用户管理" [ref=e93] [cursor=pointer]:
+          - generic [ref=e96]:
+            - img "user" [ref=e98]:
+              - img [ref=e99]
+            - generic [ref=e101]: 用户管理
+        - menuitem "setting 系统设置" [ref=e102] [cursor=pointer]:
+          - generic [ref=e105]:
+            - img "setting" [ref=e107]:
+              - img [ref=e108]
+            - generic [ref=e110]: 系统设置
+      - img [ref=e112] [cursor=pointer]
+  - generic [ref=e114]:
+    - banner [ref=e115]
+    - banner [ref=e116]:
+      - generic [ref=e117]:
+        - generic [ref=e119] [cursor=pointer]:
+          - img "dashboard" [ref=e120]:
+            - img [ref=e121]
+          - heading "威胁检测系统" [level=1] [ref=e123]
+        - generic [ref=e129] [cursor=pointer]:
+          - generic [ref=e130]: System Administrator
+          - button "logout" [ref=e131]:
+            - img "logout" [ref=e133]:
+              - img [ref=e134]
+    - main [ref=e136]:
+      - generic [ref=e137]:
+        - generic [ref=e141]:
+          - generic [ref=e143]:
+            - generic [ref=e144]: 数据分析
+            - radiogroup "segmented control" [ref=e146]:
+              - generic [ref=e147]:
+                - generic [ref=e148] [cursor=pointer]:
+                  - radio "24小时" [checked]
+                  - generic "24小时" [ref=e149]
+                - generic [ref=e150] [cursor=pointer]:
+                  - radio "7天"
+                  - generic "7天" [ref=e151]
+                - generic [ref=e152] [cursor=pointer]:
+                  - radio "30天"
+                  - generic "30天" [ref=e153]
+          - button "reload 刷新" [ref=e155] [cursor=pointer]:
+            - img "reload" [ref=e157]:
+              - img [ref=e158]
+            - generic [ref=e160]: 刷新
+        - generic [ref=e162]:
+          - generic [ref=e166]:
+            - generic [ref=e167]: 总威胁数
+            - generic [ref=e168]:
+              - img "alert" [ref=e170]:
+                - img [ref=e171]
+              - generic [ref=e173]: "275"
+          - generic [ref=e177]:
+            - generic [ref=e178]: 严重 + 高危
+            - generic [ref=e179]:
+              - img "fire" [ref=e181]:
+                - img [ref=e182]
+              - generic [ref=e184]: "0"
+          - generic [ref=e188]:
+            - generic [ref=e189]: 最高分数
+            - generic [ref=e190]:
+              - img "rise" [ref=e192]:
+                - img [ref=e193]
+              - generic [ref=e195]: "47.41"
+          - generic [ref=e199]:
+            - generic [ref=e200]: 平均分数
+            - generic [ref=e201]:
+              - img "fall" [ref=e203]:
+                - img [ref=e204]
+              - generic [ref=e206]: "25.66"
+        - generic [ref=e211]: 威胁趋势 (24小时)
+        - generic [ref=e216]:
+          - generic [ref=e221]: 威胁等级分布
+          - generic [ref=e229]: 端口攻击分布 (Top 15)
+        - generic [ref=e234]:
+          - generic [ref=e237]: Top 攻击者排行
+          - generic [ref=e241]:
+            - table [ref=e245]:
+              - rowgroup [ref=e248]:
+                - row "排名 攻击者MAC 攻击IP 攻击次数 威胁分数 端口种类 诱饵IP数" [ref=e249]:
+                  - columnheader "排名" [ref=e250]
+                  - columnheader "攻击者MAC" [ref=e251]
+                  - columnheader "攻击IP" [ref=e252]
+                  - columnheader "攻击次数" [ref=e253] [cursor=pointer]:
+                    - generic [ref=e254]:
+                      - generic [ref=e255]: 攻击次数
+                      - generic [ref=e257]:
+                        - img [ref=e258]:
+                          - img [ref=e259]
+                        - img [ref=e261]:
+                          - img [ref=e262]
+                  - columnheader "威胁分数" [ref=e264] [cursor=pointer]:
+                    - generic [ref=e265]:
+                      - generic [ref=e266]: 威胁分数
+                      - generic [ref=e268]:
+                        - img [ref=e269]:
+                          - img [ref=e270]
+                        - img [ref=e272]:
+                          - img [ref=e273]
+                  - columnheader "端口种类" [ref=e275]
+                  - columnheader "诱饵IP数" [ref=e276]
+              - rowgroup [ref=e277]:
+                - row "#1 AA:BB:CC:DD:EE:20 N/A 1 20.60 1 1" [ref=e278]:
+                  - cell "#1" [ref=e279]:
+                    - generic [ref=e280]: "#1"
+                  - cell "AA:BB:CC:DD:EE:20" [ref=e281]:
+                    - code [ref=e282]: AA:BB:CC:DD:EE:20
+                  - cell "N/A" [ref=e283]
+                  - cell "1" [ref=e284]
+                  - cell "20.60" [ref=e285]
+                  - cell "1" [ref=e286]
+                  - cell "1" [ref=e287]
+                - row "#2 AA:BB:CC:DD:EE:23 N/A 2 20.60 1 1" [ref=e288]:
+                  - cell "#2" [ref=e289]:
+                    - generic [ref=e290]: "#2"
+                  - cell "AA:BB:CC:DD:EE:23" [ref=e291]:
+                    - code [ref=e292]: AA:BB:CC:DD:EE:23
+                  - cell "N/A" [ref=e293]
+                  - cell "2" [ref=e294]
+                  - cell "20.60" [ref=e295]
+                  - cell "1" [ref=e296]
+                  - cell "1" [ref=e297]
+                - row "#3 AA:BB:CC:DD:EE:13 N/A 1 20.60 1 1" [ref=e298]:
+                  - cell "#3" [ref=e299]:
+                    - generic [ref=e300]: "#3"
+                  - cell "AA:BB:CC:DD:EE:13" [ref=e301]:
+                    - code [ref=e302]: AA:BB:CC:DD:EE:13
+                  - cell "N/A" [ref=e303]
+                  - cell "1" [ref=e304]
+                  - cell "20.60" [ref=e305]
+                  - cell "1" [ref=e306]
+                  - cell "1" [ref=e307]
+                - row "#4 AA:BB:CC:DD:EE:24 N/A 2 20.13 1 1" [ref=e308]:
+                  - cell "#4" [ref=e309]:
+                    - generic [ref=e310]: "#4"
+                  - cell "AA:BB:CC:DD:EE:24" [ref=e311]:
+                    - code [ref=e312]: AA:BB:CC:DD:EE:24
+                  - cell "N/A" [ref=e313]
+                  - cell "2" [ref=e314]
+                  - cell "20.13" [ref=e315]
+                  - cell "1" [ref=e316]
+                  - cell "1" [ref=e317]
+                - row "#5 AA:BB:CC:DD:EE:14 N/A 1 20.13 1 1" [ref=e318]:
+                  - cell "#5" [ref=e319]:
+                    - generic [ref=e320]: "#5"
+                  - cell "AA:BB:CC:DD:EE:14" [ref=e321]:
+                    - code [ref=e322]: AA:BB:CC:DD:EE:14
+                  - cell "N/A" [ref=e323]
+                  - cell "1" [ref=e324]
+                  - cell "20.13" [ref=e325]
+                  - cell "1" [ref=e326]
+                  - cell "1" [ref=e327]
+                - row "#6 AA:BB:CC:DD:EE:19 N/A 1 19.63 1 1" [ref=e328]:
+                  - cell "#6" [ref=e329]:
+                    - generic [ref=e330]: "#6"
+                  - cell "AA:BB:CC:DD:EE:19" [ref=e331]:
+                    - code [ref=e332]: AA:BB:CC:DD:EE:19
+                  - cell "N/A" [ref=e333]
+                  - cell "1" [ref=e334]
+                  - cell "19.63" [ref=e335]
+                  - cell "1" [ref=e336]
+                  - cell "1" [ref=e337]
+                - row "#7 AA:BB:CC:DD:EE:16 N/A 1 19.63 1 1" [ref=e338]:
+                  - cell "#7" [ref=e339]:
+                    - generic [ref=e340]: "#7"
+                  - cell "AA:BB:CC:DD:EE:16" [ref=e341]:
+                    - code [ref=e342]: AA:BB:CC:DD:EE:16
+                  - cell "N/A" [ref=e343]
+                  - cell "1" [ref=e344]
+                  - cell "19.63" [ref=e345]
+                  - cell "1" [ref=e346]
+                  - cell "1" [ref=e347]
+                - row "#8 AA:BB:CC:DD:EE:26 N/A 1 19.63 1 1" [ref=e348]:
+                  - cell "#8" [ref=e349]:
+                    - generic [ref=e350]: "#8"
+                  - cell "AA:BB:CC:DD:EE:26" [ref=e351]:
+                    - code [ref=e352]: AA:BB:CC:DD:EE:26
+                  - cell "N/A" [ref=e353]
+                  - cell "1" [ref=e354]
+                  - cell "19.63" [ref=e355]
+                  - cell "1" [ref=e356]
+                  - cell "1" [ref=e357]
+                - row "#9 AA:BB:CC:DD:EE:17 N/A 1 19.12 1 1" [ref=e358]:
+                  - cell "#9" [ref=e359]:
+                    - generic [ref=e360]: "#9"
+                  - cell "AA:BB:CC:DD:EE:17" [ref=e361]:
+                    - code [ref=e362]: AA:BB:CC:DD:EE:17
+                  - cell "N/A" [ref=e363]
+                  - cell "1" [ref=e364]
+                  - cell "19.12" [ref=e365]
+                  - cell "1" [ref=e366]
+                  - cell "1" [ref=e367]
+                - row "#10 AA:BB:CC:DD:EE:15 N/A 1 16.76 1 1" [ref=e368]:
+                  - cell "#10" [ref=e369]:
+                    - generic [ref=e370]: "#10"
+                  - cell "AA:BB:CC:DD:EE:15" [ref=e371]:
+                    - code [ref=e372]: AA:BB:CC:DD:EE:15
+                  - cell "N/A" [ref=e373]
+                  - cell "1" [ref=e374]
+                  - cell "16.76" [ref=e375]
+                  - cell "1" [ref=e376]
+                  - cell "1" [ref=e377]
+            - list [ref=e378]:
+              - listitem "上一页" [ref=e379]:
+                - button "left" [disabled] [ref=e380]:
+                  - img "left" [ref=e381]:
+                    - img [ref=e382]
+              - listitem "1" [ref=e384] [cursor=pointer]:
+                - generic [ref=e385]: "1"
+              - listitem "2" [ref=e386] [cursor=pointer]:
+                - generic [ref=e387]: "2"
+              - listitem "下一页" [ref=e388] [cursor=pointer]:
+                - button "right" [ref=e389]:
+                  - img "right" [ref=e390]:
+                    - img [ref=e391]

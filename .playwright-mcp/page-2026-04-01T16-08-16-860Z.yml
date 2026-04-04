@@ -1,0 +1,151 @@
+- generic [ref=e4]:
+  - complementary [ref=e6]:
+    - generic [ref=e7]:
+      - menu [ref=e9]:
+        - menuitem "dashboard 仪表盘" [ref=e10] [cursor=pointer]:
+          - generic [ref=e13]:
+            - img "dashboard" [ref=e15]:
+              - img [ref=e16]
+            - generic [ref=e18]: 仪表盘
+        - menuitem "warning 威胁列表" [ref=e19] [cursor=pointer]:
+          - generic [ref=e22]:
+            - img "warning" [ref=e24]:
+              - img [ref=e25]
+            - generic [ref=e27]: 威胁列表
+        - menuitem "bell 告警中心" [ref=e28] [cursor=pointer]:
+          - generic [ref=e31]:
+            - img "bell" [ref=e33]:
+              - img [ref=e34]
+            - generic [ref=e36]: 告警中心
+        - menuitem "bar-chart 数据分析" [ref=e37] [cursor=pointer]:
+          - generic [ref=e40]:
+            - img "bar-chart" [ref=e42]:
+              - img [ref=e43]
+            - generic [ref=e45]: 数据分析
+        - menuitem "team 客户管理" [ref=e46] [cursor=pointer]:
+          - generic [ref=e49]:
+            - img "team" [ref=e51]:
+              - img [ref=e52]
+            - generic [ref=e54]: 客户管理
+        - menuitem "global 威胁情报" [ref=e55] [cursor=pointer]:
+          - generic [ref=e58]:
+            - img "global" [ref=e60]:
+              - img [ref=e61]
+            - generic [ref=e63]: 威胁情报
+        - menuitem "experiment ML检测" [ref=e64] [cursor=pointer]:
+          - generic [ref=e67]:
+            - img "experiment" [ref=e69]:
+              - img [ref=e70]
+            - generic [ref=e72]: ML检测
+        - menuitem "cloud-server 系统监控" [ref=e73] [cursor=pointer]:
+          - generic [ref=e76]:
+            - img "cloud-server" [ref=e78]:
+              - img [ref=e79]
+            - generic [ref=e83]: 系统监控
+        - menuitem "apartment 租户管理" [ref=e84] [cursor=pointer]:
+          - generic [ref=e87]:
+            - img "apartment" [ref=e89]:
+              - img [ref=e90]
+            - generic [ref=e92]: 租户管理
+        - menuitem "user 用户管理" [ref=e93] [cursor=pointer]:
+          - generic [ref=e96]:
+            - img "user" [ref=e98]:
+              - img [ref=e99]
+            - generic [ref=e101]: 用户管理
+        - menuitem "setting 系统设置" [ref=e102] [cursor=pointer]:
+          - generic [ref=e105]:
+            - img "setting" [ref=e107]:
+              - img [ref=e108]
+            - generic [ref=e110]: 系统设置
+      - img [ref=e112] [cursor=pointer]
+  - generic [ref=e114]:
+    - banner [ref=e115]
+    - banner [ref=e116]:
+      - generic [ref=e117]:
+        - generic [ref=e119] [cursor=pointer]:
+          - img "dashboard" [ref=e120]:
+            - img [ref=e121]
+          - heading "威胁检测系统" [level=1] [ref=e123]
+        - generic [ref=e129] [cursor=pointer]:
+          - generic [ref=e130]: System Administrator
+          - button "logout" [ref=e131]:
+            - img "logout" [ref=e133]:
+              - img [ref=e134]
+    - main [ref=e136]:
+      - generic [ref=e137]:
+        - generic [ref=e139]:
+          - generic [ref=e140]: 租户管理
+          - button "plus 新建租户" [ref=e142] [cursor=pointer]:
+            - img "plus" [ref=e144]:
+              - img [ref=e145]
+            - generic [ref=e148]: 新建租户
+        - generic [ref=e152]:
+          - table [ref=e156]:
+            - rowgroup [ref=e166]:
+              - row "ID 租户标识 名称 联系邮箱 最大客户数 状态 创建时间 操作" [ref=e167]:
+                - columnheader "ID" [ref=e168]
+                - columnheader "租户标识" [ref=e169]
+                - columnheader "名称" [ref=e170]
+                - columnheader "联系邮箱" [ref=e171]
+                - columnheader "最大客户数" [ref=e172]
+                - columnheader "状态" [ref=e173]
+                - columnheader "创建时间" [ref=e174]
+                - columnheader "操作" [ref=e175]
+            - rowgroup [ref=e176]:
+              - row "1 default-tenant Default Tenant admin@threat-detection.local 100 ACTIVE 2026-03-30T05:59:08.663996 edit 编辑 delete 删除" [ref=e177]:
+                - cell "1" [ref=e178]
+                - cell "default-tenant" [ref=e179]
+                - cell "Default Tenant" [ref=e180]
+                - cell "admin@threat-detection.local" [ref=e181]
+                - cell "100" [ref=e182]
+                - cell "ACTIVE" [ref=e183]:
+                  - generic [ref=e184]: ACTIVE
+                - cell "2026-03-30T05:59:08.663996" [ref=e185]
+                - cell "edit 编辑 delete 删除" [ref=e186]:
+                  - generic [ref=e187]:
+                    - button "edit 编辑" [ref=e189] [cursor=pointer]:
+                      - img "edit" [ref=e191]:
+                        - img [ref=e192]
+                      - generic [ref=e194]: 编辑
+                    - button "delete 删除" [ref=e196] [cursor=pointer]:
+                      - img "delete" [ref=e198]:
+                        - img [ref=e199]
+                      - generic [ref=e201]: 删除
+              - row "2 tenant-acme ACME Corp admin@acme.com 5 ACTIVE 2026-03-30T06:01:12.368782 edit 编辑 delete 删除" [ref=e202]:
+                - cell "2" [ref=e203]
+                - cell "tenant-acme" [ref=e204]
+                - cell "ACME Corp" [ref=e205]
+                - cell "admin@acme.com" [ref=e206]
+                - cell "5" [ref=e207]
+                - cell "ACTIVE" [ref=e208]:
+                  - generic [ref=e209]: ACTIVE
+                - cell "2026-03-30T06:01:12.368782" [ref=e210]
+                - cell "edit 编辑 delete 删除" [ref=e211]:
+                  - generic [ref=e212]:
+                    - button "edit 编辑" [ref=e214] [cursor=pointer]:
+                      - img "edit" [ref=e216]:
+                        - img [ref=e217]
+                      - generic [ref=e219]: 编辑
+                    - button "delete 删除" [ref=e221] [cursor=pointer]:
+                      - img "delete" [ref=e223]:
+                        - img [ref=e224]
+                      - generic [ref=e226]: 删除
+          - list [ref=e227]:
+            - listitem "上一页" [ref=e228]:
+              - button "left" [disabled] [ref=e229]:
+                - img "left" [ref=e230]:
+                  - img [ref=e231]
+            - listitem "1" [ref=e233] [cursor=pointer]:
+              - generic [ref=e234]: "1"
+            - listitem "下一页" [ref=e235]:
+              - button "right" [disabled] [ref=e236]:
+                - img "right" [ref=e237]:
+                  - img [ref=e238]
+            - listitem [ref=e240]:
+              - generic "页码" [ref=e241] [cursor=pointer]:
+                - generic [ref=e243]:
+                  - combobox "页码" [ref=e245]
+                  - generic "10 条/页" [ref=e246]
+                - generic:
+                  - img:
+                    - img

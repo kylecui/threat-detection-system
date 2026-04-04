@@ -1,0 +1,126 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e51]:
+    - complementary [ref=e53]:
+      - generic [ref=e54]:
+        - menu [ref=e56]:
+          - menuitem "dashboard 仪表盘" [ref=e57] [cursor=pointer]:
+            - generic [ref=e60]:
+              - img "dashboard" [ref=e62]:
+                - img [ref=e63]
+              - generic [ref=e65]: 仪表盘
+          - menuitem "warning 威胁列表" [ref=e66] [cursor=pointer]:
+            - generic [ref=e69]:
+              - img "warning" [ref=e71]:
+                - img [ref=e72]
+              - generic [ref=e74]: 威胁列表
+          - menuitem "bell 告警中心" [ref=e75] [cursor=pointer]:
+            - generic [ref=e78]:
+              - img "bell" [ref=e80]:
+                - img [ref=e81]
+              - generic [ref=e83]: 告警中心
+          - menuitem "bar-chart 数据分析" [ref=e84] [cursor=pointer]:
+            - generic [ref=e87]:
+              - img "bar-chart" [ref=e89]:
+                - img [ref=e90]
+              - generic [ref=e92]: 数据分析
+          - menuitem "team 客户管理" [ref=e93] [cursor=pointer]:
+            - generic [ref=e96]:
+              - img "team" [ref=e98]:
+                - img [ref=e99]
+              - generic [ref=e101]: 客户管理
+          - menuitem "global 威胁情报" [ref=e102] [cursor=pointer]:
+            - generic [ref=e105]:
+              - img "global" [ref=e107]:
+                - img [ref=e108]
+              - generic [ref=e110]: 威胁情报
+          - menuitem "experiment ML检测" [ref=e111] [cursor=pointer]:
+            - generic [ref=e114]:
+              - img "experiment" [ref=e116]:
+                - img [ref=e117]
+              - generic [ref=e119]: ML检测
+          - menuitem "cloud-server 系统监控" [ref=e120] [cursor=pointer]:
+            - generic [ref=e123]:
+              - img "cloud-server" [ref=e125]:
+                - img [ref=e126]
+              - generic [ref=e130]: 系统监控
+          - menuitem "apartment 租户管理" [ref=e131] [cursor=pointer]:
+            - generic [ref=e134]:
+              - img "apartment" [ref=e136]:
+                - img [ref=e137]
+              - generic [ref=e139]: 租户管理
+          - menuitem "user 用户管理" [ref=e140] [cursor=pointer]:
+            - generic [ref=e143]:
+              - img "user" [ref=e145]:
+                - img [ref=e146]
+              - generic [ref=e148]: 用户管理
+          - menuitem "setting 系统设置" [ref=e149] [cursor=pointer]:
+            - generic [ref=e152]:
+              - img "setting" [ref=e154]:
+                - img [ref=e155]
+              - generic [ref=e157]: 系统设置
+        - img [ref=e159] [cursor=pointer]
+    - generic [ref=e161]:
+      - banner [ref=e162]
+      - banner [ref=e163]:
+        - generic [ref=e164]:
+          - generic [ref=e166] [cursor=pointer]:
+            - img "dashboard" [ref=e167]:
+              - img [ref=e168]
+            - heading "威胁检测系统" [level=1] [ref=e170]
+          - generic [ref=e176] [cursor=pointer]:
+            - generic [ref=e177]: System Administrator
+            - button "logout" [ref=e178]:
+              - img "logout" [ref=e180]:
+                - img [ref=e181]
+      - main [ref=e183]:
+        - generic [ref=e184]:
+          - generic [ref=e186]:
+            - generic [ref=e190]:
+              - generic [ref=e191]: 总威胁数
+              - generic [ref=e192]:
+                - img "alert" [ref=e194]:
+                  - img [ref=e195]
+                - generic [ref=e197]: "0"
+            - generic [ref=e201]:
+              - generic [ref=e202]: 严重威胁
+              - generic [ref=e203]:
+                - img "fire" [ref=e205]:
+                  - img [ref=e206]
+                - generic [ref=e208]: "0"
+            - generic [ref=e212]:
+              - generic [ref=e213]: 高危威胁
+              - generic [ref=e214]:
+                - img "warning" [ref=e216]:
+                  - img [ref=e217]
+                - generic [ref=e219]: "0"
+            - generic [ref=e223]:
+              - generic [ref=e224]: 平均分数
+              - generic [ref=e225]:
+                - img "info-circle" [ref=e227]:
+                  - img [ref=e228]
+                - generic [ref=e231]: "0.00"
+          - generic [ref=e236]: 威胁趋势 (24小时)
+          - generic [ref=e241]:
+            - generic [ref=e243]:
+              - generic [ref=e246]: 最新威胁
+              - table [ref=e254]:
+                - rowgroup [ref=e263]:
+                  - row "评估时间 攻击者MAC 威胁等级 威胁分数 攻击次数 诱饵IP数 端口种类" [ref=e264]:
+                    - columnheader "评估时间" [ref=e265]
+                    - columnheader "攻击者MAC" [ref=e266]
+                    - columnheader "威胁等级" [ref=e267]
+                    - columnheader "威胁分数" [ref=e268]
+                    - columnheader "攻击次数" [ref=e269]
+                    - columnheader "诱饵IP数" [ref=e270]
+                    - columnheader "端口种类" [ref=e271]
+                - rowgroup [ref=e272]:
+                  - row "暂无数据 暂无数据" [ref=e273]:
+                    - cell "暂无数据 暂无数据" [ref=e274]:
+                      - generic [ref=e275]:
+                        - img "暂无数据" [ref=e277]
+                        - generic [ref=e283]: 暂无数据
+            - generic [ref=e288]: 端口分布 (Top 10)
+  - generic [ref=e293]:
+    - img "check-circle" [ref=e294]:
+      - img [ref=e295]
+    - generic [ref=e297]: 欢迎, System Administrator
