@@ -1,8 +1,8 @@
-# 威胁检测系统 操作手册 v3.1.5
+# 威胁检测系统 操作手册 v3.1.6
 
 | 项目 | 内容 |
 |------|------|
-| 版本 | v3.1.5 |
+| 版本 | v3.1.6 |
 | 发布日期 | 2026-04-03 |
 | 适用环境 | K3s 单节点 (10.174.1.222) |
 | 编写目的 | 供测试人员验证系统全功能运行状态 |
@@ -127,10 +127,26 @@ http://10.174.1.222:30080
 
 ### 2.2 测试账号
 
+> **⚠️ 重要**: 以下账号在 v3.1.6+ 的全新部署中自动创建。如果您是从旧版本升级，需要手动初始化用户数据 (见下方说明)。
+
 | 用户名 | 密码 | 角色 | 说明 |
 |--------|------|------|------|
-| admin | admin123 | SUPER_ADMIN | 系统超级管理员，可看到所有客户数据，customerId=demo-customer |
-| demo_admin | admin123 | TENANT_ADMIN | 租户管理员，可管理 demo-customer 下的数据 |
+| admin | admin123 | SUPER_ADMIN | 系统超级管理员，可看到所有客户数据 |
+| demo_admin | admin123 | TENANT_ADMIN | 租户管理员，管理 demo-customer 下的数据 |
+
+**从旧版本升级的用户 (v3.1.5及以前)**: 如果已经部署过系统但无法登录，需要手动创建用户表:
+
+```bash
+sudo kubectl exec -n threat-detection postgres-0 -- psql -U threat_user -d threat_detection -f /docker-entrypoint-initdb.d/29-rbac-tables.sql
+```
+
+或者删除数据库存储后重新部署 (会清除所有数据):
+
+```bash
+sudo kubectl delete pvc postgres-storage-postgres-0 -n threat-detection
+sudo kubectl delete pod postgres-0 -n threat-detection
+# 等待 pod 自动重建，所有初始化脚本会重新执行
+```
 
 ### 2.3 菜单导航
 
@@ -1255,6 +1271,7 @@ sudo kubectl delete pod -n threat-detection -l app=stream-processing,component=t
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v3.1.6 | 2026-04-08 | **修复全新K8s部署无法登录的问题**: 补全缺失的数据库初始化脚本 (29-rbac-tables 至 36-demo-customer-seed)，包括RBAC用户/角色表、系统配置表、租户层级表、TIRE多租户表、插件配置表。自动创建admin/demo_admin测试账号。自动创建demo-customer客户和设备9d262111f2476d34的绑定关系。操作手册增加升级用户说明。 |
 | v3.1.5 | 2026-04-04 | V2 MQTT端到端验证通过。操作手册全面修正：V1 syslog格式去除错误的customer_id字段、补充完整字段列表和顺序要求；新增V2 MQTT测试章节 (topic格式、JSON事件格式、mosquitto_pub命令、时区注意事项)；修正快速部署清单中的测试命令。data-ingestion调试日志清理。 |
 | v3.1.4 | 2026-04-04 | Logstash输出从Kafka直连改为HTTP到data-ingestion (修复V1 syslog customerId解析)。EMQX添加NodePort 31883支持集群外MQTT设备。Logstash添加wait-for-data-ingestion initContainer。操作手册增加测试人员快速部署清单。 |
 | v3.1.3 | 2026-04-03 | 离线部署支持：所有K8s清单添加 `imagePullPolicy: IfNotPresent`，新增镜像导出/导入脚本，部署预检查。修复Flink因V1 syslog事件customerId为空导致的CrashLoopBackOff。修复镜像导出脚本对Docker Hub library镜像的兼容性。 |
@@ -1264,5 +1281,5 @@ sudo kubectl delete pod -n threat-detection -l app=stream-processing,component=t
 
 ---
 
-*本手册基于 v3.1.5 版本编写，适用于 K3s 单节点测试环境。*
+*本手册基于 v3.1.6 版本编写，适用于 K3s 单节点测试环境。*
 *如有问题请联系系统管理员。*

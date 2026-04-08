@@ -1414,6 +1414,277 @@ data:
       ('cn', 'China', 'https://cn.threat-detection.io', 'kafka.threat-detection-cn:9092', 'primary')
     ON CONFLICT (region_id) DO NOTHING;
 
+  29-rbac-tables.sql: |
+    -- =============================================================
+    -- RBAC (Role-Based Access Control) Tables
+    -- =============================================================
+    CREATE TABLE IF NOT EXISTS auth_users (
+        id              BIGSERIAL PRIMARY KEY,
+        username        VARCHAR(64)  NOT NULL UNIQUE,
+        password_hash   VARCHAR(255) NOT NULL,
+        display_name    VARCHAR(128),
+        email           VARCHAR(255),
+        customer_id     VARCHAR(50),
+        enabled         BOOLEAN      NOT NULL DEFAULT TRUE,
+        created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_roles (
+        id              BIGSERIAL PRIMARY KEY,
+        name            VARCHAR(50)  NOT NULL UNIQUE,
+        description     VARCHAR(255)
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_user_roles (
+        user_id         BIGINT NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+        role_id         BIGINT NOT NULL REFERENCES auth_roles(id) ON DELETE CASCADE,
+        PRIMARY KEY (user_id, role_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_auth_users_username ON auth_users(username);
+    CREATE INDEX IF NOT EXISTS idx_auth_users_customer ON auth_users(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_auth_user_roles_user ON auth_user_roles(user_id);
+
+    INSERT INTO auth_roles (name, description) VALUES
+        ('SUPER_ADMIN',   'Full system access - all customers, all operations'),
+        ('TENANT_ADMIN',  'Manage assigned customers - CRUD, config, alerts'),
+        ('CUSTOMER_USER', 'Read-only access to assigned customer data')
+    ON CONFLICT (name) DO NOTHING;
+
+    -- admin / admin123
+    INSERT INTO auth_users (username, password_hash, display_name, email, customer_id, enabled)
+    VALUES ('admin', '$2a$10$FBnTBCfCguv9TKTt4xoHi.KFNXmxNl1mJ7k0qIi7o0gYcVWIzDNB2', 'System Administrator', 'admin@threat-detection.local', NULL, TRUE)
+    ON CONFLICT (username) DO NOTHING;
+
+    INSERT INTO auth_user_roles (user_id, role_id)
+    SELECT u.id, r.id FROM auth_users u, auth_roles r
+    WHERE u.username = 'admin' AND r.name = 'SUPER_ADMIN'
+    ON CONFLICT DO NOTHING;
+
+    -- demo_admin / admin123
+    INSERT INTO auth_users (username, password_hash, display_name, email, customer_id, enabled)
+    VALUES ('demo_admin', '$2a$10$FBnTBCfCguv9TKTt4xoHi.KFNXmxNl1mJ7k0qIi7o0gYcVWIzDNB2', 'Demo Tenant Admin', 'demo@threat-detection.local', 'demo-customer', TRUE)
+    ON CONFLICT (username) DO NOTHING;
+
+    INSERT INTO auth_user_roles (user_id, role_id)
+    SELECT u.id, r.id FROM auth_users u, auth_roles r
+    WHERE u.username = 'demo_admin' AND r.name = 'TENANT_ADMIN'
+    ON CONFLICT DO NOTHING;
+
+  30-system-config.sql: |
+    -- System Configuration Key-Value Store
+    CREATE TABLE IF NOT EXISTS system_config (
+        id          SERIAL PRIMARY KEY,
+        config_key  VARCHAR(100) NOT NULL UNIQUE,
+        config_value TEXT NOT NULL DEFAULT '',
+        category    VARCHAR(50) NOT NULL DEFAULT 'general',
+        description VARCHAR(255),
+        is_secret   BOOLEAN NOT NULL DEFAULT false,
+        created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_system_config_key ON system_config(config_key);
+    CREATE INDEX IF NOT EXISTS idx_system_config_category ON system_config(category);
+
+    INSERT INTO system_config (config_key, config_value, category, description, is_secret) VALUES
+        ('ABUSEIPDB_API_KEY',  '', 'tire_api_keys', 'AbuseIPDB API Key for IP reputation lookup', true),
+        ('OTX_API_KEY',        '', 'tire_api_keys', 'AlienVault OTX API Key for threat intelligence', true),
+        ('GREYNOISE_API_KEY',  '', 'tire_api_keys', 'GreyNoise API Key for IP noise detection', true),
+        ('VT_API_KEY',         '', 'tire_api_keys', 'VirusTotal API Key for file/URL/IP scanning', true),
+        ('SHODAN_API_KEY',     '', 'tire_api_keys', 'Shodan API Key for internet-connected device search', true)
+    ON CONFLICT (config_key) DO NOTHING;
+
+    INSERT INTO system_config (config_key, config_value, category, description, is_secret) VALUES
+        ('LLM_API_KEY',   '', 'llm', 'LLM API Key (e.g., OpenAI, DeepSeek)', true),
+        ('LLM_MODEL',     '', 'llm', 'LLM Model name (e.g., gpt-4o, deepseek-chat)', false),
+        ('LLM_BASE_URL',  '', 'llm', 'LLM API Base URL (e.g., https://api.openai.com/v1)', false)
+    ON CONFLICT (config_key) DO NOTHING;
+
+    INSERT INTO system_config (config_key, config_value, category, description, is_secret) VALUES
+        ('TIRE_ADMIN_PASSWORD', 'tire-admin-2026', 'tire_general', 'TIRE admin panel password', true),
+        ('TIRE_CACHE_TTL_HOURS', '24', 'tire_general', 'TIRE cache TTL in hours', false)
+    ON CONFLICT (config_key) DO NOTHING;
+
+  31-tenants.sql: |
+    -- Multi-Tenant Hierarchy Tables
+    CREATE TABLE IF NOT EXISTS tenants (
+        id              BIGSERIAL PRIMARY KEY,
+        tenant_id       VARCHAR(50)  NOT NULL UNIQUE,
+        name            VARCHAR(128) NOT NULL,
+        description     VARCHAR(512),
+        contact_email   VARCHAR(255),
+        status          VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
+        max_customers   INTEGER      NOT NULL DEFAULT 100,
+        created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tenants_tenant_id ON tenants(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
+
+    ALTER TABLE auth_users ADD COLUMN IF NOT EXISTS tenant_id BIGINT REFERENCES tenants(id);
+    CREATE INDEX IF NOT EXISTS idx_auth_users_tenant ON auth_users(tenant_id);
+
+    INSERT INTO tenants (tenant_id, name, description, contact_email, status)
+    VALUES ('default-tenant', 'Default Tenant', 'Default tenant for existing users', 'admin@threat-detection.local', 'ACTIVE')
+    ON CONFLICT (tenant_id) DO NOTHING;
+
+    UPDATE auth_users
+    SET tenant_id = (SELECT id FROM tenants WHERE tenant_id = 'default-tenant')
+    WHERE username = 'demo_admin' AND tenant_id IS NULL;
+
+  32-tenant-customer-link.sql: |
+    ALTER TABLE customers ADD COLUMN IF NOT EXISTS tenant_id BIGINT REFERENCES tenants(id);
+    CREATE INDEX IF NOT EXISTS idx_customers_tenant_id ON customers(tenant_id);
+
+    UPDATE customers
+    SET tenant_id = (SELECT id FROM tenants WHERE tenant_id = 'default-tenant')
+    WHERE customer_id = 'demo-customer' AND tenant_id IS NULL;
+
+  33-plugin-configs.sql: |
+    -- TIRE Plugin Configuration + Additional API Keys
+    INSERT INTO system_config (config_key, config_value, category, description, is_secret) VALUES
+        ('THREATBOOK_API_KEY',      '', 'tire_api_keys', 'Threatbook API Key', true),
+        ('TIANJIYOUMENG_API_KEY',   '', 'tire_api_keys', 'TianjiYoumeng API Key', true)
+    ON CONFLICT (config_key) DO NOTHING;
+
+    INSERT INTO system_config (config_key, config_value, category, description, is_secret) VALUES
+        ('PLUGIN_ABUSEIPDB_ENABLED',   'true',  'tire_plugins', 'Enable AbuseIPDB plugin', false),
+        ('PLUGIN_ABUSEIPDB_PRIORITY',  '10',    'tire_plugins', 'AbuseIPDB priority', false),
+        ('PLUGIN_ABUSEIPDB_TIMEOUT',   '30',    'tire_plugins', 'AbuseIPDB timeout (seconds)', false),
+        ('PLUGIN_VIRUSTOTAL_ENABLED',  'true',  'tire_plugins', 'Enable VirusTotal plugin', false),
+        ('PLUGIN_VIRUSTOTAL_PRIORITY', '10',    'tire_plugins', 'VirusTotal priority', false),
+        ('PLUGIN_VIRUSTOTAL_TIMEOUT',  '60',    'tire_plugins', 'VirusTotal timeout (seconds)', false),
+        ('PLUGIN_OTX_ENABLED',         'true',  'tire_plugins', 'Enable OTX plugin', false),
+        ('PLUGIN_OTX_PRIORITY',        '20',    'tire_plugins', 'OTX priority', false),
+        ('PLUGIN_OTX_TIMEOUT',         '30',    'tire_plugins', 'OTX timeout (seconds)', false),
+        ('PLUGIN_GREYNOISE_ENABLED',   'true',  'tire_plugins', 'Enable GreyNoise plugin', false),
+        ('PLUGIN_GREYNOISE_PRIORITY',  '20',    'tire_plugins', 'GreyNoise priority', false),
+        ('PLUGIN_GREYNOISE_TIMEOUT',   '30',    'tire_plugins', 'GreyNoise timeout (seconds)', false),
+        ('PLUGIN_SHODAN_ENABLED',      'true',  'tire_plugins', 'Enable Shodan plugin', false),
+        ('PLUGIN_SHODAN_PRIORITY',     '30',    'tire_plugins', 'Shodan priority', false),
+        ('PLUGIN_SHODAN_TIMEOUT',      '30',    'tire_plugins', 'Shodan timeout (seconds)', false),
+        ('PLUGIN_RDAP_ENABLED',        'true',  'tire_plugins', 'Enable RDAP plugin', false),
+        ('PLUGIN_RDAP_PRIORITY',       '5',     'tire_plugins', 'RDAP priority', false),
+        ('PLUGIN_RDAP_TIMEOUT',        '30',    'tire_plugins', 'RDAP timeout (seconds)', false),
+        ('PLUGIN_REVERSE_DNS_ENABLED',   'true',  'tire_plugins', 'Enable Reverse DNS plugin', false),
+        ('PLUGIN_REVERSE_DNS_PRIORITY',  '5',     'tire_plugins', 'Reverse DNS priority', false),
+        ('PLUGIN_REVERSE_DNS_TIMEOUT',   '30',    'tire_plugins', 'Reverse DNS timeout (seconds)', false),
+        ('PLUGIN_HONEYNET_ENABLED',      'true',  'tire_plugins', 'Enable Honeynet plugin', false),
+        ('PLUGIN_HONEYNET_PRIORITY',     '40',    'tire_plugins', 'Honeynet priority', false),
+        ('PLUGIN_HONEYNET_TIMEOUT',      '30',    'tire_plugins', 'Honeynet timeout (seconds)', false),
+        ('PLUGIN_INTERNAL_FLOW_ENABLED',   'true',  'tire_plugins', 'Enable Internal Flow plugin', false),
+        ('PLUGIN_INTERNAL_FLOW_PRIORITY',  '40',    'tire_plugins', 'Internal Flow priority', false),
+        ('PLUGIN_INTERNAL_FLOW_TIMEOUT',   '30',    'tire_plugins', 'Internal Flow timeout (seconds)', false),
+        ('PLUGIN_THREATBOOK_ENABLED',      'true',  'tire_plugins', 'Enable Threatbook plugin', false),
+        ('PLUGIN_THREATBOOK_PRIORITY',     '15',    'tire_plugins', 'Threatbook priority', false),
+        ('PLUGIN_THREATBOOK_TIMEOUT',      '30',    'tire_plugins', 'Threatbook timeout (seconds)', false),
+        ('PLUGIN_TIANJIYOUMENG_ENABLED',   'true',  'tire_plugins', 'Enable TianjiYoumeng plugin', false),
+        ('PLUGIN_TIANJIYOUMENG_PRIORITY',  '15',    'tire_plugins', 'TianjiYoumeng priority', false),
+        ('PLUGIN_TIANJIYOUMENG_TIMEOUT',   '20',    'tire_plugins', 'TianjiYoumeng timeout (seconds)', false)
+    ON CONFLICT (config_key) DO NOTHING;
+
+  34-tire-llm-multitenant.sql: |
+    -- Multi-tenant TIRE Custom Plugins, LLM Providers, Config Assignments
+    CREATE TABLE IF NOT EXISTS tire_custom_plugins (
+        id           BIGSERIAL PRIMARY KEY,
+        name         VARCHAR(100) NOT NULL,
+        slug         VARCHAR(50)  NOT NULL,
+        description  VARCHAR(512),
+        plugin_url   VARCHAR(512) NOT NULL DEFAULT '',
+        api_key      TEXT         NOT NULL DEFAULT '',
+        auth_type    VARCHAR(30)  NOT NULL DEFAULT 'bearer',
+        auth_header  VARCHAR(100) NOT NULL DEFAULT 'Authorization',
+        parser_type  VARCHAR(50)  NOT NULL DEFAULT 'json',
+        request_method VARCHAR(10) NOT NULL DEFAULT 'GET',
+        request_body TEXT,
+        response_path VARCHAR(255),
+        enabled      BOOLEAN NOT NULL DEFAULT true,
+        priority     INTEGER NOT NULL DEFAULT 50,
+        timeout      INTEGER NOT NULL DEFAULT 30,
+        owner_type   VARCHAR(20)  NOT NULL DEFAULT 'SYSTEM',
+        owner_id     BIGINT,
+        created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_custom_plugins_owner ON tire_custom_plugins(owner_type, owner_id);
+    CREATE INDEX IF NOT EXISTS idx_custom_plugins_slug  ON tire_custom_plugins(slug);
+    CREATE INDEX IF NOT EXISTS idx_custom_plugins_enabled ON tire_custom_plugins(enabled);
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_custom_plugins_slug_owner
+        ON tire_custom_plugins(slug, owner_type, COALESCE(owner_id, -1));
+
+    CREATE TABLE IF NOT EXISTS llm_providers (
+        id          BIGSERIAL PRIMARY KEY,
+        name        VARCHAR(100) NOT NULL,
+        api_key     TEXT         NOT NULL DEFAULT '',
+        model       VARCHAR(100) NOT NULL DEFAULT '',
+        base_url    VARCHAR(512) NOT NULL DEFAULT '',
+        is_default  BOOLEAN NOT NULL DEFAULT false,
+        enabled     BOOLEAN NOT NULL DEFAULT true,
+        owner_type  VARCHAR(20)  NOT NULL DEFAULT 'SYSTEM',
+        owner_id    BIGINT,
+        created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_llm_providers_owner ON llm_providers(owner_type, owner_id);
+    CREATE INDEX IF NOT EXISTS idx_llm_providers_default ON llm_providers(is_default);
+
+    CREATE TABLE IF NOT EXISTS config_assignments (
+        id              BIGSERIAL PRIMARY KEY,
+        customer_id     VARCHAR(50)  NOT NULL UNIQUE,
+        llm_provider_id BIGINT REFERENCES llm_providers(id) ON DELETE SET NULL,
+        assigned_by     BIGINT NOT NULL,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_config_assignments_customer ON config_assignments(customer_id);
+
+    INSERT INTO llm_providers (name, api_key, model, base_url, is_default, owner_type, owner_id)
+    SELECT
+        'Default LLM Provider',
+        COALESCE((SELECT config_value FROM system_config WHERE config_key = 'LLM_API_KEY'), ''),
+        COALESCE((SELECT config_value FROM system_config WHERE config_key = 'LLM_MODEL'), ''),
+        COALESCE((SELECT config_value FROM system_config WHERE config_key = 'LLM_BASE_URL'), ''),
+        true,
+        'SYSTEM',
+        NULL
+    WHERE EXISTS (SELECT 1 FROM system_config WHERE config_key = 'LLM_API_KEY' AND config_value <> '');
+
+  35-config-assignments-v2.sql: |
+    -- Extend config_assignments with TI API keys + lock flags
+    ALTER TABLE config_assignments
+        ADD COLUMN IF NOT EXISTS tire_api_keys JSONB NOT NULL DEFAULT '{}'::jsonb,
+        ADD COLUMN IF NOT EXISTS lock_llm     BOOLEAN NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS lock_tire    BOOLEAN NOT NULL DEFAULT false;
+
+    CREATE TABLE IF NOT EXISTS user_configs (
+        id              BIGSERIAL PRIMARY KEY,
+        user_id         BIGINT  NOT NULL UNIQUE,
+        llm_provider_id BIGINT  REFERENCES llm_providers(id) ON DELETE SET NULL,
+        tire_api_keys   JSONB   NOT NULL DEFAULT '{}'::jsonb,
+        use_own_llm     BOOLEAN NOT NULL DEFAULT false,
+        use_own_tire    BOOLEAN NOT NULL DEFAULT false,
+        created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_configs_user ON user_configs(user_id);
+
+  36-demo-customer-seed.sql: |
+    -- Seed demo-customer and device mapping for V2 MQTT testing
+    INSERT INTO customers (customer_id, name, email, phone, address, status, subscription_tier, max_devices, description)
+    VALUES ('demo-customer', 'Demo Customer', 'demo@threat-detection.local', '+86-000-0000', 'Demo Lab', 'ACTIVE', 'PROFESSIONAL', 50, 'Demo customer for V1/V2 pipeline testing')
+    ON CONFLICT (customer_id) DO NOTHING;
+
+    INSERT INTO device_customer_mapping (dev_serial, customer_id)
+    VALUES ('9d262111f2476d34', 'demo-customer')
+    ON CONFLICT DO NOTHING;
+
 ---
 apiVersion: v1
 kind: Secret
