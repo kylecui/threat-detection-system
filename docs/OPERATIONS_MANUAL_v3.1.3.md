@@ -1,9 +1,9 @@
-# 威胁检测系统 操作手册 v3.1.6
+# 威胁检测系统 操作手册 v3.1.7
 
 | 项目 | 内容 |
 |------|------|
-| 版本 | v3.1.6 |
-| 发布日期 | 2026-04-03 |
+| 版本 | v3.1.7 |
+| 发布日期 | 2026-04-09 |
 | 适用环境 | K3s 单节点 (10.174.1.222) |
 | 编写目的 | 供测试人员验证系统全功能运行状态 |
 
@@ -1271,6 +1271,7 @@ sudo kubectl delete pod -n threat-detection -l app=stream-processing,component=t
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| v3.1.7 | 2026-04-09 | **修复Kafka topic ID不匹配导致ml-detection CrashLoopBackOff**: Kafka init容器从仅清理meta.properties改为完全清理数据目录 (`rm -rf /var/lib/kafka/data/*`)，防止ZooKeeper与Kafka broker之间的topic ID不一致。修复后ml-detection成功启动并加入消费者组，全部19个Pod恢复正常。V1 syslog和V2 MQTT端到端管道重新验证通过。 |
 | v3.1.6 | 2026-04-08 | **修复全新K8s部署无法登录的问题**: 补全缺失的数据库初始化脚本 (29-rbac-tables 至 36-demo-customer-seed)，包括RBAC用户/角色表、系统配置表、租户层级表、TIRE多租户表、插件配置表。自动创建admin/demo_admin测试账号。自动创建demo-customer客户和设备9d262111f2476d34的绑定关系。操作手册增加升级用户说明。 |
 | v3.1.5 | 2026-04-04 | V2 MQTT端到端验证通过。操作手册全面修正：V1 syslog格式去除错误的customer_id字段、补充完整字段列表和顺序要求；新增V2 MQTT测试章节 (topic格式、JSON事件格式、mosquitto_pub命令、时区注意事项)；修正快速部署清单中的测试命令。data-ingestion调试日志清理。 |
 | v3.1.4 | 2026-04-04 | Logstash输出从Kafka直连改为HTTP到data-ingestion (修复V1 syslog customerId解析)。EMQX添加NodePort 31883支持集群外MQTT设备。Logstash添加wait-for-data-ingestion initContainer。操作手册增加测试人员快速部署清单。 |
@@ -1281,5 +1282,5 @@ sudo kubectl delete pod -n threat-detection -l app=stream-processing,component=t
 
 ---
 
-*本手册基于 v3.1.6 版本编写，适用于 K3s 单节点测试环境。*
+*本手册基于 v3.1.7 版本编写，适用于 K3s 单节点测试环境。*
 *如有问题请联系系统管理员。*

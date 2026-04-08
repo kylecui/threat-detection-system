@@ -34,9 +34,9 @@ spec:
         - sh
         - -c
         - |
-          echo "Cleaning stale meta.properties to prevent InconsistentClusterIdException..."
-          rm -f /var/lib/kafka/data/meta.properties
-          echo "Kafka data directory cleaned."
+          echo "Cleaning Kafka data directory to prevent topic ID mismatches..."
+          rm -rf /var/lib/kafka/data/*
+          echo "Kafka data directory fully cleaned."
         volumeMounts:
         - name: kafka-data
           mountPath: /var/lib/kafka/data
