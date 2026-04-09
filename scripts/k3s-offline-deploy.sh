@@ -124,15 +124,19 @@ fi
 echo ""
 log "部署配置:"
 log "  镜像包: $(basename "$ARCHIVE_PATH")"
-log "  源码构建: $($REBUILD && echo '是' || echo '否')"
-log "  跳过导入: $($SKIP_IMPORT && echo '是' || echo '否')"
+if $REBUILD; then log "  源码构建: 是"; else log "  源码构建: 否"; fi
+if $SKIP_IMPORT; then log "  跳过导入: 是"; else log "  跳过导入: 否"; fi
 echo ""
 
 # =============================================================================
 # Step 1: 导入镜像
 # =============================================================================
 if ! $SKIP_IMPORT; then
-  header "Step 1/$(($REBUILD ? 3 : 2)): 导入镜像到 K3s containerd"
+  if $REBUILD; then
+    header "Step 1/3: 导入镜像到 K3s containerd"
+  else
+    header "Step 1/2: 导入镜像到 K3s containerd"
+  fi
   log "执行: bash scripts/k3s-import-images.sh $ARCHIVE_PATH"
   echo ""
 
@@ -168,8 +172,10 @@ fi
 # =============================================================================
 if $REBUILD; then
   header "Step 3/3: 部署到 K8s"
+elif $SKIP_IMPORT; then
+  header "Step 1/1: 部署到 K8s"
 else
-  header "Step $($SKIP_IMPORT && echo '1/1' || echo '2/2'): 部署到 K8s"
+  header "Step 2/2: 部署到 K8s"
 fi
 
 log "执行: bash scripts/k3s-deploy.sh"
