@@ -146,10 +146,14 @@ if [ ${#MISSING_IMAGES[@]} -gt 0 ]; then
   log "    sudo bash scripts/k3s-build-images.sh"
   log "    sudo docker pull <missing-infra-image> && docker save ... | k3s ctr images import -"
   echo ""
-  read -p "Continue anyway? (y/N) " -r REPLY
-  if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
-    err "Aborted. Import missing images first."
-    exit 1
+  if [ -t 0 ]; then
+    read -p "Continue anyway? (y/N) " -r REPLY
+    if [[ ! "$REPLY" =~ ^[Yy]$ ]]; then
+      err "Aborted. Import missing images first."
+      exit 1
+    fi
+  else
+    warn "Non-interactive mode: continuing despite missing images"
   fi
 fi
 ok "Image pre-flight check complete"
