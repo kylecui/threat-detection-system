@@ -51,7 +51,7 @@ CREATE INDEX IF NOT EXISTS idx_indicator_ioc_value ON threat_indicators USING HA
 
 -- Active indicators only (partial index eliminates expired rows)
 CREATE INDEX IF NOT EXISTS idx_active_indicators ON threat_indicators (ioc_value, severity, confidence)
-    WHERE (valid_until IS NULL OR valid_until > NOW());
+    WHERE valid_until IS NULL;
 
 -- Source filtering + time ordering
 CREATE INDEX IF NOT EXISTS idx_indicator_source ON threat_indicators (source_name, ioc_type, created_at DESC);

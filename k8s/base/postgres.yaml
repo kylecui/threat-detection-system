@@ -711,6 +711,27 @@ data:
         END IF;
     END $fn$;
 
+  10-device-status-history.sql: |
+    -- Device Status History table
+    CREATE TABLE IF NOT EXISTS device_status_history (
+        id BIGSERIAL PRIMARY KEY,
+        dev_serial VARCHAR(64) NOT NULL,
+        customer_id VARCHAR(100) NOT NULL,
+        sentry_count INTEGER NOT NULL,
+        real_host_count INTEGER NOT NULL,
+        dev_start_time BIGINT,
+        dev_end_time BIGINT,
+        report_time TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_dsh_dev_serial ON device_status_history(dev_serial);
+    CREATE INDEX IF NOT EXISTS idx_dsh_customer_id ON device_status_history(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_dsh_report_time ON device_status_history(report_time DESC);
+
+    GRANT SELECT, INSERT, UPDATE, DELETE ON device_status_history TO threat_user;
+    GRANT USAGE, SELECT ON SEQUENCE device_status_history_id_seq TO threat_user;
+
   12-ip-segment-weights-v4.sql: |
     -- IP网段权重配置表 V4.0 - 双维度权重设计
     CREATE TABLE IF NOT EXISTS attack_source_weights (
@@ -1266,7 +1287,7 @@ data:
     );
 
     CREATE INDEX IF NOT EXISTS idx_indicator_ioc_value ON threat_indicators USING HASH (ioc_value);
-    CREATE INDEX IF NOT EXISTS idx_active_indicators ON threat_indicators (ioc_value, severity, confidence) WHERE (valid_until IS NULL OR valid_until > NOW());
+    CREATE INDEX IF NOT EXISTS idx_active_indicators ON threat_indicators (ioc_value, severity, confidence) WHERE valid_until IS NULL;
     CREATE INDEX IF NOT EXISTS idx_indicator_source ON threat_indicators (source_name, ioc_type, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_indicator_tags ON threat_indicators (tags);
     CREATE INDEX IF NOT EXISTS idx_indicator_valid_range ON threat_indicators (valid_from, valid_until);

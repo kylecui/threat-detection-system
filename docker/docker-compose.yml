@@ -36,6 +36,7 @@ services:
       - ./07-whitelist-config.sql:/docker-entrypoint-initdb.d/07-whitelist-config.sql
       - ./08-threat-labels.sql:/docker-entrypoint-initdb.d/08-threat-labels.sql
       - ./09-add-missing-fields.sql:/docker-entrypoint-initdb.d/09-add-missing-fields.sql
+      - ./10-device-status-history.sql:/docker-entrypoint-initdb.d/10-device-status-history.sql
       - ./12-ip-segment-weights-v4.sql:/docker-entrypoint-initdb.d/12-ip-segment-weights-v4.sql
       - ./13-customer-port-weights.sql:/docker-entrypoint-initdb.d/13-customer-port-weights.sql
       - ./14-apt-temporal-accumulations.sql:/docker-entrypoint-initdb.d/14-apt-temporal-accumulations.sql
@@ -51,6 +52,15 @@ services:
       - ./24-threat-intel-feed-seeds.sql:/docker-entrypoint-initdb.d/24-threat-intel-feed-seeds.sql
       - ./25-threat-indicators-phase2-upgrade.sql:/docker-entrypoint-initdb.d/25-threat-indicators-phase2-upgrade.sql
       - ./27-ml-weight-columns.sql:/docker-entrypoint-initdb.d/27-ml-weight-columns.sql
+      - ./26-ml-detection-tables.sql:/docker-entrypoint-initdb.d/26-ml-detection-tables.sql
+      - ./28-region-support.sql:/docker-entrypoint-initdb.d/28-region-support.sql
+      - ./29-rbac-tables.sql:/docker-entrypoint-initdb.d/29-rbac-tables.sql
+      - ./30-system-config.sql:/docker-entrypoint-initdb.d/30-system-config.sql
+      - ./31-tenants.sql:/docker-entrypoint-initdb.d/31-tenants.sql
+      - ./32-tenant-customer-link.sql:/docker-entrypoint-initdb.d/32-tenant-customer-link.sql
+      - ./33-plugin-configs.sql:/docker-entrypoint-initdb.d/33-plugin-configs.sql
+      - ./34-tire-llm-multitenant.sql:/docker-entrypoint-initdb.d/34-tire-llm-multitenant.sql
+      - ./35-config-assignments-v2.sql:/docker-entrypoint-initdb.d/35-config-assignments-v2.sql
     networks:
       - threat-detection-network
     healthcheck:
@@ -174,8 +184,8 @@ services:
 
   data-ingestion:
     build:
-      context: ../services/data-ingestion
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/data-ingestion/Dockerfile
       # ✅ Prevent layer caching issues
       cache_from: []
       # Build args to invalidate cache on timestamp changes
@@ -213,8 +223,8 @@ services:
 
   stream-processing:
     build:
-      context: ../services/stream-processing
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/stream-processing/Dockerfile
       # ✅ Prevent layer caching issues
       cache_from: []
       args:
@@ -277,8 +287,8 @@ services:
 
   taskmanager:
     build:
-      context: ../services/stream-processing
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/stream-processing/Dockerfile
     hostname: taskmanager
     container_name: taskmanager
     depends_on:
@@ -296,8 +306,8 @@ services:
 
   threat-assessment:
     build:
-      context: ../services/threat-assessment
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/threat-assessment/Dockerfile
       # ✅ Prevent layer caching issues
       cache_from: []
       args:
@@ -340,8 +350,8 @@ services:
 
   alert-management:
     build:
-      context: ../services/alert-management
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/alert-management/Dockerfile
       # ✅ Prevent layer caching issues - this was the root cause of past bugs!
       cache_from: []
       args:
@@ -392,8 +402,8 @@ services:
 
   customer-management:
     build:
-      context: ../services/customer-management
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/customer-management/Dockerfile
       # ✅ Prevent layer caching issues
       cache_from: []
       args:
@@ -435,8 +445,8 @@ services:
 
   threat-intelligence:
     build:
-      context: ../services/threat-intelligence
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/threat-intelligence/Dockerfile
       cache_from: []
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
@@ -480,8 +490,8 @@ services:
 
   api-gateway:
     build:
-      context: ../services/api-gateway
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/api-gateway/Dockerfile
       # ✅ Prevent layer caching issues
       cache_from: []
       args:
@@ -526,8 +536,8 @@ services:
 
   config-server:
     build:
-      context: ../services/config-server
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: services/config-server/Dockerfile
       # ✅ Prevent layer caching issues
       cache_from: []
       args:
@@ -599,6 +609,28 @@ services:
         reservations:
           cpus: '1.0'
           memory: 1G
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    image: frontend:latest
+    hostname: frontend
+    container_name: frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    networks:
+      - threat-detection-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     restart: unless-stopped
 
   topic-init:
