@@ -82,6 +82,7 @@ build_image() {
   if [[ "$BUILD_CMD" == "nerdctl" ]]; then
     if ! nerdctl --namespace k8s.io build \
         --no-cache \
+        --build-arg USE_CHINA_MIRROR="${USE_CHINA_MIRROR:-false}" \
         -t "$full_tag" \
         -f "$dockerfile" \
         "$context"; then
@@ -92,6 +93,7 @@ build_image() {
   else
     if ! docker build \
         --no-cache \
+        --build-arg USE_CHINA_MIRROR="${USE_CHINA_MIRROR:-false}" \
         -t "$full_tag" \
         -f "$dockerfile" \
         "$context"; then

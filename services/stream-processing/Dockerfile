@@ -4,7 +4,11 @@
 FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /workspace
 
-COPY maven-settings.xml /root/.m2/settings.xml
+ARG USE_CHINA_MIRROR=false
+COPY maven-settings.xml /tmp/maven-settings.xml
+RUN if [ "$USE_CHINA_MIRROR" = "true" ]; then \
+      cp /tmp/maven-settings.xml /root/.m2/settings.xml; \
+    fi
 COPY pom.xml ./pom.xml
 
 # Copy all module POMs for dependency resolution

@@ -8,8 +8,10 @@ WORKDIR /app
 # 复制依赖文件
 COPY package.json ./
 
-# 使用国内镜像加速 + 安装依赖
-RUN npm config set registry https://registry.npmmirror.com && \
+ARG USE_CHINA_MIRROR=false
+RUN if [ "$USE_CHINA_MIRROR" = "true" ]; then \
+      npm config set registry https://registry.npmmirror.com; \
+    fi && \
     npm install --legacy-peer-deps && \
     npm install terser --legacy-peer-deps
 

@@ -191,6 +191,7 @@ services:
       # Build args to invalidate cache on timestamp changes
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
     image: data-ingestion:latest
     hostname: data-ingestion
     container_name: data-ingestion-service
@@ -229,6 +230,7 @@ services:
       cache_from: []
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
     image: stream-processing:latest
     hostname: stream-processing
     container_name: stream-processing
@@ -289,6 +291,8 @@ services:
     build:
       context: ..
       dockerfile: services/stream-processing/Dockerfile
+      args:
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
     hostname: taskmanager
     container_name: taskmanager
     depends_on:
@@ -312,6 +316,7 @@ services:
       cache_from: []
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
     image: threat-assessment:latest
     hostname: threat-assessment
     container_name: threat-assessment-service
@@ -356,6 +361,7 @@ services:
       cache_from: []
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
     image: alert-management:latest
     hostname: alert-management
     container_name: alert-management-service
@@ -408,6 +414,7 @@ services:
       cache_from: []
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
     image: customer-management:latest
     hostname: customer-management
     container_name: customer-management-service
@@ -450,6 +457,7 @@ services:
       cache_from: []
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
     image: threat-intelligence:latest
     hostname: threat-intelligence
     container_name: threat-intelligence-service
@@ -496,6 +504,7 @@ services:
       cache_from: []
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
     image: api-gateway:latest
     hostname: api-gateway
     container_name: api-gateway
@@ -542,6 +551,7 @@ services:
       cache_from: []
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
     image: config-server:latest
     hostname: config-server
     container_name: config-server
@@ -575,6 +585,8 @@ services:
     build:
       context: ../services/ml-detection
       dockerfile: Dockerfile
+      args:
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
     image: ml-detection:latest
     hostname: ml-detection
     container_name: ml-detection-service
@@ -615,6 +627,8 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      args:
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
     image: frontend:latest
     hostname: frontend
     container_name: frontend
