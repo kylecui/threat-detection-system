@@ -1,0 +1,309 @@
+{
+  "customerId": "regression-v2",
+  "events": [
+    {
+      "v": 2,
+      "device_id": "jz-regression-001",
+      "seq": 1000,
+      "ts": "2026-03-23T10:15:00.000000000+08:00",
+      "type": "attack",
+      "data": {
+        "src_ip": "192.168.1.100",
+        "src_mac": "aa:bb:cc:dd:ee:01",
+        "guard_ip": "10.0.0.10",
+        "guard_mac": "aa:bb:cc:dd:ee:10",
+        "guard_type": "static",
+        "protocol": "tcp",
+        "dst_port": 22,
+        "interface": "eth1",
+        "ifindex": 3,
+        "vlan_id": 100,
+        "threat_level": 2,
+        "ethertype": 2048,
+        "ip_proto": 6
+      }
+    },
+    {
+      "v": 2,
+      "device_id": "jz-regression-001",
+      "seq": 1001,
+      "ts": "2026-03-23T10:16:00.000000000+08:00",
+      "type": "attack",
+      "data": {
+        "src_ip": "192.168.1.100",
+        "src_mac": "aa:bb:cc:dd:ee:01",
+        "guard_ip": "10.0.0.11",
+        "guard_mac": "aa:bb:cc:dd:ee:11",
+        "guard_type": "dynamic",
+        "protocol": "tcp",
+        "dst_port": 445,
+        "interface": "eth1",
+        "ifindex": 3,
+        "vlan_id": 100,
+        "threat_level": 3,
+        "ethertype": 2048,
+        "ip_proto": 6
+      }
+    },
+    {
+      "v": 2,
+      "device_id": "jz-regression-001",
+      "seq": 1002,
+      "ts": "2026-03-23T10:17:00.000000000+08:00",
+      "type": "attack",
+      "data": {
+        "src_ip": "192.168.1.100",
+        "src_mac": "aa:bb:cc:dd:ee:01",
+        "guard_ip": "10.0.0.12",
+        "guard_mac": "aa:bb:cc:dd:ee:12",
+        "guard_type": "dynamic",
+        "protocol": "tcp",
+        "dst_port": 3389,
+        "interface": "eth2",
+        "ifindex": 4,
+        "vlan_id": 100,
+        "threat_level": 3,
+        "ethertype": 2048,
+        "ip_proto": 6
+      }
+    },
+    {
+      "v": 2,
+      "device_id": "jz-regression-001",
+      "seq": 1003,
+      "ts": "2026-03-23T10:18:00.000000000+08:00",
+      "type": "attack",
+      "data": {
+        "src_ip": "192.168.1.100",
+        "src_mac": "aa:bb:cc:dd:ee:01",
+        "guard_ip": "10.0.0.13",
+        "guard_mac": "aa:bb:cc:dd:ee:13",
+        "guard_type": "static",
+        "protocol": "tcp",
+        "dst_port": 3306,
+        "interface": "eth1",
+        "ifindex": 3,
+        "vlan_id": 200,
+        "threat_level": 2,
+        "ethertype": 2048,
+        "ip_proto": 6
+      }
+    },
+    {
+      "v": 2,
+      "device_id": "jz-regression-001",
+      "seq": 1004,
+      "ts": "2026-03-23T10:19:00.000000000+08:00",
+      "type": "attack",
+      "data": {
+        "src_ip": "192.168.1.100",
+        "src_mac": "aa:bb:cc:dd:ee:01",
+        "guard_ip": "10.0.0.10",
+        "guard_mac": "aa:bb:cc:dd:ee:10",
+        "guard_type": "dynamic",
+        "protocol": "tcp",
+        "dst_port": 445,
+        "interface": "eth2",
+        "ifindex": 4,
+        "vlan_id": 200,
+        "threat_level": 4,
+        "ethertype": 2048,
+        "ip_proto": 6
+      }
+    },
+    {
+      "v": 2,
+      "device_id": "jz-regression-001",
+      "seq": 1005,
+      "ts": "2026-03-23T10:20:00.000000000+08:00",
+      "type": "sniffer",
+      "data": {
+        "suspect_mac": "00:11:22:33:44:55",
+        "suspect_ip": "10.0.1.200",
+        "probe_ip": "10.0.1.253",
+        "interface": "eth1",
+        "ifindex": 3,
+        "response_count": 3,
+        "first_seen": "2026-03-23T09:55:00+08:00",
+        "last_seen": "2026-03-23T10:20:00+08:00"
+      }
+    },
+    {
+      "v": 2,
+      "device_id": "jz-regression-001",
+      "seq": 1006,
+      "ts": "2026-03-23T10:21:00.000000000+08:00",
+      "type": "attack",
+      "data": {
+        "src_ip": "192.168.1.100",
+        "src_mac": "aa:bb:cc:dd:ee:01",
+        "guard_ip": "10.0.0.11",
+        "guard_mac": "aa:bb:cc:dd:ee:11",
+        "guard_type": "static",
+        "protocol": "tcp",
+        "dst_port": 22,
+        "interface": "eth1",
+        "ifindex": 3,
+        "vlan_id": 100,
+        "threat_level": 2,
+        "ethertype": 2048,
+        "ip_proto": 6
+      }
+    },
+    {
+      "v": 2,
+      "device_id": "jz-regression-001",
+      "seq": 1007,
+      "ts": "2026-03-23T10:22:00.000000000+08:00",
+      "type": "heartbeat",
+      "data": {
+        "uptime_sec": 86400,
+        "static_guards": 10,
+        "dynamic_guards": 45,
+        "total_guards": 55,
+        "online_devices": 120,
+        "frozen_ips": 5,
+        "whitelist_count": 8,
+        "interfaces": {
+          "eth1": { "rx_pps": 15000, "tx_pps": 200, "bpf_modules": 8 }
+        },
+        "modules": {
+          "loaded": 8,
+          "failed": 0
+        },
+        "db_size_mb": 128,
+        "attack_count_total": 5432,
+        "attack_count_last_period": 12,
+        "network_topology": {
+          "total_identified": 95,
+          "total_unidentified": 25,
+          "by_class": { "Computer": 42, "Phone": 18, "Unknown": 40 },
+          "by_os": { "Windows": 30, "Linux": 8, "Unknown": 61 },
+          "by_vendor": { "Dell": 12, "Apple": 18, "Other": 74 }
+        },
+        "devices": [
+          {
+            "ip": "10.0.1.100",
+            "mac": "aa:bb:cc:11:22:33",
+            "vlan": 100,
+            "vendor": "Dell",
+            "os_class": "Windows",
+            "device_class": "Computer",
+            "hostname": "desktop-01",
+            "confidence": 85,
+            "first_seen": "2026-03-20T08:00:00+08:00",
+            "last_seen": "2026-03-23T10:21:55+08:00"
+          }
+        ]
+      }
+    },
+    {
+      "v": 2,
+      "device_id": "jz-regression-001",
+      "seq": 1008,
+      "ts": "2026-03-23T10:23:00.000000000+08:00",
+      "type": "attack",
+      "data": {
+        "src_ip": "192.168.1.100",
+        "src_mac": "aa:bb:cc:dd:ee:01",
+        "guard_ip": "10.0.0.12",
+        "guard_mac": "aa:bb:cc:dd:ee:12",
+        "guard_type": "dynamic",
+        "protocol": "tcp",
+        "dst_port": 3389,
+        "interface": "eth2",
+        "ifindex": 4,
+        "vlan_id": 100,
+        "threat_level": 3,
+        "ethertype": 2048,
+        "ip_proto": 6
+      }
+    },
+    {
+      "v": 2,
+      "device_id": "jz-regression-001",
+      "seq": 1009,
+      "ts": "2026-03-23T10:24:00.000000000+08:00",
+      "type": "sniffer",
+      "data": {
+        "suspect_mac": "00:11:22:33:44:66",
+        "suspect_ip": "10.0.1.201",
+        "probe_ip": "10.0.1.254",
+        "interface": "eth2",
+        "ifindex": 4,
+        "response_count": 2,
+        "first_seen": "2026-03-23T10:05:00+08:00",
+        "last_seen": "2026-03-23T10:24:00+08:00"
+      }
+    },
+    {
+      "v": 2,
+      "device_id": "jz-regression-001",
+      "seq": 1010,
+      "ts": "2026-03-23T10:25:00.000000000+08:00",
+      "type": "attack",
+      "data": {
+        "src_ip": "192.168.1.100",
+        "src_mac": "aa:bb:cc:dd:ee:01",
+        "guard_ip": "10.0.0.13",
+        "guard_mac": "aa:bb:cc:dd:ee:13",
+        "guard_type": "static",
+        "protocol": "tcp",
+        "dst_port": 3306,
+        "interface": "eth1",
+        "ifindex": 3,
+        "vlan_id": 200,
+        "threat_level": 2,
+        "ethertype": 2048,
+        "ip_proto": 6
+      }
+    },
+    {
+      "v": 2,
+      "device_id": "jz-regression-001",
+      "seq": 1011,
+      "ts": "2026-03-23T10:26:00.000000000+08:00",
+      "type": "heartbeat",
+      "data": {
+        "uptime_sec": 86760,
+        "static_guards": 10,
+        "dynamic_guards": 46,
+        "total_guards": 56,
+        "online_devices": 122,
+        "frozen_ips": 5,
+        "whitelist_count": 8,
+        "interfaces": {
+          "eth1": { "rx_pps": 14900, "tx_pps": 210, "bpf_modules": 8 }
+        },
+        "modules": {
+          "loaded": 8,
+          "failed": 0
+        },
+        "db_size_mb": 129,
+        "attack_count_total": 5445,
+        "attack_count_last_period": 13,
+        "network_topology": {
+          "total_identified": 97,
+          "total_unidentified": 25,
+          "by_class": { "Computer": 44, "Phone": 18, "Unknown": 40 },
+          "by_os": { "Windows": 31, "Linux": 8, "Unknown": 61 },
+          "by_vendor": { "Dell": 13, "Apple": 18, "Other": 74 }
+        },
+        "devices": [
+          {
+            "ip": "10.0.1.101",
+            "mac": "aa:bb:cc:11:22:34",
+            "vlan": 100,
+            "vendor": "Dell",
+            "os_class": "Windows",
+            "device_class": "Computer",
+            "hostname": "desktop-02",
+            "confidence": 86,
+            "first_seen": "2026-03-20T08:10:00+08:00",
+            "last_seen": "2026-03-23T10:25:55+08:00"
+          }
+        ]
+      }
+    }
+  ]
+}

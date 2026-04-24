@@ -1,0 +1,234 @@
+---
+# PostgreSQL Backup Infrastructure
+# Daily pg_dump CronJob + restore drill script ConfigMap
+# Designed for K3s single-node deployment with local PVC storage
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-backup-pvc
+  labels:
+    app: postgres-backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-restore-script
+  labels:
+    app: postgres-backup
+data:
+  restore.sh: |
+    #!/bin/bash
+    # =============================================================================
+    # PostgreSQL Restore Script for Threat Detection System
+    # =============================================================================
+    #
+    # USAGE:
+    #   ./restore.sh                          # List available backups
+    #   ./restore.sh <backup-filename>        # Restore from a specific backup
+    #
+    # EXAMPLES:
+    #   ./restore.sh threat_detection_2026-04-24_02-00-00.sql.gz
+    #
+    # PREREQUISITES:
+    #   - PGPASSWORD environment variable must be set (or use .pgpass)
+    #   - pg_restore / psql must be available in PATH
+    #   - The backup file must exist in /backups directory
+    #
+    # NOTES:
+    #   - This script will DROP and RECREATE the target database before restoring.
+    #   - Always verify the backup integrity before running in production.
+    #   - Ensure all application services are stopped before restoring.
+    # =============================================================================
+
+    set -euo pipefail
+
+    BACKUP_DIR="/backups"
+    DB_HOST="${PGHOST:-postgres}"
+    DB_PORT="${PGPORT:-5432}"
+    DB_NAME="${PGDATABASE:-threat_detection}"
+    DB_USER="${PGUSER:-threat_user}"
+
+    # ── List available backups ────────────────────────────────────────────────────
+    list_backups() {
+      echo "Available backups in ${BACKUP_DIR}:"
+      echo "------------------------------------------------------------"
+      if ls "${BACKUP_DIR}"/*.sql.gz 2>/dev/null | head -20; then
+        echo ""
+        echo "Total backups: $(ls "${BACKUP_DIR}"/*.sql.gz 2>/dev/null | wc -l)"
+      else
+        echo "  (no backups found)"
+      fi
+    }
+
+    # ── Safety confirmation prompt ────────────────────────────────────────────────
+    confirm_restore() {
+      local backup_file="$1"
+      echo ""
+      echo "⚠️  WARNING: You are about to restore the database!"
+      echo "   Target database : ${DB_NAME}"
+      echo "   Target host     : ${DB_HOST}:${DB_PORT}"
+      echo "   Backup file     : ${backup_file}"
+      echo ""
+      echo "   This will OVERWRITE all existing data in '${DB_NAME}'."
+      echo "   Make sure all application services are stopped first."
+      echo ""
+      read -r -p "Type 'yes' to confirm restore: " answer
+      if [[ "${answer}" != "yes" ]]; then
+        echo "Restore cancelled."
+        exit 0
+      fi
+    }
+
+    # ── Perform restore ───────────────────────────────────────────────────────────
+    do_restore() {
+      local backup_file="$1"
+      local full_path="${BACKUP_DIR}/${backup_file}"
+
+      if [[ ! -f "${full_path}" ]]; then
+        echo "ERROR: Backup file not found: ${full_path}"
+        exit 1
+      fi
+
+      echo ""
+      echo "Starting restore at $(date '+%Y-%m-%d %H:%M:%S') ..."
+
+      # Decompress and pipe into psql
+      echo "  → Decompressing and restoring ${backup_file} ..."
+      gunzip -c "${full_path}" | psql \
+        -h "${DB_HOST}" \
+        -p "${DB_PORT}" \
+        -U "${DB_USER}" \
+        -d "${DB_NAME}" \
+        --set ON_ERROR_STOP=1
+
+      echo ""
+      echo "✅ Restore completed successfully at $(date '+%Y-%m-%d %H:%M:%S')"
+    }
+
+    # ── Main ──────────────────────────────────────────────────────────────────────
+    if [[ $# -eq 0 ]]; then
+      list_backups
+      exit 0
+    fi
+
+    BACKUP_FILE="$1"
+    list_backups
+    confirm_restore "${BACKUP_FILE}"
+    do_restore "${BACKUP_FILE}"
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  labels:
+    app: postgres-backup
+spec:
+  schedule: "0 2 * * *"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: postgres-backup
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: postgres-backup
+              image: postgres:15
+              imagePullPolicy: IfNotPresent
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "100m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+              env:
+                - name: PGHOST
+                  value: "postgres"
+                - name: PGPORT
+                  value: "5432"
+                - name: PGDATABASE
+                  value: "threat_detection"
+                - name: PGUSER
+                  value: "threat_user"
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-secret
+                      key: password
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backups
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -euo pipefail
+
+                  BACKUP_DIR="/backups"
+                  TIMESTAMP=$(date '+%Y-%m-%d_%H-%M-%S')
+                  BACKUP_FILE="${BACKUP_DIR}/threat_detection_${TIMESTAMP}.sql.gz"
+                  KEEP_LAST=7
+
+                  echo "=== PostgreSQL Backup Job ==="
+                  echo "Start time : $(date '+%Y-%m-%d %H:%M:%S')"
+                  echo "Target DB  : ${PGDATABASE} @ ${PGHOST}:${PGPORT}"
+                  echo "Output     : ${BACKUP_FILE}"
+                  echo ""
+
+                  # Wait for postgres to be ready
+                  until pg_isready -h "${PGHOST}" -p "${PGPORT}" -U "${PGUSER}"; do
+                    echo "Waiting for PostgreSQL to be ready..."
+                    sleep 5
+                  done
+
+                  # Run pg_dump with gzip compression
+                  echo "Running pg_dump ..."
+                  pg_dump \
+                    -h "${PGHOST}" \
+                    -p "${PGPORT}" \
+                    -U "${PGUSER}" \
+                    -d "${PGDATABASE}" \
+                    --no-password \
+                    --format=plain \
+                    --clean \
+                    --if-exists \
+                    --create \
+                  | gzip -9 > "${BACKUP_FILE}"
+
+                  BACKUP_SIZE=$(du -sh "${BACKUP_FILE}" | cut -f1)
+                  echo "Backup completed: ${BACKUP_FILE} (${BACKUP_SIZE})"
+
+                  # Retain only the last N backups
+                  echo ""
+                  echo "Cleaning up old backups (keeping last ${KEEP_LAST}) ..."
+                  BACKUP_COUNT=$(ls -1t "${BACKUP_DIR}"/threat_detection_*.sql.gz 2>/dev/null | wc -l)
+                  if [[ "${BACKUP_COUNT}" -gt "${KEEP_LAST}" ]]; then
+                    ls -1t "${BACKUP_DIR}"/threat_detection_*.sql.gz \
+                      | tail -n "+$((KEEP_LAST + 1))" \
+                      | xargs rm -f
+                    echo "Removed $((BACKUP_COUNT - KEEP_LAST)) old backup(s)."
+                  else
+                    echo "No cleanup needed (${BACKUP_COUNT}/${KEEP_LAST} slots used)."
+                  fi
+
+                  echo ""
+                  echo "=== Backup job finished at $(date '+%Y-%m-%d %H:%M:%S') ==="
+                  ls -lh "${BACKUP_DIR}"/threat_detection_*.sql.gz 2>/dev/null || true
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: postgres-backup-pvc
