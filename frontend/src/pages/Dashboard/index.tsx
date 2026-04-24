@@ -10,6 +10,7 @@ import { Line, Pie } from '@ant-design/charts';
 import type { Statistics, ThreatAssessment, ChartDataPoint, Customer } from '@/types';
 import { ThreatLevel } from '@/types';
 import threatService from '@/services/threat';
+import { getCustomerId } from '@/services/api';
 import dayjs from 'dayjs';
 
 // 在文件顶部 import 之后添加（或放在组件内也可）
@@ -44,7 +45,7 @@ const Dashboard = () => {
     : null;
   const isTenantAdmin = !!user?.roles?.includes('TENANT_ADMIN');
   const tenantId = user?.tenantId;
-  const customerId = localStorage.getItem('customer_id') || user?.customerId || 'demo-customer';
+  const customerId = getCustomerId();
 
   /**
    * 加载仪表盘数据

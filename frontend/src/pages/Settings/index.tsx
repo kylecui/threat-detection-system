@@ -39,7 +39,7 @@ import {
   DeleteOutlined,
   LinkOutlined,
 } from '@ant-design/icons';
-import apiClient, { switchRegion } from '@/services/api';
+import apiClient, { switchRegion, getCustomerId } from '@/services/api';
 import { getConfigsByCategory, batchUpdateConfigs, validateLlmConnection } from '@/services/config';
 import type { LlmValidateResult as ConfigLlmValidateResult } from '@/services/config';
 import {
@@ -132,7 +132,7 @@ const Settings = () => {
   const [userConfigLoading, setUserConfigLoading] = useState(false);
   const [userConfigSaving, setUserConfigSaving] = useState(false);
 
-  const customerId = localStorage.getItem('customer_id') || 'demo-customer';
+  const customerId = getCustomerId();
   const userRoles: string[] = (() => {
     try {
       const user = localStorage.getItem('user');

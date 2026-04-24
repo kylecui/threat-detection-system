@@ -3,11 +3,11 @@ import { message } from 'antd';
 import { REGION_ENDPOINTS, type RegionId } from '@/types';
 
 /**
- * snake_case → camelCase 键名转换
+ * snake_case → camelCase 键名转换 (安全网)
  *
- * customer-management 服务使用 Jackson SNAKE_CASE 命名策略,
- * 前端 TypeScript 类型全部使用 camelCase。
- * 此转换器在响应拦截器中自动桥接两者差异。
+ * 所有后端服务已统一使用 camelCase JSON 输出。
+ * 此转换器作为安全网保留在响应拦截器中，
+ * 对 camelCase 键无副作用，可兼容过渡期间的残留 snake_case。
  */
 function snakeToCamel(str: string): string {
   return str.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
@@ -28,28 +28,6 @@ function convertKeys(obj: unknown): unknown {
   }
   return obj;
 }
-
-function camelToSnake(str: string): string {
-  return str.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
-}
-
-function convertKeysToSnake(obj: unknown): unknown {
-  if (Array.isArray(obj)) {
-    return obj.map(convertKeysToSnake);
-  }
-  if (obj !== null && typeof obj === 'object' && !(obj instanceof Date)) {
-    return Object.entries(obj as Record<string, unknown>).reduce(
-      (acc, [key, value]) => {
-        acc[camelToSnake(key)] = convertKeysToSnake(value);
-        return acc;
-      },
-      {} as Record<string, unknown>,
-    );
-  }
-  return obj;
-}
-
-const SNAKE_CASE_ROUTES = ['/api/v1/customers'];
 
 /**
  * 区域路由优先级: localStorage.region → VITE_API_BASE_URL → /api
@@ -82,6 +60,21 @@ const apiClient: AxiosInstance = axios.create({
   },
 });
 
+/**
+ * 从 localStorage 获取当前 customerId。
+ * 优先级: customer_id 键 → user JSON 中的 customerId 字段。
+ * 管理员用户无绑定客户时返回 undefined（不注入 customer_id 参数）。
+ */
+export function getCustomerId(): string | undefined {
+  const stored = localStorage.getItem('customer_id');
+  if (stored) return stored;
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '');
+    if (user?.customerId) return user.customerId;
+  } catch { /* ignore parse errors */ }
+  return undefined;
+}
+
 export function switchRegion(regionId: RegionId): void {
   localStorage.setItem('region', regionId);
   apiClient.defaults.baseURL = getRegionBaseURL();
@@ -106,22 +99,17 @@ apiClient.interceptors.request.use(
         && !url.includes('/api/v1/llm-providers')
         && !url.includes('/api/v1/config-assignments')
         && !url.includes('/api/v1/user-config')) {
-      const customerId = localStorage.getItem('customer_id') || 'demo-customer';
-      if (config.params) {
-        config.params.customer_id = customerId;
-      } else {
-        config.params = { customer_id: customerId };
+      const customerId = getCustomerId();
+      if (customerId) {
+        if (config.params) {
+          config.params.customer_id = customerId;
+        } else {
+          config.params = { customer_id: customerId };
+        }
       }
     }
 
     console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.params);
-
-    // Convert request body to snake_case for customer-management endpoints
-    if (config.data && typeof config.data === 'object') {
-      if (SNAKE_CASE_ROUTES.some((route) => url.startsWith(route))) {
-        config.data = convertKeysToSnake(config.data);
-      }
-    }
 
     return config;
   },

@@ -44,6 +44,7 @@ function handleLogout() {
   localStorage.removeItem('token');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
+  localStorage.removeItem('customer_id');
   window.location.href = '/login';
 }
 

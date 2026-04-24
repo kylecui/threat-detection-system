@@ -23,6 +23,7 @@ import {
 import { Line, Pie, Column } from '@ant-design/charts';
 import type { Statistics, ChartDataPoint, ThreatAssessment, Customer } from '@/types';
 import threatService from '@/services/threat';
+import { getCustomerId } from '@/services/api';
 import dayjs from 'dayjs';
 
 type TopAttacker = {
@@ -95,7 +96,7 @@ const Analytics = () => {
   const isTenantAdmin = !!user?.roles?.includes('TENANT_ADMIN');
   const tenantId = user?.tenantId;
 
-  const customerId = localStorage.getItem('customer_id') || user?.customerId || 'demo-customer';
+  const customerId = getCustomerId();
 
   /** 加载所有分析数据 */
   const loadData = useCallback(async () => {

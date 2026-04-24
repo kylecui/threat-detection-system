@@ -5,6 +5,7 @@ import { DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import type { ThreatAssessment } from '@/types';
 import { ThreatLevel } from '@/types';
 import threatService from '@/services/threat';
+import { getCustomerId } from '@/services/api';
 import dayjs from 'dayjs';
 
 /**
@@ -23,7 +24,7 @@ const ThreatList = () => {
   const loadThreats = async () => {
     try {
       setLoading(true);
-      const customerId = localStorage.getItem('customer_id') || 'demo-customer';
+      const customerId = getCustomerId();
       const response = await threatService.getThreatList({
         customer_id: customerId,
         page: page - 1,
