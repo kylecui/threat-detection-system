@@ -14,6 +14,7 @@ import {
   LogoutOutlined,
   ApartmentOutlined,
   UserOutlined,
+  ApiOutlined,
 } from '@ant-design/icons';
 import Dashboard from './pages/Dashboard';
 import ThreatList from './pages/ThreatList';
@@ -27,6 +28,7 @@ import SystemMonitor from './pages/SystemMonitor';
 import LoginPage from './pages/Login';
 import TenantMgmt from './pages/TenantMgmt';
 import UserMgmt from './pages/UserMgmt';
+import DeviceMgmt from './pages/DeviceMgmt';
 
 function isAuthenticated(): boolean {
   return !!localStorage.getItem('token');
@@ -70,6 +72,7 @@ function AppLayout() {
     { path: '/alerts', name: '告警中心', icon: <BellOutlined /> },
     { path: '/analytics', name: '数据分析', icon: <BarChartOutlined /> },
     { path: '/customers', name: '客户管理', icon: <TeamOutlined /> },
+    { path: '/devices', name: '设备管理', icon: <ApiOutlined /> },
     { path: '/threat-intel', name: '威胁情报', icon: <GlobalOutlined /> },
     { path: '/ml', name: 'ML检测', icon: <ExperimentOutlined /> },
     { path: '/system', name: '系统监控', icon: <CloudServerOutlined /> },
@@ -118,6 +121,7 @@ function AppLayout() {
         <Route path="/alerts" element={<AlertCenter />} />
         <Route path="/analytics" element={<Analytics />} />
         <Route path="/customers" element={<CustomerMgmt />} />
+        <Route path="/devices" element={<DeviceMgmt />} />
         <Route path="/threat-intel" element={<ThreatIntel />} />
         <Route path="/ml" element={<MlDetection />} />
         <Route path="/system" element={<SystemMonitor />} />
