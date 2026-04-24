@@ -40,6 +40,9 @@ CREATE INDEX IF NOT EXISTS idx_attack_events_response_port ON attack_events(resp
 -- JSONB字段GIN索引(用于快速查询原始日志)
 CREATE INDEX IF NOT EXISTS idx_attack_events_raw_log ON attack_events USING GIN (raw_log_data);
 
+-- 设备绑定回填优化索引 (用于 UPDATE ... WHERE dev_serial = ? AND customer_id = 'unknown')
+CREATE INDEX IF NOT EXISTS idx_attack_events_devserial_customer ON attack_events(dev_serial, customer_id);
+
 COMMENT ON TABLE attack_events IS '原始攻击事件存储 - 所有蜜罐检测到的探测行为';
 COMMENT ON COLUMN attack_events.attack_mac IS '被诱捕者MAC地址 (内网失陷主机)';
 COMMENT ON COLUMN attack_events.response_ip IS '诱饵IP (不存在的虚拟哨兵)';

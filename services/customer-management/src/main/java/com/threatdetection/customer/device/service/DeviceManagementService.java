@@ -14,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,7 @@ public class DeviceManagementService {
     private final DeviceMappingRepository deviceMappingRepository;
     private final CustomerRepository customerRepository;
     private final CustomerService customerService;
+    private final JdbcTemplate jdbcTemplate;
 
     /**
      * 绑定单个设备到客户
@@ -70,6 +73,7 @@ public class DeviceManagementService {
         customerService.updateDeviceCount(customerId, (int) (currentDeviceCount + 1));
 
         log.info("Successfully bound device {} to customer {}", request.getDevSerial(), customerId);
+        backfillCustomerIdForDevice(request.getDevSerial(), customerId);
         return DeviceMappingResponse.fromEntity(saved);
     }
 
@@ -146,6 +150,9 @@ public class DeviceManagementService {
         // 4. 更新客户的当前设备数
         if (response.getSucceeded() > 0) {
             customerService.updateDeviceCount(customerId, (int) (currentDeviceCount + response.getSucceeded()));
+            for (String devSerial : response.getSuccessfulDevices()) {
+                backfillCustomerIdForDevice(devSerial, customerId);
+            }
         }
 
         log.info("Batch binding completed: {}/{} succeeded, {}/{} failed", 
@@ -385,5 +392,21 @@ public class DeviceManagementService {
 
         com.threatdetection.customer.model.Customer customer = customerService.getCustomerEntity(mapping.getCustomerId());
         return com.threatdetection.customer.dto.CustomerResponse.fromEntity(customer);
+    }
+
+    @Async
+    public void backfillCustomerIdForDevice(String devSerial, String customerId) {
+        try {
+            String upperSerial = devSerial.toUpperCase();
+            int updated = jdbcTemplate.update(
+                "UPDATE attack_events SET customer_id = ? WHERE dev_serial = ? AND customer_id = 'unknown'",
+                customerId, upperSerial
+            );
+            if (updated > 0) {
+                log.info("Backfilled {} attack_events rows: dev_serial={} → customer_id={}", updated, upperSerial, customerId);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to backfill attack_events for dev_serial={}: {}", devSerial, e.getMessage());
+        }
     }
 }

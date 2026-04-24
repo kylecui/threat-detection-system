@@ -2,11 +2,10 @@ package com.threatdetection.customer;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableAsync;
 
-/**
- * 客户管理服务主应用
- */
 @SpringBootApplication
+@EnableAsync
 public class CustomerManagementApplication {
 
     public static void main(String[] args) {
