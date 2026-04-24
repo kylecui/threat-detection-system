@@ -162,6 +162,7 @@ const Settings = () => {
 
   // ──────── 加载通知配置 ────────
   const loadNotifConfig = async () => {
+    if (!customerId) return;
     try {
       setNotifLoading(true);
       const resp = await apiClient.get<NotificationConfig>(
@@ -348,6 +349,10 @@ const Settings = () => {
 
   // ──────── 保存通知偏好 ────────
   const handleNotifSave = async (values: Record<string, unknown>) => {
+    if (!customerId) {
+      message.warning('请先设置客户ID');
+      return;
+    }
     try {
       await apiClient.put(
         `/api/v1/customers/${customerId}/notification-config`,
@@ -1242,12 +1247,22 @@ const Settings = () => {
       ),
       children: (
         <Card bordered={false} loading={notifLoading}>
-          <Alert
-            message={`当前客户: ${customerId} — 通知配置将应用于该客户的所有告警`}
-            type="info"
-            showIcon
-            style={{ marginBottom: 24 }}
-          />
+          {!customerId ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="未选择客户"
+              description="通知偏好为客户级别配置。请先在「基础设置」标签页中设置客户ID，或在「客户管理」页面选择客户。"
+              style={{ marginBottom: 24 }}
+            />
+          ) : (
+            <>
+              <Alert
+                message={`当前客户: ${customerId} — 通知配置将应用于该客户的所有告警`}
+                type="info"
+                showIcon
+                style={{ marginBottom: 24 }}
+              />
           <Form
             form={notifForm}
             layout="vertical"
@@ -1327,6 +1342,8 @@ const Settings = () => {
               </Space>
             </Form.Item>
           </Form>
+            </>
+          )}
         </Card>
       ),
     },
