@@ -472,7 +472,26 @@ public class LogParserService {
             logger.warn("Invalid MAC address format: {}", mac);
             return null;
         }
-        return mac.toUpperCase();
+        String normalized = mac.toUpperCase();
+
+        if ("FF:FF:FF:FF:FF:FF".equals(normalized)) {
+            logger.warn("Rejected broadcast MAC address: {}", normalized);
+            incrementStat("mac_broadcast_rejected");
+            return null;
+        }
+        if ("00:00:00:00:00:00".equals(normalized)) {
+            logger.warn("Rejected null MAC address: {}", normalized);
+            incrementStat("mac_null_rejected");
+            return null;
+        }
+
+        int firstOctet = Integer.parseInt(normalized.substring(0, 2), 16);
+        if ((firstOctet & 0x01) != 0) {
+            logger.warn("Multicast MAC address detected (first octet LSB=1): {}", normalized);
+            incrementStat("mac_multicast_detected");
+        }
+
+        return normalized;
     }
 
     private String validateIpAddress(String ip) {
