@@ -73,7 +73,12 @@ const MlDetection = () => {
     try {
       const result = await mlService.reloadModels();
       if (result.status === 'ok') {
-        message.success(`模型重载成功，已加载 ${result.reloadCount || 0} 个模型`);
+        const loadedCount = Object.values(result.modelsLoaded || {}).filter(Boolean).length;
+        if (loadedCount > 0) {
+          message.success(`模型重载成功，已加载 ${loadedCount} 个模型`);
+        } else {
+          message.warning('模型重载完成，但未找到可用模型文件');
+        }
         loadAll();
       } else {
         message.error(`重载失败: ${result.error || '未知错误'}`);
