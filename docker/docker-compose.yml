@@ -61,6 +61,7 @@ services:
       - ./33-plugin-configs.sql:/docker-entrypoint-initdb.d/33-plugin-configs.sql
       - ./34-tire-llm-multitenant.sql:/docker-entrypoint-initdb.d/34-tire-llm-multitenant.sql
       - ./35-config-assignments-v2.sql:/docker-entrypoint-initdb.d/35-config-assignments-v2.sql
+      - ./36-demo-customer-seed.sql:/docker-entrypoint-initdb.d/36-demo-customer-seed.sql
     networks:
       - threat-detection-network
     healthcheck:
@@ -168,7 +169,7 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1

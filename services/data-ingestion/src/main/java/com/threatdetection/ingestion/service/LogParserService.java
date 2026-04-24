@@ -27,7 +27,7 @@ public class LogParserService {
     private static final Pattern ATTACK_LOG_PATTERN = Pattern.compile(
         "(?:<\\d+>\\w+\\s+\\d+\\s+\\d+:\\d+:\\d+\\s+[^\\s]+\\s+[^:]+:\\s*)?" +  // 可选的syslog头部
         "syslog_version=(\\d+(?:\\.\\d+)*)\\s*,\\s*" +
-        "dev_serial=(" + System.getenv().getOrDefault("DEV_SERIAL_PATTERN", "[0-9A-Za-z]+") + ")\\s*,\\s*" +
+        "dev_serial=(" + System.getenv().getOrDefault("DEV_SERIAL_PATTERN", "[0-9A-Za-z._-]+") + ")\\s*,\\s*" +
         "log_type=(\\d+)\\s*,\\s*" +
         "sub_type\\s*=\\s*(\\d+)\\s*,\\s*" +  // 修复：允许sub_type后面和=前后的空格
         "attack_mac=([0-9A-Fa-f:]+)\\s*,\\s*" +
@@ -46,7 +46,7 @@ public class LogParserService {
     private static final Pattern STATUS_LOG_PATTERN = Pattern.compile(
         "(?:<\\d+>\\w+\\s+\\d+\\s+\\d+:\\d+:\\d+\\s+[^\\s]+\\s+[^:]+:\\s*)?" +  // 可选的syslog头部
         "syslog_version=(\\d+(?:\\.\\d+)*)\\s*,\\s*" +
-        "dev_serial=(" + System.getenv().getOrDefault("DEV_SERIAL_PATTERN", "[0-9A-Za-z]+") + ")\\s*,\\s*" +
+        "dev_serial=(" + System.getenv().getOrDefault("DEV_SERIAL_PATTERN", "[0-9A-Za-z._-]+") + ")\\s*,\\s*" +
         "log_type=(\\d+)\\s*,\\s*" +
         "sentry_count=(\\d+)\\s*,\\s*" +
         "real_host_count=(\\d+)\\s*,\\s*" +
@@ -65,7 +65,7 @@ public class LogParserService {
     
     // 设备序列号验证模式 - 支持环境变量配置
     private static final Pattern DEV_SERIAL_PATTERN = Pattern.compile(
-        System.getenv().getOrDefault("DEV_SERIAL_PATTERN", "[0-9A-Za-z]+")  // 默认允许字母数字组合
+        System.getenv().getOrDefault("DEV_SERIAL_PATTERN", "[0-9A-Za-z._-]+")  // 默认允许字母数字、点、下划线、连字符
     );
 
     // 统计信息
@@ -441,7 +441,7 @@ public class LogParserService {
         }
         
         // 使用可配置的正则表达式验证设备序列号
-        String pattern = System.getenv().getOrDefault("DEV_SERIAL_PATTERN", "[0-9A-Za-z]+");
+        String pattern = System.getenv().getOrDefault("DEV_SERIAL_PATTERN", "[0-9A-Za-z._-]+");
         logger.debug("Validating dev_serial '{}' with pattern '{}'", devSerial, pattern);
         
         if (!DEV_SERIAL_PATTERN.matcher(devSerial).matches()) {
