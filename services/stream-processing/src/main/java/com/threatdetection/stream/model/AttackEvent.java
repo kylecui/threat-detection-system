@@ -35,6 +35,8 @@ public class AttackEvent {
     @JsonAlias({"company_obj_id", "customer_id"})
     private String customerId;
 
+    private String schemaVersion;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'", timezone = "UTC")
     private Instant timestamp;
 
@@ -159,6 +161,9 @@ public class AttackEvent {
 
     public Instant getTimestamp() { return timestamp; }
     public void setTimestamp(Instant timestamp) { this.timestamp = timestamp; }
+
+    public String getSchemaVersion() { return schemaVersion; }
+    public void setSchemaVersion(String schemaVersion) { this.schemaVersion = schemaVersion; }
 
     /**
      * 获取本地时间（便捷方法）

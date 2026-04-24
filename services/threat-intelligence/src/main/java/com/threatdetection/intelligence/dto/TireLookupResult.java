@@ -1,7 +1,6 @@
 package com.threatdetection.intelligence.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -91,13 +90,10 @@ public class TireLookupResult {
     @AllArgsConstructor
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Analysis {
-        @JsonProperty("reputation_score")
         private Double reputationScore;
 
-        @JsonProperty("contextual_score")
         private Double contextualScore;
 
-        @JsonProperty("final_score")
         private Double finalScore;
 
         private String level;
@@ -105,5 +101,21 @@ public class TireLookupResult {
         private Double confidence;
 
         private String decision;
+
+        public Double getReputationScore() {
+            return reputationScore;
+        }
+
+        public Double getContextualScore() {
+            return contextualScore;
+        }
+
+        public Double getFinalScore() {
+            return finalScore;
+        }
+
+        public String getLevel() {
+            return level;
+        }
     }
 }

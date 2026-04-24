@@ -19,6 +19,7 @@ public class StatusEvent {
     private String status;
     private String description;
     private String rawLog;
+    private String schemaVersion;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'", timezone = "UTC")
     private Instant timestamp;
@@ -83,6 +84,9 @@ public class StatusEvent {
 
     public Instant getTimestamp() { return timestamp; }
     public void setTimestamp(Instant timestamp) { this.timestamp = timestamp; }
+
+    public String getSchemaVersion() { return schemaVersion; }
+    public void setSchemaVersion(String schemaVersion) { this.schemaVersion = schemaVersion; }
 
     /**
      * 获取本地时间（便捷方法）

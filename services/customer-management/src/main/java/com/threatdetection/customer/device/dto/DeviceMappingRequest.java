@@ -1,6 +1,5 @@
 package com.threatdetection.customer.device.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -20,7 +19,6 @@ public class DeviceMappingRequest {
     /**
      * 设备序列号
      */
-    @JsonProperty("dev_serial")
     @NotBlank(message = "Device serial cannot be blank")
     @Size(max = 50, message = "Device serial cannot exceed 50 characters")
     private String devSerial;
@@ -28,7 +26,6 @@ public class DeviceMappingRequest {
     /**
      * 描述信息
      */
-    @JsonProperty("description")
     @Size(max = 500, message = "Description cannot exceed 500 characters")
     private String description;
 }

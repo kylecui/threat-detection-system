@@ -107,6 +107,13 @@ public class ThreatAlertMessage {
     private java.util.List<Integer> portList;
     
     /**
+     * 消息Schema版本 (用于向前兼容)
+     */
+    @JsonProperty(value = "schemaVersion", access = JsonProperty.Access.WRITE_ONLY)
+    @JsonAlias({"schema_version", "schemaVersion"})
+    private String schemaVersion;
+    
+    /**
      * 评估时间戳 (ISO8601格式 或 Unix时间戳)
      */
     @JsonProperty(value = "timestamp", access = JsonProperty.Access.WRITE_ONLY)

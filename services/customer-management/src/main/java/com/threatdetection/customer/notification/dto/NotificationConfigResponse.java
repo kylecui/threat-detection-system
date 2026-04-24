@@ -1,6 +1,5 @@
 package com.threatdetection.customer.notification.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,88 +28,66 @@ public class NotificationConfigResponse {
 
     private Long id;
     
-    @JsonProperty("customer_id")
     private String customerId;
 
     // ========== 邮件配置 ==========
     
-    @JsonProperty("email_enabled")
     private Boolean emailEnabled;
 
-    @JsonProperty("email_recipients")
     private List<String> emailRecipients;
 
     // ========== 短信配置 ==========
     
-    @JsonProperty("sms_enabled")
     private Boolean smsEnabled;
 
-    @JsonProperty("sms_recipients")
     private List<String> smsRecipients;
 
     // ========== Slack配置 ==========
     
-    @JsonProperty("slack_enabled")
     private Boolean slackEnabled;
 
-    @JsonProperty("slack_webhook_url")
     private String slackWebhookUrl;
 
-    @JsonProperty("slack_channel")
     private String slackChannel;
 
     // ========== Webhook配置 ==========
     
-    @JsonProperty("webhook_enabled")
     private Boolean webhookEnabled;
 
-    @JsonProperty("webhook_url")
     private String webhookUrl;
 
-    @JsonProperty("webhook_headers")
     private Map<String, String> webhookHeaders;
 
     // ========== 告警级别过滤 ==========
     
-    @JsonProperty("min_severity_level")
     private String minSeverityLevel;
 
-    @JsonProperty("notify_on_severities")
     private List<String> notifyOnSeverities;
 
     // ========== 通知频率控制 ==========
     
-    @JsonProperty("max_notifications_per_hour")
     private Integer maxNotificationsPerHour;
 
-    @JsonProperty("enable_rate_limiting")
     private Boolean enableRateLimiting;
 
     // ========== 静默时段配置 ==========
     
-    @JsonProperty("quiet_hours_enabled")
     private Boolean quietHoursEnabled;
 
-    @JsonProperty("quiet_hours_start")
     private LocalTime quietHoursStart;
 
-    @JsonProperty("quiet_hours_end")
     private LocalTime quietHoursEnd;
 
-    @JsonProperty("quiet_hours_timezone")
     private String quietHoursTimezone;
 
     // ========== 元数据 ==========
     
-    @JsonProperty("is_active")
     private Boolean isActive;
 
     private String description;
 
-    @JsonProperty("created_at")
     private Instant createdAt;
 
-    @JsonProperty("updated_at")
     private Instant updatedAt;
 
     /**

@@ -16,6 +16,7 @@ public class HeartbeatEvent {
     private String networkInterfacesJson;
     private String rawTopologyJson;
     private List<DiscoveredHostData> devices;
+    private String schemaVersion = "1.0";
 
     public HeartbeatEvent() {
         this.devices = new ArrayList<>();
@@ -135,6 +136,9 @@ public class HeartbeatEvent {
     public void setDevices(List<DiscoveredHostData> devices) {
         this.devices = devices;
     }
+
+    public String getSchemaVersion() { return schemaVersion; }
+    public void setSchemaVersion(String schemaVersion) { this.schemaVersion = schemaVersion; }
 
     public static class DiscoveredHostData {
         private String macAddress;

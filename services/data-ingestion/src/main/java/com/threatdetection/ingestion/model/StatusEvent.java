@@ -15,6 +15,7 @@ public class StatusEvent {
     private String status;
     private String description;
     private String rawLog;
+    private String schemaVersion = "1.0";
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'")
     private LocalDateTime timestamp;
@@ -79,4 +80,7 @@ public class StatusEvent {
     
     public LocalDateTime getTimestamp() { return timestamp; }
     public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
+    
+    public String getSchemaVersion() { return schemaVersion; }
+    public void setSchemaVersion(String schemaVersion) { this.schemaVersion = schemaVersion; }
 }

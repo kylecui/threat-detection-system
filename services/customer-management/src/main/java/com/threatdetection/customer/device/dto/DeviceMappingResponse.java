@@ -1,6 +1,5 @@
 package com.threatdetection.customer.device.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.threatdetection.customer.device.model.DeviceMapping;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,28 +17,20 @@ import java.time.Instant;
 @AllArgsConstructor
 public class DeviceMappingResponse {
 
-    @JsonProperty("id")
     private Long id;
-    
-    @JsonProperty("dev_serial")
+
     private String devSerial;
-    
-    @JsonProperty("customer_id")
+
     private String customerId;
-    
-    @JsonProperty("is_active")
+
     private Boolean isActive;
-    
-    @JsonProperty("description")
+
     private String description;
-    
-    @JsonProperty("created_at")
+
     private Instant createdAt;
-    
-    @JsonProperty("updated_at")
+
     private Instant updatedAt;
 
-    @JsonProperty("real_host_count")
     private Integer realHostCount;
 
     public static DeviceMappingResponse fromEntity(DeviceMapping mapping) {

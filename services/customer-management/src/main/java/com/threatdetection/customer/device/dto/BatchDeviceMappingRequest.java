@@ -1,6 +1,5 @@
 package com.threatdetection.customer.device.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
@@ -23,7 +22,6 @@ public class BatchDeviceMappingRequest {
     /**
      * 设备列表
      */
-    @JsonProperty("devices")
     @NotEmpty(message = "Device list cannot be empty")
     @Size(max = 100, message = "Cannot bind more than 100 devices at once")
     @Valid

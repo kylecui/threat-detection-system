@@ -22,6 +22,7 @@ public class AttackEvent {
     private String description;
     private String rawLog;
     private String customerId;
+    private String schemaVersion = "1.0";
     
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'")
     private LocalDateTime timestamp;
@@ -149,4 +150,7 @@ public class AttackEvent {
     
     public LocalDateTime getTimestamp() { return timestamp; }
     public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
+    
+    public String getSchemaVersion() { return schemaVersion; }
+    public void setSchemaVersion(String schemaVersion) { this.schemaVersion = schemaVersion; }
 }
