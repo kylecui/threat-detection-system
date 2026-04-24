@@ -1,0 +1,66 @@
+name: Docker Build Verification
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: docker-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-images:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: alert-management
+            context: .
+            dockerfile: services/alert-management/Dockerfile
+          - name: api-gateway
+            context: .
+            dockerfile: services/api-gateway/Dockerfile
+          - name: config-server
+            context: .
+            dockerfile: services/config-server/Dockerfile
+          - name: customer-management
+            context: .
+            dockerfile: services/customer-management/Dockerfile
+          - name: data-ingestion
+            context: .
+            dockerfile: services/data-ingestion/Dockerfile
+          - name: stream-processing
+            context: .
+            dockerfile: services/stream-processing/Dockerfile
+          - name: threat-assessment
+            context: .
+            dockerfile: services/threat-assessment/Dockerfile
+          - name: threat-intelligence
+            context: .
+            dockerfile: services/threat-intelligence/Dockerfile
+          - name: ml-detection
+            context: services/ml-detection
+            dockerfile: services/ml-detection/Dockerfile
+          - name: tire
+            context: services/tire
+            dockerfile: services/tire/Dockerfile
+          - name: frontend
+            context: frontend
+            dockerfile: frontend/Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.name }} image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: false
+          tags: threat-detection/${{ matrix.name }}:ci
