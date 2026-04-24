@@ -6,6 +6,8 @@ import type {
   MlBufferStats,
   MlDriftStatus,
   MlShadowStats,
+  MlTrainingStatus,
+  MlDataReadiness,
 } from '@/types';
 
 /**
@@ -58,6 +60,28 @@ class MlService {
   async getShadowStats(): Promise<MlShadowStats> {
     const response = await apiClient.get<MlShadowStats>(
       '/api/v1/ml/shadow/stats'
+    );
+    return response.data;
+  }
+
+  async triggerTraining(tiers?: number[]): Promise<{ status: string; tiers: number[] }> {
+    const response = await apiClient.post<{ status: string; tiers: number[] }>(
+      '/api/v1/ml/train',
+      tiers ? { tiers } : {}
+    );
+    return response.data;
+  }
+
+  async getTrainingStatus(): Promise<MlTrainingStatus> {
+    const response = await apiClient.get<MlTrainingStatus>(
+      '/api/v1/ml/train/status'
+    );
+    return response.data;
+  }
+
+  async getDataReadiness(): Promise<MlDataReadiness> {
+    const response = await apiClient.get<MlDataReadiness>(
+      '/api/v1/ml/train/data-readiness'
     );
     return response.data;
   }

@@ -374,6 +374,25 @@ export interface MlShadowStats {
   [key: string]: unknown;
 }
 
+/** ML训练状态 */
+export interface MlTrainingStatus {
+  training: boolean;
+  tiers: number[];
+  startedAt?: string;
+  completedAt?: string;
+  elapsedSeconds?: number;
+  results?: Record<number, Record<string, unknown>>;
+  error?: string;
+}
+
+/** ML训练数据就绪状态 */
+export interface MlDataReadiness {
+  ready: boolean;
+  sampleCounts?: Record<number, number>;
+  minimumRequired?: { autoencoder: number; bigru: number };
+  error?: string;
+}
+
 // ============================================================
 // 系统监控
 // ============================================================
