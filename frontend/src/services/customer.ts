@@ -139,7 +139,7 @@ class CustomerService {
   ): Promise<Device[]> {
     const response = await apiClient.post<Device[]>(
       `/api/v1/customers/${customerId}/devices/batch`,
-      devices
+      { devices }
     );
     return response.data;
   }
