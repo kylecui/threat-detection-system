@@ -27,6 +27,7 @@ class AggregatedAttackData(BaseModel):
     timestamp: str = ""
     threatScore: float = 0.0
     threatLevel: str = "INFO"
+    schemaVersion: str = "1.0"
 
     @field_validator("windowStart", "windowEnd", "timestamp", mode="before")
     @classmethod
@@ -65,7 +66,10 @@ class MlDetectionResult(BaseModel):
     challengerScore: Optional[float] = None
     challengerWeight: Optional[float] = None
     challengerVersion: Optional[str] = None
-    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    schemaVersion: str = "1.0"
 
 
 class HealthResponse(BaseModel):

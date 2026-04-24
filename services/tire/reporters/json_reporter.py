@@ -2,6 +2,8 @@
 JSON reporter for threat intelligence verdicts.
 """
 
+# pyright: reportMissingImports=false, reportImplicitRelativeImport=false
+
 import json
 from typing import Any, Dict
 from models import Verdict
@@ -23,9 +25,9 @@ class JSONReporter:
         report = {
             "object": {"type": verdict.object_type, "value": verdict.object_value},
             "analysis": {
-                "reputation_score": verdict.reputation_score,
-                "contextual_score": verdict.contextual_score,
-                "final_score": verdict.final_score,
+                "reputationScore": verdict.reputation_score,
+                "contextualScore": verdict.contextual_score,
+                "finalScore": verdict.final_score,
                 "level": verdict.level,
                 "confidence": verdict.confidence,
                 "decision": verdict.decision,
@@ -39,14 +41,14 @@ class JSONReporter:
                     "severity": e.severity,
                     "title": e.title,
                     "detail": e.detail,
-                    "score_delta": e.score_delta,
+                    "scoreDelta": e.score_delta,
                     "confidence": e.confidence,
-                    "raw_data": e.raw,
+                    "rawData": e.raw,
                 }
                 for e in verdict.evidence
             ],
             "metadata": {
-                "generated_by": "Threat Intelligence Reasoning Engine",
+                "generatedBy": "Threat Intelligence Reasoning Engine",
                 "version": "2.0.0",
             },
         }

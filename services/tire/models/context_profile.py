@@ -2,13 +2,18 @@
 Context profile model for behavioral analysis context.
 """
 
-from pydantic import BaseModel
+# pyright: reportMissingImports=false, reportImplicitRelativeImport=false
+
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
 from datetime import datetime
 from typing import Optional
 
 
 class ContextProfile(BaseModel):
     """Context information for observable analysis."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     direction: Optional[str] = None
     protocol: Optional[str] = None
