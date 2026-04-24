@@ -31,11 +31,12 @@ class CustomerService {
 
   /** 搜索客户 */
   async searchCustomers(keyword: string): Promise<Customer[]> {
-    const response = await apiClient.get<Customer[]>(
+    const response = await apiClient.get(
       '/api/v1/customers/search',
       { params: { keyword } }
     );
-    return response.data;
+    const data = response.data;
+    return Array.isArray(data) ? data : (data?.content ?? []);
   }
 
   /** 获取客户详情 */
