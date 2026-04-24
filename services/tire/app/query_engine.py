@@ -9,6 +9,8 @@ v2.1: Integrates persistent storage — verdicts are archived on refresh
 and new results are saved to storage/results.db alongside the TTL cache.
 """
 
+# pyright: reportMissingImports=false, reportImplicitRelativeImport=false, reportMissingModuleSource=false, reportPossiblyUnboundVariable=false
+
 import asyncio
 import json
 import logging
@@ -326,6 +328,12 @@ class QueryEngine:
         Sandboxed plugins (community/ by default) run in an isolated subprocess.
         Trusted plugins (builtin/ by default) run in-process for zero overhead.
         """
+        from prometheus_client import REGISTRY
+
+        tire_plugin_calls_total = REGISTRY._names_to_collectors.get(  # type: ignore[attr-defined]
+            "tire_plugin_calls_total"
+        )
+
         plugin_name = plugin.metadata.name
         started_at = time.perf_counter()
 
@@ -360,6 +368,11 @@ class QueryEngine:
                 status_code=_status_code_from_error(result.error),
                 error_message=result.error or "",
             )
+            if tire_plugin_calls_total is not None:
+                tire_plugin_calls_total.labels(  # type: ignore[union-attr]
+                    plugin_name=plugin_name,
+                    status="success" if result.ok else "failure",
+                ).inc()
             return result
         except Exception as e:
             logger.error(f"Plugin '{plugin_name}' crashed: {e}", exc_info=True)
@@ -372,6 +385,10 @@ class QueryEngine:
                 latency_ms=int((time.perf_counter() - started_at) * 1000),
                 error_message=error_message,
             )
+            if tire_plugin_calls_total is not None:
+                tire_plugin_calls_total.labels(  # type: ignore[union-attr]
+                    plugin_name=plugin_name, status="error"
+                ).inc()
             return PluginResult(
                 source=plugin_name,
                 ok=False,
@@ -475,7 +492,7 @@ class QueryEngine:
 
         # Persist verdict snapshot for historical comparison
         try:
-            verdict_json = verdict.json()
+            verdict_json = verdict.model_dump_json(by_alias=True)
             sources_json = json.dumps(profile.sources) if profile.sources else None
             # Determine API key type for per-key sharing logic
             api_key_type = sharing_scope

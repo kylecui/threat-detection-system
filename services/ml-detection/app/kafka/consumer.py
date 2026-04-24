@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# pyright: reportMissingImports=false, reportMissingTypeArgument=false, reportArgumentType=false
+
 import asyncio
 import json
 import logging
@@ -19,7 +21,11 @@ from app.monitoring.drift import DriftMonitor
 from app.persistence.db_writer import MlPredictionWriter
 from app.serving.engine import InferenceEngine
 from app.serving.ensemble import ensemble_anomaly_score
-from app.serving.scorer import anomaly_type, reconstruction_to_anomaly_score, score_to_weight
+from app.serving.scorer import (
+    anomaly_type,
+    reconstruction_to_anomaly_score,
+    score_to_weight,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -45,8 +51,12 @@ class ShadowStats:
         self._total: int = 0
 
     def record(
-        self, tier: int, champion_score: float, challenger_score: float,
-        champion_weight: float, challenger_weight: float,
+        self,
+        tier: int,
+        champion_score: float,
+        challenger_score: float,
+        champion_weight: float,
+        challenger_weight: float,
     ) -> None:
         self._champion_scores.append(champion_score)
         self._challenger_scores.append(challenger_score)
@@ -84,10 +94,16 @@ class ShadowStats:
             "meanChallengerScore": round(float(np.mean(challenger_arr)), 4),
             "meanScoreDelta": round(float(np.mean(deltas)), 4),
             "meanAbsScoreDelta": round(float(np.mean(np.abs(deltas))), 4),
-            "meanChampionWeight": round(float(np.mean(list(self._champion_weights))), 4),
-            "meanChallengerWeight": round(float(np.mean(list(self._challenger_weights))), 4),
+            "meanChampionWeight": round(
+                float(np.mean(list(self._champion_weights))), 4
+            ),
+            "meanChallengerWeight": round(
+                float(np.mean(list(self._challenger_weights))), 4
+            ),
             "challengerBetterCount": challenger_better,
-            "challengerBetterPct": round(challenger_better / len(champion_arr) * 100, 2),
+            "challengerBetterPct": round(
+                challenger_better / len(champion_arr) * 100, 2
+            ),
             "perTier": per_tier,
         }
 
@@ -160,7 +176,9 @@ class MlDetectionConsumer:
             if msg_count <= 5 or msg_count % 100 == 0:
                 logger.info(
                     "Consumed message #%d from %s (offset=%d)",
-                    msg_count, message.topic, message.offset,
+                    msg_count,
+                    message.topic,
+                    message.offset,
                 )
             await self.process_message(payload)
 
@@ -199,13 +217,27 @@ class MlDetectionConsumer:
         self._maybe_check_drift()
 
     def _infer(self, data: AggregatedAttackData) -> MlDetectionResult:
+        from prometheus_client import REGISTRY
+
+        detections_total = REGISTRY._names_to_collectors.get(  # type: ignore[attr-defined]
+            "ml_detections_total"
+        )
+        inference_duration = REGISTRY._names_to_collectors.get(  # type: ignore[attr-defined]
+            "ml_inference_duration_seconds"
+        )
+
+        started_at = time.perf_counter()
+        result: MlDetectionResult | None = None
+
         features = self.feature_extractor.extract(data)
 
         if self.drift_monitor is not None:
             self.drift_monitor.observe(data.tier, features)
 
         reconstructed, threshold = self.engine.predict(features, data.tier)
-        reconstructed_one = reconstructed[0] if reconstructed.ndim == 2 else reconstructed
+        reconstructed_one = (
+            reconstructed[0] if reconstructed.ndim == 2 else reconstructed
+        )
         rec_error = float(np.mean((features - reconstructed_one) ** 2))
         score = reconstruction_to_anomaly_score(rec_error, threshold)
         confidence = float(max(0.0, min(1.0, score)))
@@ -220,12 +252,16 @@ class MlDetectionConsumer:
         ensemble_method = "autoencoder_only"
         final_score = score
         model_version = (
-            f"autoencoder_v1_tier{data.tier}" if self.engine.is_model_loaded(data.tier) else "fallback"
+            f"autoencoder_v1_tier{data.tier}"
+            if self.engine.is_model_loaded(data.tier)
+            else "fallback"
         )
 
         tier_alpha = self.bigru_ensemble_alpha
         if self.bigru_enabled and self.sequence_buffer is not None:
-            tier_alpha = self.engine.get_optimal_alpha(data.tier, self.bigru_ensemble_alpha)
+            tier_alpha = self.engine.get_optimal_alpha(
+                data.tier, self.bigru_ensemble_alpha
+            )
             temporal_score, seq_len, ensemble_method, final_score, model_version = (
                 self._apply_bigru(data, features, score, model_version, tier_alpha)
             )
@@ -244,29 +280,41 @@ class MlDetectionConsumer:
                 data.tier, final_score, challenger_score, weight, challenger_weight
             )
 
-        return MlDetectionResult(
-            customerId=data.customerId,
-            attackMac=data.attackMac,
-            attackIp=data.attackIp,
-            tier=data.tier,
-            windowStart=data.windowStart,
-            windowEnd=data.windowEnd,
-            mlScore=final_score,
-            mlWeight=weight,
-            mlConfidence=confidence,
-            anomalyType=anomaly_type(final_score),
-            reconstructionError=rec_error,
-            threshold=threshold,
-            modelVersion=model_version,
-            sequenceLength=seq_len,
-            temporalScore=temporal_score,
-            ensembleMethod=ensemble_method,
-            ensembleAlpha=tier_alpha,
-            challengerScore=challenger_score,
-            challengerWeight=challenger_weight,
-            challengerVersion=challenger_version,
-            timestamp=datetime.now(timezone.utc).isoformat(),
-        )
+        try:
+            result = MlDetectionResult(
+                customerId=data.customerId,
+                attackMac=data.attackMac,
+                attackIp=data.attackIp,
+                tier=data.tier,
+                windowStart=data.windowStart,
+                windowEnd=data.windowEnd,
+                mlScore=final_score,
+                mlWeight=weight,
+                mlConfidence=confidence,
+                anomalyType=anomaly_type(final_score),
+                reconstructionError=rec_error,
+                threshold=threshold,
+                modelVersion=model_version,
+                sequenceLength=seq_len,
+                temporalScore=temporal_score,
+                ensembleMethod=ensemble_method,
+                ensembleAlpha=tier_alpha,
+                challengerScore=challenger_score,
+                challengerWeight=challenger_weight,
+                challengerVersion=challenger_version,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+            return result
+        finally:
+            if inference_duration is not None:
+                inference_duration.labels(tier=str(data.tier)).observe(  # type: ignore[union-attr]
+                    time.perf_counter() - started_at
+                )
+            if result is not None:
+                if detections_total is not None:
+                    detections_total.labels(  # type: ignore[union-attr]
+                        tier=str(data.tier), anomaly_type=result.anomalyType
+                    ).inc()
 
     def _apply_bigru(
         self,
@@ -280,8 +328,12 @@ class MlDetectionConsumer:
         if alpha is None:
             alpha = self.bigru_ensemble_alpha
 
-        self.sequence_buffer.append(data.customerId, data.attackMac, data.tier, features)
-        seq_data = self.sequence_buffer.get_sequence(data.customerId, data.attackMac, data.tier)
+        self.sequence_buffer.append(
+            data.customerId, data.attackMac, data.tier, features
+        )
+        seq_data = self.sequence_buffer.get_sequence(
+            data.customerId, data.attackMac, data.tier
+        )
 
         if seq_data is None:
             return 0.0, 0, "autoencoder_only", ae_score, model_version
@@ -296,7 +348,9 @@ class MlDetectionConsumer:
 
         temporal_score = bigru_pred if bigru_pred is not None else 0.0
         combined, method = ensemble_anomaly_score(
-            ae_score, bigru_pred, seq_len,
+            ae_score,
+            bigru_pred,
+            seq_len,
             min_seq_len=self.bigru_min_seq_len,
             alpha=alpha,
         )
@@ -317,7 +371,9 @@ class MlDetectionConsumer:
             return 0.0, self.default_weight, "challenger_unavailable"
 
         ch_reconstructed, ch_threshold = result
-        ch_reconstructed_one = ch_reconstructed[0] if ch_reconstructed.ndim == 2 else ch_reconstructed
+        ch_reconstructed_one = (
+            ch_reconstructed[0] if ch_reconstructed.ndim == 2 else ch_reconstructed
+        )
         ch_rec_error = float(np.mean((features - ch_reconstructed_one) ** 2))
         ch_score = reconstruction_to_anomaly_score(ch_rec_error, ch_threshold)
         ch_weight = score_to_weight(ch_score, confidence)
@@ -346,7 +402,9 @@ class MlDetectionConsumer:
             drift_result = self.drift_monitor.compute_drift(tier)
             if drift_result and drift_result.get("total_psi", 0) > 0.2:
                 logger.warning(
-                    "Drift detected for tier %d: PSI=%.4f", tier, drift_result["total_psi"]
+                    "Drift detected for tier %d: PSI=%.4f",
+                    tier,
+                    drift_result["total_psi"],
                 )
 
     @property

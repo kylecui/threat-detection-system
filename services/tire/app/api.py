@@ -2,9 +2,12 @@
 FastAPI interface for Threat Intelligence Reasoning Engine.
 """
 
+# pyright: reportMissingImports=false, reportImplicitRelativeImport=false, reportMissingModuleSource=false
+
 import logging
 import os
 import json
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from app.config import settings
@@ -16,10 +19,12 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-from fastapi import FastAPI, HTTPException, Request, Form
+from fastapi import FastAPI, HTTPException, Request, Form, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from starlette.middleware.sessions import SessionMiddleware
 from typing import Any, Optional
 from app.service import ThreatIntelService
@@ -35,6 +40,38 @@ from app import api_helpers
 from storage.result_store import get_result_store
 
 logger = logging.getLogger(__name__)
+
+
+TIRE_LOOKUPS_TOTAL = Counter(
+    "tire_lookups_total",
+    "Total TIRE lookups by verdict",
+    ["verdict"],
+)
+TIRE_LOOKUP_DURATION_SECONDS = Histogram(
+    "tire_lookup_duration_seconds",
+    "TIRE lookup duration in seconds",
+)
+TIRE_PLUGIN_CALLS_TOTAL = Counter(
+    "tire_plugin_calls_total",
+    "Total TIRE plugin calls by plugin and status",
+    ["plugin_name", "status"],
+)
+
+
+def _snake_to_camel(name: str) -> str:
+    parts = name.split("_")
+    return parts[0] + "".join(part.capitalize() for part in parts[1:])
+
+
+def _camelize_json(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            _snake_to_camel(key) if isinstance(key, str) else key: _camelize_json(val)
+            for key, val in value.items()
+        }
+    if isinstance(value, list):
+        return [_camelize_json(item) for item in value]
+    return value
 
 
 @asynccontextmanager
@@ -157,6 +194,8 @@ async def _render_and_persist_report(
 class AnalyzeRequest(BaseModel):
     """Request model for context-aware analysis."""
 
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
     ip: str
     context: Optional[ContextProfile] = None
     refresh: bool = False
@@ -201,9 +240,16 @@ async def readiness_check():
     return {"status": "ready", "service": "threat-intel-reasoning-engine"}
 
 
+@app.get("/metrics")
+async def metrics() -> Response:
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 @app.get("/api/v1/ip/{ip}")
 async def analyze_ip(ip: str, request: Request, refresh: bool = False):
     """Analyze an IP address for threats."""
+    started_at = time.perf_counter()
+    verdict: Verdict | None = None
     try:
         user = get_current_user(request)
         user_id = user["id"] if user else None
@@ -213,15 +259,23 @@ async def analyze_ip(ip: str, request: Request, refresh: bool = False):
         # Parse back to dict for JSON response
         import json
 
-        return JSONResponse(content=json.loads(report))
+        return JSONResponse(content=_camelize_json(json.loads(report)))
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+    finally:
+        TIRE_LOOKUP_DURATION_SECONDS.observe(time.perf_counter() - started_at)
+        if "verdict" in locals() and verdict is not None:
+            TIRE_LOOKUPS_TOTAL.labels(
+                verdict=getattr(verdict, "level", "unknown")
+            ).inc()
 
 
 @app.post("/api/v1/analyze/ip")
 async def analyze_ip_with_context(request: Request, body: AnalyzeRequest):
     """Context-aware IP analysis."""
+    started_at = time.perf_counter()
+    verdict: Verdict | None = None
     try:
         user = get_current_user(request)
         user_id = user["id"] if user else None
@@ -233,10 +287,16 @@ async def analyze_ip_with_context(request: Request, body: AnalyzeRequest):
         # Parse back to dict for JSON response
         import json
 
-        return JSONResponse(content=json.loads(report))
+        return JSONResponse(content=_camelize_json(json.loads(report)))
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+    finally:
+        TIRE_LOOKUP_DURATION_SECONDS.observe(time.perf_counter() - started_at)
+        if "verdict" in locals() and verdict is not None:
+            TIRE_LOOKUPS_TOTAL.labels(
+                verdict=getattr(verdict, "level", "unknown")
+            ).inc()
 
 
 @app.get("/api/v1/docs")
@@ -264,7 +324,9 @@ async def get_result_history(ip: str, request: Request, limit: int = 20):
             limit=limit,
         )
         return JSONResponse(
-            content={"ip": ip, "snapshots": snapshots, "count": len(snapshots)}
+            content=_camelize_json(
+                {"ip": ip, "snapshots": snapshots, "count": len(snapshots)}
+            )
         )
     except Exception as e:
         logger.error("Failed to fetch history for %s: %s", ip, e)
@@ -288,7 +350,7 @@ async def get_snapshot_detail(snapshot_id: int, request: Request):
         raise HTTPException(status_code=404, detail=f"Snapshot {snapshot_id} not found")
     if not _can_view_snapshot(user, snapshot):
         raise HTTPException(status_code=403, detail="Access denied")
-    return JSONResponse(content=snapshot)
+        return JSONResponse(content=_camelize_json(snapshot))
 
 
 @app.get("/api/v1/debug/sources/{ip}")
@@ -351,7 +413,7 @@ async def debug_sources(ip: str):
                 else None,
             }
 
-        return JSONResponse(content=summary)
+        return JSONResponse(content=_camelize_json(summary))
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Debug collection failed: {str(e)}"
@@ -576,7 +638,8 @@ async def get_report_history(ip: str, request: Request, limit: int = 20):
     user = get_current_user(request)
     if not user:
         return JSONResponse(
-            status_code=401, content={"detail": "Authentication required"}
+            status_code=401,
+            content=_camelize_json({"detail": "Authentication required"}),
         )
 
     from storage.result_store import result_store
@@ -586,7 +649,9 @@ async def get_report_history(ip: str, request: Request, limit: int = 20):
             ip=ip, user_id=user["id"], limit=limit
         )
         return JSONResponse(
-            content={"ip": ip, "reports": reports, "count": len(reports)}
+            content=_camelize_json(
+                {"ip": ip, "reports": reports, "count": len(reports)}
+            )
         )
     except Exception as e:
         logger.error("Failed to fetch report history for %s: %s", ip, e)
@@ -625,23 +690,25 @@ async def compare_snapshots(
             # Compute diff
             diff = _compute_snapshot_diff(snap_a, snap_b)
             return JSONResponse(
-                content={
-                    "mode": "diff",
-                    "ip": ip,
-                    "snapshot_a": {
-                        "id": snap_a["id"],
-                        "queried_at": snap_a["queried_at"],
-                        "final_score": snap_a["final_score"],
-                        "level": snap_a["level"],
-                    },
-                    "snapshot_b": {
-                        "id": snap_b["id"],
-                        "queried_at": snap_b["queried_at"],
-                        "final_score": snap_b["final_score"],
-                        "level": snap_b["level"],
-                    },
-                    "diff": diff,
-                }
+                content=_camelize_json(
+                    {
+                        "mode": "diff",
+                        "ip": ip,
+                        "snapshot_a": {
+                            "id": snap_a["id"],
+                            "queried_at": snap_a["queried_at"],
+                            "final_score": snap_a["final_score"],
+                            "level": snap_a["level"],
+                        },
+                        "snapshot_b": {
+                            "id": snap_b["id"],
+                            "queried_at": snap_b["queried_at"],
+                            "final_score": snap_b["final_score"],
+                            "level": snap_b["level"],
+                        },
+                        "diff": diff,
+                    }
+                )
             )
         else:
             # Timeline mode — return score history
@@ -653,12 +720,14 @@ async def compare_snapshots(
             )
             timeline = _build_timeline_from_snapshots(snapshots)
             return JSONResponse(
-                content={
-                    "mode": "timeline",
-                    "ip": ip,
-                    "timeline": timeline,
-                    "count": len(timeline),
-                }
+                content=_camelize_json(
+                    {
+                        "mode": "timeline",
+                        "ip": ip,
+                        "timeline": timeline,
+                        "count": len(timeline),
+                    }
+                )
             )
     except HTTPException:
         raise
@@ -863,7 +932,7 @@ async def get_report_detail(report_id: int, request: Request):
     if not _can_view_report(user, report):
         raise HTTPException(status_code=403, detail="Access denied")
 
-    return JSONResponse(content=report)
+    return JSONResponse(content=_camelize_json(report))
 
 
 @app.get("/api/v1/users/me/snapshots")
@@ -871,11 +940,14 @@ async def get_my_snapshot_history(request: Request, limit: int = 20):
     user = get_current_user(request)
     if not user:
         return JSONResponse(
-            status_code=401, content={"detail": "Authentication required"}
+            status_code=401,
+            content=_camelize_json({"detail": "Authentication required"}),
         )
 
     snapshots = get_result_store().get_user_snapshot_history(user["id"], limit=limit)
-    return JSONResponse(content={"snapshots": snapshots, "count": len(snapshots)})
+    return JSONResponse(
+        content=_camelize_json({"snapshots": snapshots, "count": len(snapshots)})
+    )
 
 
 @app.get("/api/v1/users/me/reports")
@@ -883,11 +955,14 @@ async def get_my_report_history(request: Request, limit: int = 20):
     user = get_current_user(request)
     if not user:
         return JSONResponse(
-            status_code=401, content={"detail": "Authentication required"}
+            status_code=401,
+            content=_camelize_json({"detail": "Authentication required"}),
         )
 
     reports = get_result_store().get_user_report_history(user["id"], limit=limit)
-    return JSONResponse(content={"reports": reports, "count": len(reports)})
+    return JSONResponse(
+        content=_camelize_json({"reports": reports, "count": len(reports)})
+    )
 
 
 if __name__ == "__main__":

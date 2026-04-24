@@ -1,13 +1,23 @@
 from __future__ import annotations
 
+# pyright: reportMissingImports=false, reportMissingTypeArgument=false
+
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional, cast
 
 import numpy as np
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 
 from app.config import settings
 from app.features.extractor import FeatureExtractor
@@ -25,11 +35,32 @@ from app.models.schemas import (
 from app.monitoring.drift import DriftMonitor
 from app.persistence.db_writer import MlPredictionWriter
 from app.serving.engine import InferenceEngine, get_engine
-from app.serving.scorer import anomaly_type, reconstruction_to_anomaly_score, score_to_weight
+from app.serving.scorer import (
+    anomaly_type,
+    reconstruction_to_anomaly_score,
+    score_to_weight,
+)
 
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logger = logging.getLogger(__name__)
+
+
+ML_DETECTIONS_TOTAL = Counter(
+    "ml_detections_total",
+    "Total ML detections by tier and anomaly type",
+    ["tier", "anomaly_type"],
+)
+ML_INFERENCE_DURATION_SECONDS = Histogram(
+    "ml_inference_duration_seconds",
+    "ML inference duration in seconds by tier",
+    ["tier"],
+)
+ML_MODEL_LOADED = Gauge(
+    "ml_model_loaded",
+    "Whether an ML model is loaded for a given tier",
+    ["tier"],
+)
 
 
 class AppState:
@@ -47,10 +78,19 @@ class AppState:
 state = AppState()
 
 
+def _sync_model_loaded_metrics() -> None:
+    for tier in (1, 2, 3):
+        loaded = bool(state.engine and state.engine.is_model_loaded(tier))
+        ML_MODEL_LOADED.labels(tier=str(tier)).set(1 if loaded else 0)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     state.engine = get_engine(settings.model_dir, settings.ml_confidence_threshold)
-    state.producer = MlDetectionProducer(settings.kafka_bootstrap_servers, settings.kafka_output_topic)
+    _sync_model_loaded_metrics()
+    state.producer = MlDetectionProducer(
+        settings.kafka_bootstrap_servers, settings.kafka_output_topic
+    )
     await state.producer.start()
 
     if settings.bigru_enabled:
@@ -127,6 +167,7 @@ async def _model_watch_loop() -> None:
         if state.engine and state.engine.check_for_updates():
             logger.info("Model file change detected, triggering reload")
             state.engine.reload()
+            _sync_model_loaded_metrics()
 
 
 app = FastAPI(title="ML Threat Detection Service", version="2.0.0", lifespan=lifespan)
@@ -136,50 +177,80 @@ def _run_inference_sync(data: AggregatedAttackData) -> MlDetectionResult:
     if not state.engine:
         raise RuntimeError("Inference engine not initialized")
 
-    features = state.extractor.extract(data)
-    reconstruction, threshold = state.engine.predict(features, data.tier)
-    reconstruction_one = reconstruction[0] if reconstruction.ndim == 2 else reconstruction
-    reconstruction_error = float(np.mean((features - reconstruction_one) ** 2))
-    ml_score = reconstruction_to_anomaly_score(reconstruction_error, threshold)
-    confidence = min(1.0, max(0.0, ml_score))
-    model_loaded = state.engine.is_model_loaded(data.tier)
+    started_at = time.perf_counter()
+    result: MlDetectionResult | None = None
+    anomaly_label = "error"
+    try:
+        features = state.extractor.extract(data)
+        reconstruction, threshold = state.engine.predict(features, data.tier)
+        reconstruction_one = (
+            reconstruction[0] if reconstruction.ndim == 2 else reconstruction
+        )
+        reconstruction_error = float(np.mean((features - reconstruction_one) ** 2))
+        ml_score = reconstruction_to_anomaly_score(reconstruction_error, threshold)
+        confidence = min(1.0, max(0.0, ml_score))
+        model_loaded = state.engine.is_model_loaded(data.tier)
 
-    if model_loaded:
-        ml_weight = score_to_weight(ml_score, confidence)
-        version = f"autoencoder_v1_tier{data.tier}"
-    else:
-        ml_weight = settings.ml_default_weight
-        version = "fallback"
+        if model_loaded:
+            ml_weight = score_to_weight(ml_score, confidence)
+            version = f"autoencoder_v1_tier{data.tier}"
+        else:
+            ml_weight = settings.ml_default_weight
+            version = "fallback"
 
-    return MlDetectionResult(
-        customerId=data.customerId,
-        attackMac=data.attackMac,
-        attackIp=data.attackIp,
-        tier=data.tier,
-        windowStart=data.windowStart,
-        windowEnd=data.windowEnd,
-        mlScore=ml_score,
-        mlWeight=ml_weight,
-        mlConfidence=confidence,
-        anomalyType=anomaly_type(ml_score),
-        reconstructionError=reconstruction_error,
-        threshold=threshold,
-        modelVersion=version,
-        timestamp=datetime.now(timezone.utc).isoformat(),
-    )
+        result = MlDetectionResult(
+            customerId=data.customerId,
+            attackMac=data.attackMac,
+            attackIp=data.attackIp,
+            tier=data.tier,
+            windowStart=data.windowStart,
+            windowEnd=data.windowEnd,
+            mlScore=ml_score,
+            mlWeight=ml_weight,
+            mlConfidence=confidence,
+            anomalyType=anomaly_type(ml_score),
+            reconstructionError=reconstruction_error,
+            threshold=threshold,
+            modelVersion=version,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+        )
+        anomaly_label = result.anomalyType
+        return result
+    finally:
+        ML_INFERENCE_DURATION_SECONDS.labels(tier=str(data.tier)).observe(
+            time.perf_counter() - started_at
+        )
+        if result is not None:
+            ML_DETECTIONS_TOTAL.labels(
+                tier=str(data.tier), anomaly_type=anomaly_label
+            ).inc()
 
 
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     model_loaded = bool(state.engine and state.engine.is_model_loaded())
-    models_available: Dict[str, bool] = state.engine.model_info() if state.engine else {"tier1": False, "tier2": False, "tier3": False}
-    kafka_connected = bool(state.producer and state.producer.connected and state.consumer and state.consumer.connected)
+    models_available: Dict[str, bool] = (
+        state.engine.model_info()
+        if state.engine
+        else {"tier1": False, "tier2": False, "tier3": False}
+    )
+    kafka_connected = bool(
+        state.producer
+        and state.producer.connected
+        and state.consumer
+        and state.consumer.connected
+    )
     return HealthResponse(
         status="ok",
         modelLoaded=model_loaded,
         modelsAvailable=models_available,
         kafkaConnected=kafka_connected,
     )
+
+
+@app.get("/metrics")
+async def metrics() -> Response:
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.post("/api/v1/ml/detect", response_model=MlDetectionResult)
@@ -191,15 +262,30 @@ async def detect(payload: AggregatedAttackData) -> MlDetectionResult:
 async def models() -> List[ModelInfo]:
     if not state.engine:
         return [
-            ModelInfo(tier=1, available=False, threshold=settings.ml_confidence_threshold, modelPath=f"{settings.model_dir}/autoencoder_v1_tier1.onnx"),
-            ModelInfo(tier=2, available=False, threshold=settings.ml_confidence_threshold, modelPath=f"{settings.model_dir}/autoencoder_v1_tier2.onnx"),
-            ModelInfo(tier=3, available=False, threshold=settings.ml_confidence_threshold, modelPath=f"{settings.model_dir}/autoencoder_v1_tier3.onnx"),
+            ModelInfo(
+                tier=1,
+                available=False,
+                threshold=settings.ml_confidence_threshold,
+                modelPath=f"{settings.model_dir}/autoencoder_v1_tier1.onnx",
+            ),
+            ModelInfo(
+                tier=2,
+                available=False,
+                threshold=settings.ml_confidence_threshold,
+                modelPath=f"{settings.model_dir}/autoencoder_v1_tier2.onnx",
+            ),
+            ModelInfo(
+                tier=3,
+                available=False,
+                threshold=settings.ml_confidence_threshold,
+                modelPath=f"{settings.model_dir}/autoencoder_v1_tier3.onnx",
+            ),
         ]
 
     metadata = state.engine.model_metadata()
     return [
         ModelInfo(
-            tier=tier,
+            tier=cast(Literal[1, 2, 3], tier),
             available=bool(info["available"]),
             threshold=float(info["threshold"]),
             modelPath=str(info["modelPath"]),
@@ -215,17 +301,18 @@ async def models() -> List[ModelInfo]:
 async def reload_models() -> ReloadResponse:
     if not state.engine:
         return ReloadResponse(status="error", error="Engine not initialized")
-    result = state.engine.reload()
+    result = cast(Dict[str, object], state.engine.reload())
+    _sync_model_loaded_metrics()
     return ReloadResponse(
-        status=result.get("status", "error"),
-        reloadCount=result.get("reloadCount", 0),
-        modelsLoaded=result.get("modelsLoaded"),
-        error=result.get("error"),
+        status=cast(str, result.get("status", "error")),
+        reloadCount=cast(int, result.get("reloadCount", 0)),
+        modelsLoaded=cast(Optional[Dict[str, bool]], result.get("modelsLoaded")),
+        error=cast(Optional[str], result.get("error")),
     )
 
 
 @app.get("/api/v1/ml/buffer/stats")
-async def buffer_stats() -> dict:
+async def buffer_stats() -> dict[str, object]:
     if state.sequence_buffer is None:
         return {"enabled": False, "totalKeys": 0, "totalWindows": 0}
     return {
@@ -236,7 +323,7 @@ async def buffer_stats() -> dict:
 
 
 @app.get("/api/v1/ml/drift/status")
-async def drift_status() -> dict:
+async def drift_status() -> dict[str, object]:
     if state.drift_monitor is None:
         return {"enabled": False}
     for tier in (1, 2, 3):
@@ -245,7 +332,7 @@ async def drift_status() -> dict:
 
 
 @app.get("/api/v1/ml/shadow/stats")
-async def shadow_stats() -> dict:
+async def shadow_stats() -> dict[str, object]:
     if state.consumer is None:
         return {"enabled": False, "totalComparisons": 0}
     return {
