@@ -1,0 +1,216 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+data:
+  dashboard-provider.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'threat-detection-provider'
+        orgId: 1
+        folder: 'Threat Detection'
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+data:
+  threat-detection.json: |
+    {
+      "title": "Threat Detection System",
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "tags": ["threat-detection"],
+      "panels": [
+        {
+          "id": 1,
+          "type": "row",
+          "title": "System Overview",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Up Targets Count",
+          "gridPos": { "h": 5, "w": 8, "x": 0, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [{ "expr": "sum(up)", "refId": "A" }]
+        },
+        {
+          "id": 3,
+          "type": "timeseries",
+          "title": "Total Events/sec (data-ingestion)",
+          "gridPos": { "h": 5, "w": 8, "x": 8, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count{job=\"data-ingestion\"}[1m]))", "refId": "A" }]
+        },
+        {
+          "id": 4,
+          "type": "stat",
+          "title": "Active Alerts Count",
+          "gridPos": { "h": 5, "w": 8, "x": 16, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [{ "expr": "sum(ALERTS{alertstate=\"firing\"})", "refId": "A" }]
+        },
+        {
+          "id": 5,
+          "type": "row",
+          "title": "Threat Detection Pipeline",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 }
+        },
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "Kafka Consumer Lag",
+          "gridPos": { "h": 6, "w": 6, "x": 0, "y": 7 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [{ "expr": "sum(kafka_consumergroup_lag_sum)", "refId": "A" }]
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "Flink Processing Rate",
+          "gridPos": { "h": 6, "w": 6, "x": 6, "y": 7 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count{job=\"stream-processing\"}[1m]))", "refId": "A" }]
+        },
+        {
+          "id": 8,
+          "type": "timeseries",
+          "title": "Threat Alerts/min",
+          "gridPos": { "h": 6, "w": 6, "x": 12, "y": 7 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [{ "expr": "sum(increase(threat_alerts_total[1m]))", "refId": "A" }]
+        },
+        {
+          "id": 9,
+          "type": "timeseries",
+          "title": "ML Detection Latency",
+          "gridPos": { "h": 6, "w": 6, "x": 18, "y": 7 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"ml-detection\"}[5m])) by (le))", "refId": "A" }]
+        },
+        {
+          "id": 10,
+          "type": "row",
+          "title": "Service Health",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 }
+        },
+        {
+          "id": 11,
+          "type": "timeseries",
+          "title": "JVM Heap Usage per Service",
+          "gridPos": { "h": 7, "w": 8, "x": 0, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [{ "expr": "sum(jvm_memory_used_bytes{area=\"heap\"}) by (job) / sum(jvm_memory_max_bytes{area=\"heap\"}) by (job)", "refId": "A" }]
+        },
+        {
+          "id": 12,
+          "type": "timeseries",
+          "title": "HTTP Request Rate per Service",
+          "gridPos": { "h": 7, "w": 8, "x": 8, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count[1m])) by (job)", "refId": "A" }]
+        },
+        {
+          "id": 13,
+          "type": "timeseries",
+          "title": "Error Rate per Service",
+          "gridPos": { "h": 7, "w": 8, "x": 16, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) by (job) / sum(rate(http_server_requests_seconds_count[5m])) by (job)", "refId": "A" }]
+        }
+      ],
+      "templating": { "list": [] },
+      "annotations": { "list": [] }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.4.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: admin
+            - name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH
+              value: /var/lib/grafana/dashboards/threat-detection.json
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          volumeMounts:
+            - name: grafana-datasource
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: grafana-dashboard-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: grafana-dashboards
+              mountPath: /var/lib/grafana/dashboards
+      volumes:
+        - name: grafana-datasource
+          configMap:
+            name: grafana-datasource
+        - name: grafana-dashboard-provider
+          configMap:
+            name: grafana-dashboard-provider
+        - name: grafana-dashboards
+          configMap:
+            name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+  type: ClusterIP

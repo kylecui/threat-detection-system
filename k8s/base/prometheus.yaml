@@ -1,0 +1,191 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints", "nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+                - alertmanager:9093
+
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets: ['localhost:9090']
+
+      - job_name: alertmanager
+        metrics_path: /metrics
+        static_configs:
+          - targets: ['alertmanager:9093']
+
+      # Java services (Spring Boot/Flink metrics)
+      - job_name: data-ingestion
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['data-ingestion:8080']
+
+      - job_name: stream-processing
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['stream-processing:8081']
+
+      - job_name: alert-management
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['alert-management:8082']
+
+      - job_name: threat-assessment
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['threat-assessment:8083']
+
+      - job_name: customer-management
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['customer-management:8084']
+
+      - job_name: threat-intelligence
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['threat-intelligence:8085']
+
+      - job_name: api-gateway
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['api-gateway:8888']
+
+      - job_name: config-server
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ['config-server:8899']
+
+      # Python services
+      - job_name: ml-detection
+        metrics_path: /metrics
+        static_configs:
+          - targets: ['ml-detection:8086']
+
+      - job_name: tire
+        metrics_path: /metrics
+        static_configs:
+          - targets: ['tire:5000']
+
+      # Infrastructure
+      - job_name: kafka
+        metrics_path: /metrics
+        static_configs:
+          - targets: ['kafka:9101']
+
+      # TODO: Add postgres-exporter sidecar and enable postgres:9187 scrape target
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      enableServiceLinks: false
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.51.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --web.enable-lifecycle
+          ports:
+            - containerPort: 9090
+              name: http
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: prometheus-config
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+            - name: prometheus-rules
+              mountPath: /etc/prometheus/rules
+            - name: prometheus-data
+              mountPath: /prometheus
+      volumes:
+        - name: prometheus-config
+          configMap:
+            name: prometheus-config
+        - name: prometheus-rules
+          configMap:
+            name: prometheus-rules
+        - name: prometheus-data
+          persistentVolumeClaim:
+            claimName: prometheus-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
+  type: ClusterIP

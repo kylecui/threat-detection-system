@@ -28,7 +28,14 @@ resources:
   - api-gateway.yaml
   - tire.yaml
   - tire-secret.yaml
+  # Monitoring stack
+  - prometheus.yaml
+  - prometheus-rules.yaml
+  - grafana.yaml
+  - alertmanager.yaml
   - postgres-schema-apply.yaml
+  - postgres-backup.yaml
+  - network-policies.yaml
   # Multi-region resources (enable in region overlays):
   # - kafka-mirrormaker.yaml
   # - postgres-replication.yaml
