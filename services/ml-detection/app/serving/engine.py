@@ -16,7 +16,11 @@ class InferenceEngine:
         self.model_dir = Path(model_dir)
         self.default_threshold = default_threshold
         self._sessions: Dict[int, ort.InferenceSession] = {}
-        self._thresholds: Dict[int, float] = {1: default_threshold, 2: default_threshold, 3: default_threshold}
+        self._thresholds: Dict[int, float] = {
+            1: default_threshold,
+            2: default_threshold,
+            3: default_threshold,
+        }
         self._model_paths: Dict[int, Path] = {
             1: self.model_dir / "autoencoder_v1_tier1.onnx",
             2: self.model_dir / "autoencoder_v1_tier2.onnx",
@@ -44,8 +48,13 @@ class InferenceEngine:
         sess_options = ort.SessionOptions()
         for tier, path in self._model_paths.items():
             if not path.exists():
+                logger.warning(
+                    "Autoencoder model file not found, skipping tier %d: %s", tier, path
+                )
                 continue
-            session = ort.InferenceSession(str(path), sess_options=sess_options, providers=providers)
+            session = ort.InferenceSession(
+                str(path), sess_options=sess_options, providers=providers
+            )
             self._sessions[tier] = session
             self._file_mtimes[str(path)] = path.stat().st_mtime
 
@@ -62,8 +71,13 @@ class InferenceEngine:
     def _load_bigru(self, sess_options: ort.SessionOptions, providers: list) -> None:
         for tier, path in self._bigru_model_paths.items():
             if not path.exists():
+                logger.warning(
+                    "BiGRU model file not found, skipping tier %d: %s", tier, path
+                )
                 continue
-            session = ort.InferenceSession(str(path), sess_options=sess_options, providers=providers)
+            session = ort.InferenceSession(
+                str(path), sess_options=sess_options, providers=providers
+            )
             self._bigru_sessions[tier] = session
             self._file_mtimes[str(path)] = path.stat().st_mtime
 
@@ -94,7 +108,9 @@ class InferenceEngine:
                     "reloadCount": self._reload_count,
                     "modelsLoaded": self.model_info(),
                 }
-                logger.info("Model reload #%d successful: %s", self._reload_count, reloaded)
+                logger.info(
+                    "Model reload #%d successful: %s", self._reload_count, reloaded
+                )
                 return reloaded
             except Exception as exc:
                 logger.error("Reload failed, restoring previous sessions: %s", exc)
@@ -104,7 +120,9 @@ class InferenceEngine:
 
     def check_for_updates(self) -> bool:
         """Check if any ONNX files have been modified since last load. Returns True if reload needed."""
-        all_paths = list(self._model_paths.values()) + list(self._bigru_model_paths.values())
+        all_paths = list(self._model_paths.values()) + list(
+            self._bigru_model_paths.values()
+        )
         for path in all_paths:
             if not path.exists():
                 if str(path) in self._file_mtimes:
@@ -155,7 +173,9 @@ class InferenceEngine:
 
     def predict(self, features: np.ndarray, tier: int) -> Tuple[np.ndarray, float]:
         if tier not in self._sessions:
-            return features.astype(np.float32), self._thresholds.get(tier, self.default_threshold)
+            return features.astype(np.float32), self._thresholds.get(
+                tier, self.default_threshold
+            )
 
         session = self._sessions[tier]
         input_name = session.get_inputs()[0].name
@@ -197,7 +217,9 @@ class InferenceEngine:
         for tier in (1, 2, 3):
             ae_path = self._challenger_dir / f"autoencoder_v1_tier{tier}.onnx"
             if ae_path.exists():
-                session = ort.InferenceSession(str(ae_path), sess_options=sess_options, providers=providers)
+                session = ort.InferenceSession(
+                    str(ae_path), sess_options=sess_options, providers=providers
+                )
                 self._challenger_sessions[tier] = session
                 loaded_count += 1
                 metadata_map = session.get_modelmeta().custom_metadata_map
@@ -210,7 +232,9 @@ class InferenceEngine:
 
             bigru_path = self._challenger_dir / f"bigru_v1_tier{tier}.onnx"
             if bigru_path.exists():
-                session = ort.InferenceSession(str(bigru_path), sess_options=sess_options, providers=providers)
+                session = ort.InferenceSession(
+                    str(bigru_path), sess_options=sess_options, providers=providers
+                )
                 self._challenger_bigru_sessions[tier] = session
                 loaded_count += 1
                 metadata_map = session.get_modelmeta().custom_metadata_map
@@ -240,7 +264,9 @@ class InferenceEngine:
             return bool(self._challenger_sessions)
         return tier in self._challenger_sessions
 
-    def predict_challenger(self, features: np.ndarray, tier: int) -> Optional[Tuple[np.ndarray, float]]:
+    def predict_challenger(
+        self, features: np.ndarray, tier: int
+    ) -> Optional[Tuple[np.ndarray, float]]:
         if tier not in self._challenger_sessions:
             return None
 
@@ -279,6 +305,8 @@ _engine_singleton: InferenceEngine | None = None
 def get_engine(model_dir: str, default_threshold: float = 0.3) -> InferenceEngine:
     global _engine_singleton
     if _engine_singleton is None:
-        _engine_singleton = InferenceEngine(model_dir=model_dir, default_threshold=default_threshold)
+        _engine_singleton = InferenceEngine(
+            model_dir=model_dir, default_threshold=default_threshold
+        )
         _engine_singleton.load()
     return _engine_singleton
