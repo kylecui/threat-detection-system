@@ -69,20 +69,20 @@ curl http://localhost:8888/api/v1/alerts?severity=CRITICAL
 # 创建客户
 curl -X POST http://localhost:8084/api/v1/customers \
   -H "Content-Type: application/json" \
-  -d '{"customer_id": "cust-001", "company_name": "示例公司", "subscription_tier": "PROFESSIONAL"}'
+  -d '{"customerId": "cust-001", "companyName": "示例公司", "subscriptionTier": "PROFESSIONAL"}'
 
 # 绑定设备
 curl -X POST http://localhost:8084/api/v1/customers/cust-001/devices \
   -H "Content-Type: application/json" \
-  -d '{"dev_serial": "DEV-001", "device_name": "网关01"}'
+  -d '{"devSerial": "DEV-001", "deviceName": "网关01"}'
 
 # 配置通知
 curl -X PUT http://localhost:8084/api/v1/customers/cust-001/notification-config \
   -H "Content-Type: application/json" \
-  -d '{"email_enabled": true, "email_recipients": ["admin@example.com"]}'
+  -d '{"emailEnabled": true, "emailRecipients": ["admin@example.com"]}'
 ```
 
-⚠️ **字段命名注意**: Customer Management服务使用 **snake_case** 命名 (如 `customer_id`, `subscription_tier`)，而非 camelCase。
+⚠️ **字段命名注意**: Customer Management服务使用 **camelCase** 命名 (如 `customerId`, `subscriptionTier`)。
 
 ---
 

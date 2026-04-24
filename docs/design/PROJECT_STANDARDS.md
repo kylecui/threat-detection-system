@@ -148,6 +148,16 @@ private Instant createdAt;
 
 ---
 
+## 字段命名规范 (Field Naming Convention)
+
+- **REST API JSON**: camelCase (e.g. `customerId`, `companyName`, `subscriptionTier`)
+- **Java fields**: camelCase (Java standard, Jackson serializes as-is)
+- **Python Pydantic models**: camelCase field names with `alias_generator=to_camel` where needed
+- **Database columns**: snake_case (SQL standard, mapped via JPA `@Column(name="...")`)
+- **Kafka messages**: camelCase JSON with `schemaVersion` field for evolution
+- **Backward compatibility**: Consumer models use `@JsonAlias` / `@JsonIgnoreProperties(ignoreUnknown=true)` to accept both formats during transition
+- Note: This was unified in April 2026. Previously customer-management and a few other services used snake_case.
+
 ## 🌐 REST API标准 (已锁定)
 
 ### 服务端口分配

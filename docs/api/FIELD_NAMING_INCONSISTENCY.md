@@ -3,7 +3,7 @@
 **问题发现日期**: 2025-01-16  
 **严重级别**: ⚠️ P0 (高优先级)  
 **影响范围**: API文档、前端集成、测试脚本  
-**状态**: 🔴 待解决
+**状态**: ✅ RESOLVED
 
 ---
 
@@ -152,7 +152,7 @@ public class Customer {
 
 ## 🎯 解决方案
 
-### 方案1: 统一使用snake_case（推荐） ⭐
+### 方案1: 统一使用snake_case
 
 **描述**: 保持服务实现不变（snake_case），更新所有文档。
 
@@ -191,7 +191,7 @@ public class Customer {
 
 ---
 
-### 方案2: 统一使用camelCase
+### 方案2: 统一使用camelCase (已选择) ⭐
 
 **描述**: 修改服务配置和Jackson序列化，改为camelCase。
 
@@ -260,26 +260,25 @@ public class Customer {
 
 ---
 
-## ✅ 推荐行动计划
+## ✅ 推荐行动计划 (已完成)
 
-### 阶段1: 立即行动（今天）
+### 阶段1: 立即行动 (2026-04-24)
 
-**选择方案1: 统一使用snake_case**
+**选择方案2: 统一使用camelCase**
 
 **理由**:
-1. **最快速**: 仅需更新文档，无需代码改动
-2. **最安全**: 不涉及服务重启和部署
-3. **最经济**: 4小时 vs 6.5小时
-4. **符合惯例**: REST API常用snake_case
+1. **符合标准**: 符合Java/JSON标准惯例
+2. **前端一致**: 与主流前端框架一致（React, Vue）
+3. **文档规范**: 文档已使用camelCase，无需修改
 
 **执行清单**:
-- [x] 更新`docs/api/README.md` - 添加字段命名说明 ✅
-- [x] 创建`FIELD_NAMING_INCONSISTENCY.md` - 问题分析文档 ✅
-- [x] 更新`api_gateway_current.md` - 所有JSON示例 ✅
-- [x] 更新测试脚本 - `test_api_gateway.sh` ✅
-- [ ] 更新`customer_management_api.md` - 所有JSON示例（26个端点，约150处修改）
-- [ ] 验证所有API文档 - 批量查找camelCase
-- [ ] 发布更新公告
+- [x] Deleted JacksonConfig.java from customer-management (removed global SNAKE_CASE) ✅
+- [x] Removed snake_case @JsonProperty annotations from customer-management (10 DTOs), threat-assessment (7 DTOs), threat-intelligence (1 DTO) ✅
+- [x] Updated tire Python Pydantic models with camelCase aliases (6 models) ✅
+- [x] Updated frontend api.ts to remove snake_case conversion ✅
+- [x] Added schemaVersion field to all Kafka DTOs for forward compatibility ✅
+- [x] Kept @JsonAlias on consumer models (stream-processing, threat-assessment) for backward compatibility ✅
+- [x] 发布更新公告 ✅
 
 ---
 
@@ -319,21 +318,21 @@ public class Customer {
 
 ## 📝 更新的文档规范
 
-### 字段命名规范
+### 字段命名规范 (camelCase)
 
-**REST API响应**: 统一使用 **snake_case**
+**REST API响应**: 统一使用 **camelCase**
 
 **示例**:
 ```json
 {
-  "customer_id": "customer-001",
-  "company_name": "示例公司",
-  "subscription_tier": "PROFESSIONAL",
-  "max_devices": 100,
-  "current_devices": 45,
-  "is_active": true,
-  "created_at": 1760882824.193540074,
-  "updated_at": 1760882824.193540231
+  "customerId": "customer-001",
+  "companyName": "示例公司",
+  "subscriptionTier": "PROFESSIONAL",
+  "maxDevices": 100,
+  "currentDevices": 45,
+  "isActive": true,
+  "createdAt": "2026-04-24T10:30:00Z",
+  "updatedAt": "2026-04-24T10:30:00Z"
 }
 ```
 
@@ -369,13 +368,7 @@ CREATE TABLE customers (
 );
 ```
 
-**Jackson配置**: 强制snake_case
-
-```yaml
-spring:
-  jackson:
-    property-naming-strategy: SNAKE_CASE
-```
+**Jackson配置**: 默认camelCase (无需显式配置)
 
 ---
 
@@ -477,5 +470,5 @@ spring:
 
 **文档创建日期**: 2025-01-16  
 **负责人**: 系统开发团队  
-**状态**: 🟡 进行中  
+**状态**: ✅ 已解决  
 **预计完成**: 2025-01-16 (今天)
