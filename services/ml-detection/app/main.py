@@ -91,7 +91,30 @@ async def lifespan(_: FastAPI):
     state.producer = MlDetectionProducer(
         settings.kafka_bootstrap_servers, settings.kafka_output_topic
     )
-    await state.producer.start()
+    kafka_max_retries = 5
+    kafka_base_delay = 2
+    for attempt in range(1, kafka_max_retries + 1):
+        try:
+            await state.producer.start()
+            logger.info("Kafka producer connected on attempt %d", attempt)
+            break
+        except Exception as exc:
+            if attempt == kafka_max_retries:
+                logger.error(
+                    "Kafka producer failed after %d attempts, giving up: %s",
+                    kafka_max_retries,
+                    exc,
+                )
+                raise
+            delay = kafka_base_delay * (2 ** (attempt - 1))
+            logger.warning(
+                "Kafka producer connection attempt %d/%d failed: %s. Retrying in %ds...",
+                attempt,
+                kafka_max_retries,
+                exc,
+                delay,
+            )
+            await asyncio.sleep(delay)
 
     if settings.bigru_enabled:
         state.sequence_buffer = SequenceBuffer(
@@ -138,7 +161,28 @@ async def lifespan(_: FastAPI):
         shadow_scoring_enabled=settings.shadow_scoring_enabled,
         db_writer=state.db_writer,
     )
-    await state.consumer.start()
+    for attempt in range(1, kafka_max_retries + 1):
+        try:
+            await state.consumer.start()
+            logger.info("Kafka consumer connected on attempt %d", attempt)
+            break
+        except Exception as exc:
+            if attempt == kafka_max_retries:
+                logger.error(
+                    "Kafka consumer failed after %d attempts, giving up: %s",
+                    kafka_max_retries,
+                    exc,
+                )
+                raise
+            delay = kafka_base_delay * (2 ** (attempt - 1))
+            logger.warning(
+                "Kafka consumer connection attempt %d/%d failed: %s. Retrying in %ds...",
+                attempt,
+                kafka_max_retries,
+                exc,
+                delay,
+            )
+            await asyncio.sleep(delay)
 
     if settings.model_watch_enabled and state.engine:
         state._watch_task = asyncio.create_task(_model_watch_loop())
