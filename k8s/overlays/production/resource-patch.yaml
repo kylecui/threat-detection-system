@@ -48,3 +48,190 @@ spec:
           limits:
             memory: "2Gi"
             cpu: "1000m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-management
+spec:
+  template:
+    spec:
+      containers:
+      - name: alert-management
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "300m"
+          limits:
+            memory: "1Gi"
+            cpu: "800m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: threat-assessment
+spec:
+  template:
+    spec:
+      containers:
+      - name: threat-assessment
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customer-management
+spec:
+  template:
+    spec:
+      containers:
+      - name: customer-management
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "300m"
+          limits:
+            memory: "1Gi"
+            cpu: "800m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: threat-intelligence
+spec:
+  template:
+    spec:
+      containers:
+      - name: threat-intelligence
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "300m"
+          limits:
+            memory: "1Gi"
+            cpu: "800m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+spec:
+  template:
+    spec:
+      containers:
+      - name: api-gateway
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-server
+spec:
+  template:
+    spec:
+      containers:
+      - name: config-server
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-detection
+spec:
+  template:
+    spec:
+      containers:
+      - name: ml-detection
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tire
+spec:
+  template:
+    spec:
+      containers:
+      - name: tire
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "300m"
+          limits:
+            memory: "1Gi"
+            cpu: "800m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+spec:
+  template:
+    spec:
+      containers:
+      - name: prometheus
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "300m"
+          limits:
+            memory: "1Gi"
+            cpu: "800m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+spec:
+  template:
+    spec:
+      containers:
+      - name: grafana
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "400m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+spec:
+  template:
+    spec:
+      containers:
+      - name: alertmanager
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"

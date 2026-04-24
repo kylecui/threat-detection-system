@@ -9,10 +9,10 @@ namespace: threat-detection-prod
 resources:
   - ../../base
 
-patchesStrategicMerge:
-  - replica-patch.yaml
-  - resource-patch.yaml
-  - security-patch.yaml
+patches:
+  - path: replica-patch.yaml
+  - path: resource-patch.yaml
+  - path: security-patch.yaml
 
 images:
   - name: threat-detection/data-ingestion
