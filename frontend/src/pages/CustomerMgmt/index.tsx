@@ -19,6 +19,7 @@ import {
   EditOutlined,
   MobileOutlined,
   ReloadOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import { ProTable } from '@ant-design/pro-components';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
@@ -54,6 +55,11 @@ const CustomerMgmt = () => {
   const [devicesLoading, setDevicesLoading] = useState(false);
   const [createForm] = Form.useForm();
   const [editForm] = Form.useForm();
+  const [bindDeviceModalOpen, setBindDeviceModalOpen] = useState(false);
+  const [editDeviceModalOpen, setEditDeviceModalOpen] = useState(false);
+  const [currentDevice, setCurrentDevice] = useState<Device | null>(null);
+  const [bindDeviceForm] = Form.useForm();
+  const [editDeviceForm] = Form.useForm();
 
   /** 加载设备列表 */
   const loadDevices = async (customerId: string) => {
@@ -118,6 +124,53 @@ const CustomerMgmt = () => {
       loadDevices(currentCustomer.customerId);
     } catch {
       message.error('删除失败');
+    }
+  };
+
+  /** 绑定设备 */
+  const handleBindDevice = async () => {
+    if (!currentCustomer) return;
+    try {
+      const values = await bindDeviceForm.validateFields();
+      await customerService.addDevices(currentCustomer.customerId, [
+        { devSerial: values.devSerial, description: values.description },
+      ]);
+      message.success('设备绑定成功');
+      setBindDeviceModalOpen(false);
+      bindDeviceForm.resetFields();
+      loadDevices(currentCustomer.customerId);
+    } catch {
+      message.error('设备绑定失败');
+    }
+  };
+
+  /** 编辑设备 */
+  const handleEditDevice = async () => {
+    if (!currentCustomer || !currentDevice) return;
+    try {
+      const values = await editDeviceForm.validateFields();
+      await customerService.updateDevice(
+        currentCustomer.customerId,
+        currentDevice.devSerial,
+        { description: values.description, isActive: values.isActive },
+      );
+      message.success('设备更新成功');
+      setEditDeviceModalOpen(false);
+      loadDevices(currentCustomer.customerId);
+    } catch {
+      message.error('更新失败');
+    }
+  };
+
+  /** 同步设备 */
+  const handleSyncDevices = async () => {
+    if (!currentCustomer) return;
+    try {
+      await customerService.syncDevices(currentCustomer.customerId);
+      message.success('设备同步成功');
+      loadDevices(currentCustomer.customerId);
+    } catch {
+      message.error('同步失败');
     }
   };
 
@@ -251,12 +304,27 @@ const CustomerMgmt = () => {
     {
       title: '操作', key: 'actions',
       render: (_: unknown, record: Device) => (
-        <Popconfirm
-          title="确定删除?"
-          onConfirm={() => handleDeleteDevice(record.devSerial)}
-        >
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} />
-        </Popconfirm>
+        <Space size="small">
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => {
+              setCurrentDevice(record);
+              editDeviceForm.setFieldsValue({
+                description: record.description,
+                isActive: record.isActive !== false,
+              });
+              setEditDeviceModalOpen(true);
+            }}
+          />
+          <Popconfirm
+            title="确定解绑?"
+            onConfirm={() => handleDeleteDevice(record.devSerial)}
+          >
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
@@ -385,6 +453,28 @@ const CustomerMgmt = () => {
         open={deviceDrawerOpen}
         onClose={() => setDeviceDrawerOpen(false)}
         width={800}
+        extra={
+          <Space>
+            <Button
+              size="small"
+              icon={<SyncOutlined />}
+              onClick={handleSyncDevices}
+            >
+              同步
+            </Button>
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                bindDeviceForm.resetFields();
+                setBindDeviceModalOpen(true);
+              }}
+            >
+              绑定设备
+            </Button>
+          </Space>
+        }
       >
         {deviceQuota && (
           <Descriptions bordered size="small" style={{ marginBottom: 16 }}>
@@ -404,6 +494,57 @@ const CustomerMgmt = () => {
           pagination={false}
         />
       </Drawer>
+
+      <Modal
+        title="绑定新设备"
+        open={bindDeviceModalOpen}
+        onOk={handleBindDevice}
+        onCancel={() => {
+          setBindDeviceModalOpen(false);
+          bindDeviceForm.resetFields();
+        }}
+        okText="绑定"
+        cancelText="取消"
+      >
+        <Form form={bindDeviceForm} layout="vertical">
+          <Form.Item
+            name="devSerial"
+            label="设备序列号"
+            rules={[{ required: true, message: '请输入设备序列号' }]}
+          >
+            <Input placeholder="例如: JZ-SNIFF-001" />
+          </Form.Item>
+          <Form.Item name="description" label="描述">
+            <Input.TextArea rows={2} placeholder="设备描述（可选）" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="编辑设备"
+        open={editDeviceModalOpen}
+        onOk={handleEditDevice}
+        onCancel={() => setEditDeviceModalOpen(false)}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Form form={editDeviceForm} layout="vertical">
+          <Form.Item label="设备序列号">
+            <Input value={currentDevice?.devSerial} disabled />
+          </Form.Item>
+          <Form.Item name="description" label="描述">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+          <Form.Item name="isActive" label="状态">
+            <Select
+              options={[
+                { label: '激活', value: true },
+                { label: '停用', value: false },
+              ]}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   );
 };
