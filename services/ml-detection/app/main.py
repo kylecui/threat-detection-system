@@ -31,6 +31,8 @@ from app.models.schemas import (
     ModelInfo,
     ReloadResponse,
     ShadowComparisonStats,
+    TrainRequest,
+    TrainingStatusResponse,
 )
 from app.monitoring.drift import DriftMonitor
 from app.persistence.db_writer import MlPredictionWriter
@@ -76,6 +78,31 @@ class AppState:
 
 
 state = AppState()
+
+
+class _TrainingState:
+    def __init__(self) -> None:
+        self.training = False
+        self.tiers: List[int] = []
+        self.started_at: Optional[str] = None
+        self.completed_at: Optional[str] = None
+        self.elapsed_seconds: Optional[float] = None
+        self.results: Optional[Dict[int, Dict[str, object]]] = None
+        self.error: Optional[str] = None
+
+    def to_response(self) -> TrainingStatusResponse:
+        return TrainingStatusResponse(
+            training=self.training,
+            tiers=self.tiers,
+            startedAt=self.started_at,
+            completedAt=self.completed_at,
+            elapsedSeconds=self.elapsed_seconds,
+            results=self.results,
+            error=self.error,
+        )
+
+
+_training_state = _TrainingState()
 
 
 def _sync_model_loaded_metrics() -> None:
@@ -385,3 +412,90 @@ async def shadow_stats() -> dict[str, object]:
         "challengerLoaded": bool(state.engine and state.engine.is_challenger_loaded()),
         **state.consumer.shadow_stats.get_stats(),
     }
+
+
+def _run_training(tiers: List[int], ae_epochs: int, bigru_epochs: int) -> None:
+    from app.training.pipeline import TrainingPipeline
+
+    _training_state.results = {}
+    try:
+        for tier in tiers:
+            pipeline = TrainingPipeline(
+                tier=tier,
+                model_dir=settings.model_dir,
+                ae_epochs=ae_epochs,
+                bigru_epochs=bigru_epochs,
+                database_url=settings.database_url,
+            )
+            _training_state.results[tier] = pipeline.run()
+
+        if state.engine:
+            state.engine.reload()
+            _sync_model_loaded_metrics()
+
+        _training_state.completed_at = datetime.now(timezone.utc).isoformat()
+        started = datetime.fromisoformat(_training_state.started_at)
+        _training_state.elapsed_seconds = round(
+            (datetime.now(timezone.utc) - started).total_seconds(), 2
+        )
+        logger.info(
+            "Training completed for tiers %s in %.1fs",
+            tiers,
+            _training_state.elapsed_seconds,
+        )
+    except Exception as exc:
+        _training_state.error = str(exc)
+        logger.error("Training failed: %s", exc)
+    finally:
+        _training_state.training = False
+
+
+@app.post("/api/v1/ml/train")
+async def trigger_training(req: TrainRequest = TrainRequest()) -> dict[str, object]:
+    if _training_state.training:
+        return {"status": "already_running", "tiers": _training_state.tiers}
+
+    for t in req.tiers:
+        if t not in (1, 2, 3):
+            return {"status": "error", "error": f"Invalid tier: {t}"}
+
+    _training_state.training = True
+    _training_state.tiers = req.tiers
+    _training_state.started_at = datetime.now(timezone.utc).isoformat()
+    _training_state.completed_at = None
+    _training_state.elapsed_seconds = None
+    _training_state.results = None
+    _training_state.error = None
+
+    import threading
+
+    threading.Thread(
+        target=_run_training,
+        args=(req.tiers, req.aeEpochs, req.bigruEpochs),
+        daemon=True,
+    ).start()
+
+    return {"status": "training_started", "tiers": req.tiers}
+
+
+@app.get("/api/v1/ml/train/status", response_model=TrainingStatusResponse)
+async def training_status() -> TrainingStatusResponse:
+    return _training_state.to_response()
+
+
+@app.get("/api/v1/ml/train/data-readiness")
+async def data_readiness() -> dict[str, object]:
+    try:
+        from app.training.trainer import load_from_postgres
+
+        counts: Dict[int, int] = {}
+        for tier in (1, 2, 3):
+            features = load_from_postgres(settings.database_url, tier)
+            counts[tier] = len(features)
+        return {
+            "ready": any(c > 0 for c in counts.values()),
+            "sampleCounts": counts,
+            "minimumRequired": {"autoencoder": 1, "bigru": 20},
+        }
+    except Exception as exc:
+        return {"ready": False, "error": str(exc)}

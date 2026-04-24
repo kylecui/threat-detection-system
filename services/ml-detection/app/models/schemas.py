@@ -109,3 +109,19 @@ class ShadowComparisonStats(BaseModel):
     championModelVersion: str = ""
     challengerModelVersion: str = ""
     perTier: Dict[str, object] = Field(default_factory=dict)
+
+
+class TrainRequest(BaseModel):
+    tiers: List[int] = Field(default=[1, 2, 3])
+    aeEpochs: int = Field(default=100, ge=1, le=1000)
+    bigruEpochs: int = Field(default=50, ge=1, le=500)
+
+
+class TrainingStatusResponse(BaseModel):
+    training: bool = False
+    tiers: List[int] = Field(default_factory=list)
+    startedAt: Optional[str] = None
+    completedAt: Optional[str] = None
+    elapsedSeconds: Optional[float] = None
+    results: Optional[Dict[int, Dict[str, object]]] = None
+    error: Optional[str] = None
