@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import {
   Tag,
   Button,
@@ -8,7 +8,9 @@ import {
   Input,
   Popconfirm,
   message,
-  Alert,
+  Select,
+  Card,
+  Typography,
 } from 'antd';
 import {
   PlusOutlined,
@@ -17,17 +19,56 @@ import {
 } from '@ant-design/icons';
 import { ProTable } from '@ant-design/pro-components';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import type { Device } from '@/types';
+import type { Device, Customer } from '@/types';
 import customerService from '@/services/customer';
 import { getCustomerId } from '@/services/api';
 import dayjs from 'dayjs';
+
+const { Text } = Typography;
 
 const DeviceMgmt = () => {
   const actionRef = useRef<ActionType>();
   const [bindModalOpen, setBindModalOpen] = useState(false);
   const [bindForm] = Form.useForm();
 
-  const customerId = getCustomerId();
+  const storedCustomerId = getCustomerId();
+  const [customerId, setCustomerId] = useState<string | undefined>(
+    storedCustomerId || undefined,
+  );
+  const [customerOptions, setCustomerOptions] = useState<
+    { label: string; value: string }[]
+  >([]);
+  const [customerLoading, setCustomerLoading] = useState(false);
+
+  const handleCustomerSearch = useCallback(async (keyword: string) => {
+    if (!keyword || keyword.length < 1) {
+      setCustomerOptions([]);
+      return;
+    }
+    setCustomerLoading(true);
+    try {
+      const customers: Customer[] =
+        await customerService.searchCustomers(keyword);
+      setCustomerOptions(
+        customers.map((c) => ({
+          label: `${c.name} (${c.customerId})`,
+          value: c.customerId,
+        })),
+      );
+    } catch {
+      setCustomerOptions([]);
+    } finally {
+      setCustomerLoading(false);
+    }
+  }, []);
+
+  const handleCustomerChange = (value: string) => {
+    setCustomerId(value);
+    if (value) {
+      localStorage.setItem('customer_id', value);
+    }
+    setTimeout(() => actionRef.current?.reload(), 0);
+  };
 
   const handleBind = async () => {
     try {
@@ -64,11 +105,6 @@ const DeviceMgmt = () => {
       ellipsis: true,
     },
     {
-      title: '客户ID',
-      dataIndex: 'customerId',
-      ellipsis: true,
-    },
-    {
       title: '状态',
       dataIndex: 'isActive',
       valueType: 'select',
@@ -101,7 +137,9 @@ const DeviceMgmt = () => {
       search: false,
       sorter: true,
       render: (_, record) =>
-        record.createdAt ? dayjs(record.createdAt).format('YYYY-MM-DD HH:mm') : '-',
+        record.createdAt
+          ? dayjs(record.createdAt).format('YYYY-MM-DD HH:mm')
+          : '-',
     },
     {
       title: '操作',
@@ -121,80 +159,101 @@ const DeviceMgmt = () => {
     },
   ];
 
-  if (!customerId) {
-    return (
-      <Alert
-        type="warning"
-        showIcon
-        message="未选择客户"
-        description="请先在系统设置页面选择一个客户，或使用具有客户绑定的账号登录。"
-        style={{ margin: 24 }}
-      />
-    );
-  }
-
   return (
-    <>
-      <ProTable<Device>
-        headerTitle="设备管理"
-        actionRef={actionRef}
-        rowKey="devSerial"
-        columns={columns}
-        search={{ labelWidth: 'auto' }}
-        request={async () => {
-          try {
-            const data = await customerService.getDevices(customerId);
-            return { data, success: true, total: data.length };
-          } catch {
-            message.error('加载设备列表失败');
-            return { data: [], success: false, total: 0 };
-          }
-        }}
-        toolBarRender={() => [
-          <Button
-            key="reload"
-            icon={<ReloadOutlined />}
-            onClick={() => actionRef.current?.reload()}
-          >
-            刷新
-          </Button>,
-          <Button
-            key="bind"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setBindModalOpen(true)}
-          >
-            绑定设备
-          </Button>,
-        ]}
-        pagination={{ defaultPageSize: 20 }}
-      />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Card size="small">
+        <Space align="center" wrap>
+          <Text strong>选择客户：</Text>
+          <Select
+            showSearch
+            allowClear
+            placeholder="输入客户名称或ID搜索"
+            value={customerId}
+            onChange={handleCustomerChange}
+            onSearch={handleCustomerSearch}
+            loading={customerLoading}
+            options={customerOptions}
+            filterOption={false}
+            style={{ minWidth: 320 }}
+            notFoundContent={customerLoading ? '搜索中...' : '无匹配客户'}
+          />
+          {customerId && (
+            <Text type="secondary">当前客户: {customerId}</Text>
+          )}
+        </Space>
+      </Card>
 
-      <Modal
-        title="绑定新设备"
-        open={bindModalOpen}
-        onOk={handleBind}
-        onCancel={() => {
-          setBindModalOpen(false);
-          bindForm.resetFields();
-        }}
-        okText="绑定"
-        cancelText="取消"
-      >
-        <Form form={bindForm} layout="vertical">
-          <Form.Item
-            name="devSerial"
-            label="设备序列号"
-            rules={[{ required: true, message: '请输入设备序列号' }]}
+      {!customerId ? (
+        <Card>
+          <div style={{ textAlign: 'center', padding: '48px 0', color: '#999' }}>
+            请先在上方选择一个客户，然后管理其设备。
+          </div>
+        </Card>
+      ) : (
+        <>
+          <ProTable<Device>
+            headerTitle={`设备列表`}
+            actionRef={actionRef}
+            rowKey="devSerial"
+            columns={columns}
+            search={{ labelWidth: 'auto' }}
+            request={async () => {
+              if (!customerId) return { data: [], success: true, total: 0 };
+              try {
+                const data = await customerService.getDevices(customerId);
+                return { data, success: true, total: data.length };
+              } catch {
+                message.error('加载设备列表失败');
+                return { data: [], success: false, total: 0 };
+              }
+            }}
+            toolBarRender={() => [
+              <Button
+                key="reload"
+                icon={<ReloadOutlined />}
+                onClick={() => actionRef.current?.reload()}
+              >
+                刷新
+              </Button>,
+              <Button
+                key="bind"
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => setBindModalOpen(true)}
+              >
+                绑定设备
+              </Button>,
+            ]}
+            pagination={{ defaultPageSize: 20 }}
+          />
+
+          <Modal
+            title="绑定新设备"
+            open={bindModalOpen}
+            onOk={handleBind}
+            onCancel={() => {
+              setBindModalOpen(false);
+              bindForm.resetFields();
+            }}
+            okText="绑定"
+            cancelText="取消"
           >
-            <Input placeholder="例如: JZ-SNIFF-001" />
-          </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={3} placeholder="设备描述（可选）" />
-          </Form.Item>
-        </Form>
-      </Modal>
-    </>
+            <Form form={bindForm} layout="vertical">
+              <Form.Item
+                name="devSerial"
+                label="设备序列号"
+                rules={[{ required: true, message: '请输入设备序列号' }]}
+              >
+                <Input placeholder="例如: JZ-SNIFF-001" />
+              </Form.Item>
+              <Form.Item name="description" label="描述">
+                <Input.TextArea rows={3} placeholder="设备描述（可选）" />
+              </Form.Item>
+            </Form>
+          </Modal>
+        </>
+      )}
+    </div>
   );
 };
 
