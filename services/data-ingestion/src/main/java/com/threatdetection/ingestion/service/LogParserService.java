@@ -346,10 +346,20 @@ public class LogParserService {
             int lineId = Integer.parseInt(matcher.group(9));
             int ifaceType = Integer.parseInt(matcher.group(10));
             int vlanId = Integer.parseInt(matcher.group(11));
-            long logTime = validateTimestamp(Long.parseLong(matcher.group(12)));
+            long rawLogTime = Long.parseLong(matcher.group(12));
+            long logTime = validateTimestamp(rawLogTime);
             if (logTime == -1) {
                 logger.warn("Invalid log_time: {}", matcher.group(12));
                 return Optional.empty();
+            }
+            // Sanitize device-uptime values: if logTime < 2020-01-01 epoch,
+            // the device is sending uptime seconds instead of Unix epoch.
+            // Replace with ingestion time so Flink event-time windows work correctly.
+            final long MIN_EPOCH_THRESHOLD = 1577836800L; // 2020-01-01T00:00:00Z
+            if (logTime < MIN_EPOCH_THRESHOLD) {
+                long now = System.currentTimeMillis() / 1000;
+                logger.info("logTime {} appears to be device uptime (< 2020 epoch), replacing with ingestion time {}", logTime, now);
+                logTime = now;
             }
 
             // eth_type和ip_type字段现在是可选的，提供默认值

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.cfg.CoercionAction;
 import com.fasterxml.jackson.databind.cfg.CoercionInputShape;
 import com.fasterxml.jackson.databind.type.LogicalType;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.threatdetection.stream.functions.AttackEventTimestampAssigner;
 import com.threatdetection.stream.model.AttackEvent;
 import com.threatdetection.stream.model.StatusEvent;
 import com.threatdetection.stream.service.APTTemporalAccumulator;
@@ -148,8 +149,8 @@ public class StreamProcessingJob {
         .filter(StreamProcessingJob::isAttackEventValid)
         .name("attack-event-validation")
                 .assignTimestampsAndWatermarks(
-                        WatermarkStrategy.<AttackEvent>forMonotonousTimestamps()
-                                .withTimestampAssigner(new AttackEventTimestampAssigner()) // 使用显式类替代lambda
+                        WatermarkStrategy.<AttackEvent>forBoundedOutOfOrderness(java.time.Duration.ofMinutes(5))
+                                .withTimestampAssigner(new AttackEventTimestampAssigner())
                 )
                 .name("attack-event-preprocessor");
 
@@ -542,22 +543,6 @@ public class StreamProcessingJob {
             throw new IllegalStateException("Interrupted while waiting for Kafka topics", e);
         } catch (ExecutionException | TimeoutException e) {
             throw new IllegalStateException("Failed to verify Kafka topics availability", e);
-        }
-    }
-
-    /**
-     * 时间戳分配器 - 使用原始日志时间而不是处理时间
-     */
-    public static class AttackEventTimestampAssigner implements SerializableTimestampAssigner<AttackEvent> {
-        private static final long serialVersionUID = 1L;
-        
-        @Override
-        public long extractTimestamp(AttackEvent event, long recordTimestamp) {
-            // 使用原始日志时间 (logTime 是秒，转换为毫秒)
-            long eventTimeMillis = event.getLogTime() * 1000;
-            logger.debug("Assigning timestamp for attack event {}: logTime={}, eventTimeMillis={}", 
-                        event.getId(), event.getLogTime(), eventTimeMillis);
-            return eventTimeMillis;
         }
     }
 
