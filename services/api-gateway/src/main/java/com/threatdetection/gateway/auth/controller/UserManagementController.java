@@ -131,27 +131,41 @@ public class UserManagementController {
                                                     "Username already exists")));
                                 }
 
-                                LocalDateTime now = LocalDateTime.now();
-                                AuthUser user = AuthUser.builder()
-                                        .username(request.getUsername())
-                                        .passwordHash(passwordEncoder.encode(request.getPassword()))
-                                        .displayName(request.getDisplayName())
-                                        .email(request.getEmail())
-                                        .customerId(request.getCustomerId())
-                                        .tenantId(effectiveTenantId)
-                                        .enabled(true)
-                                        .createdAt(now)
-                                        .updatedAt(now)
-                                        .build();
+                                Mono<Boolean> customerValidation = Mono.just(true);
+                                if (request.getCustomerId() != null && effectiveTenantId != null) {
+                                    customerValidation = validateCustomerBelongsToTenant(
+                                            request.getCustomerId(), effectiveTenantId);
+                                }
 
-                                return userRepository.save(user)
-                                        .flatMap(saved -> assignRole(saved.getId(), request.getRole())
-                                                .then(enrichUserWithRoles(saved)))
-                                        .map(userMap -> {
-                                            log.info("Created user: username={}, tenantId={}, role={}",
-                                                    request.getUsername(), effectiveTenantId, request.getRole());
-                                            return ResponseEntity.status(HttpStatus.CREATED).body(userMap);
-                                        });
+                                return customerValidation.flatMap(isValidCustomer -> {
+                                    if (!Boolean.TRUE.equals(isValidCustomer)) {
+                                        return Mono.just(ResponseEntity.badRequest()
+                                                .body(Map.<String, Object>of("error",
+                                                        "Customer does not exist or does not belong to the specified tenant")));
+                                    }
+
+                                    LocalDateTime now = LocalDateTime.now();
+                                    AuthUser user = AuthUser.builder()
+                                            .username(request.getUsername())
+                                            .passwordHash(passwordEncoder.encode(request.getPassword()))
+                                            .displayName(request.getDisplayName())
+                                            .email(request.getEmail())
+                                            .customerId(request.getCustomerId())
+                                            .tenantId(effectiveTenantId)
+                                            .enabled(true)
+                                            .createdAt(now)
+                                            .updatedAt(now)
+                                            .build();
+
+                                    return userRepository.save(user)
+                                            .flatMap(saved -> assignRole(saved.getId(), request.getRole())
+                                                    .then(enrichUserWithRoles(saved)))
+                                            .map(userMap -> {
+                                                log.info("Created user: username={}, tenantId={}, role={}",
+                                                        request.getUsername(), effectiveTenantId, request.getRole());
+                                                return ResponseEntity.status(HttpStatus.CREATED).body(userMap);
+                                            });
+                                });
                             });
                 })
                 .onErrorResume(SecurityException.class, e ->
@@ -171,33 +185,47 @@ public class UserManagementController {
                                         .<Map<String, Object>>build());
                             }
 
-                            if (request.getDisplayName() != null) user.setDisplayName(request.getDisplayName());
-                            if (request.getEmail() != null) user.setEmail(request.getEmail());
-                            if (request.getCustomerId() != null) user.setCustomerId(request.getCustomerId());
-                            if (request.getEnabled() != null) user.setEnabled(request.getEnabled());
-                            if (request.getPassword() != null && !request.getPassword().isBlank()) {
-                                user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+                            Mono<Boolean> customerValidation = Mono.just(true);
+                            if (request.getCustomerId() != null) {
+                                customerValidation = validateCustomerBelongsToTenant(
+                                        request.getCustomerId(), user.getTenantId());
                             }
-                            user.setUpdatedAt(LocalDateTime.now());
 
-                            Mono<Void> roleUpdate = Mono.empty();
-                            if (request.getRole() != null && !request.getRole().isBlank()) {
-                                if (!ctx.isSuperAdmin() && "SUPER_ADMIN".equals(request.getRole())) {
-                                    return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            return customerValidation.flatMap(isValidCustomer -> {
+                                if (!Boolean.TRUE.equals(isValidCustomer)) {
+                                    return Mono.just(ResponseEntity.badRequest()
                                             .body(Map.<String, Object>of("error",
-                                                    "Cannot assign SUPER_ADMIN role")));
+                                                    "Customer does not exist or does not belong to the specified tenant")));
                                 }
-                                roleUpdate = clearRoles(id).then(assignRole(id, request.getRole()));
-                            }
 
-                            return userRepository.save(user)
-                                    .then(roleUpdate)
-                                    .then(userRepository.findById(id))
-                                    .flatMap(this::enrichUserWithRoles)
-                                    .map(userMap -> {
-                                        log.info("Updated user: id={}, username={}", id, user.getUsername());
-                                        return ResponseEntity.ok(userMap);
-                                    });
+                                if (request.getDisplayName() != null) user.setDisplayName(request.getDisplayName());
+                                if (request.getEmail() != null) user.setEmail(request.getEmail());
+                                if (request.getCustomerId() != null) user.setCustomerId(request.getCustomerId());
+                                if (request.getEnabled() != null) user.setEnabled(request.getEnabled());
+                                if (request.getPassword() != null && !request.getPassword().isBlank()) {
+                                    user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+                                }
+                                user.setUpdatedAt(LocalDateTime.now());
+
+                                Mono<Void> roleUpdate = Mono.empty();
+                                if (request.getRole() != null && !request.getRole().isBlank()) {
+                                    if (!ctx.isSuperAdmin() && "SUPER_ADMIN".equals(request.getRole())) {
+                                        return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                                .body(Map.<String, Object>of("error",
+                                                        "Cannot assign SUPER_ADMIN role")));
+                                    }
+                                    roleUpdate = clearRoles(id).then(assignRole(id, request.getRole()));
+                                }
+
+                                return userRepository.save(user)
+                                        .then(roleUpdate)
+                                        .then(userRepository.findById(id))
+                                        .flatMap(this::enrichUserWithRoles)
+                                        .map(userMap -> {
+                                            log.info("Updated user: id={}, username={}", id, user.getUsername());
+                                            return ResponseEntity.ok(userMap);
+                                        });
+                            });
                         })
                         .defaultIfEmpty(ResponseEntity.notFound().build()))
                 .onErrorResume(SecurityException.class, e ->
@@ -266,6 +294,20 @@ public class UserManagementController {
         return databaseClient.sql("DELETE FROM auth_user_roles WHERE user_id = :userId")
                 .bind("userId", userId)
                 .then();
+    }
+
+    private Mono<Boolean> validateCustomerBelongsToTenant(String customerId, Long tenantId) {
+        if (customerId == null || tenantId == null) {
+            return Mono.just(false);
+        }
+
+        return databaseClient.sql("SELECT COUNT(*) FROM customers WHERE customer_id = :customerId AND tenant_id = :tenantId")
+                .bind("customerId", customerId)
+                .bind("tenantId", tenantId)
+                .map(row -> row.get(0, Long.class))
+                .one()
+                .map(count -> count != null && count > 0)
+                .defaultIfEmpty(false);
     }
 
     private Mono<CallerContext> resolveCallerContext(ServerWebExchange exchange) {

@@ -33,7 +33,7 @@ class ThreatService {
    */
   async getThreatDetail(id: number): Promise<ThreatAssessment> {
     const response = await apiClient.get<ThreatAssessment>(
-      `/api/v1/assessment/assessments/${id}`
+      `/api/v1/assessment/${id}`
     );
     return response.data;
   }
@@ -136,16 +136,18 @@ class ThreatService {
 
   /**
    * 删除威胁记录 (管理员功能)
+   * TODO: Backend AssessmentController has no DELETE endpoint yet — this will 404 until implemented
    */
   async deleteThreat(id: number): Promise<void> {
-    await apiClient.delete(`/api/v1/assessment/assessments/${id}`);
+    await apiClient.delete(`/api/v1/assessment/${id}`);
   }
 
   /**
    * 批量删除威胁记录
+   * TODO: Backend AssessmentController has no batch-delete endpoint yet — this will 404 until implemented
    */
   async batchDeleteThreats(ids: number[]): Promise<void> {
-    await apiClient.post('/api/v1/assessment/assessments/batch-delete', { ids });
+    await apiClient.post('/api/v1/assessment/batch-delete', { ids });
   }
 
   /**

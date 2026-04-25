@@ -19,13 +19,15 @@ CREATE TABLE IF NOT EXISTS customers (
     updated_by VARCHAR(100) DEFAULT 'system',
     subscription_start_date TIMESTAMP WITH TIME ZONE,
     subscription_end_date TIMESTAMP WITH TIME ZONE,
-    alert_enabled BOOLEAN DEFAULT TRUE
+    alert_enabled BOOLEAN DEFAULT TRUE,
+    tenant_id BIGINT
 );
 
 -- 创建索引
 CREATE INDEX IF NOT EXISTS idx_customer_id ON customers(customer_id);
 CREATE INDEX IF NOT EXISTS idx_customer_email ON customers(email);
 CREATE INDEX IF NOT EXISTS idx_customer_status ON customers(status);
+CREATE INDEX IF NOT EXISTS idx_customer_tenant_id ON customers(tenant_id);
 
 -- 插入测试数据
 INSERT INTO customers (customer_id, name, email, phone, address, status, subscription_tier, max_devices, description)

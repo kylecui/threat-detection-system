@@ -108,7 +108,7 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
 
           let validatedCustomerId: string | undefined;
           if (validatedTenantId !== undefined) {
-            const customersRes = await apiClient.get<Customer[]>(`/api/v1/customers/tenant/${validatedTenantId}`);
+            const customersRes = await apiClient.get<Customer[]>(`/api/v1/customers/by-tenant/${validatedTenantId}`);
             const customers = Array.isArray(customersRes.data) ? customersRes.data : [];
 
             validatedCustomerId =
@@ -146,7 +146,7 @@ export function ScopeProvider({ children }: { children: ReactNode }) {
           let validatedCustomerId: string | undefined;
 
           if (fixedTenantId !== undefined) {
-            const customersRes = await apiClient.get<Customer[]>(`/api/v1/customers/tenant/${fixedTenantId}`);
+            const customersRes = await apiClient.get<Customer[]>(`/api/v1/customers/by-tenant/${fixedTenantId}`);
             const customers = Array.isArray(customersRes.data) ? customersRes.data : [];
 
             validatedCustomerId =

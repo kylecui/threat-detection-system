@@ -12,4 +12,8 @@ public interface AuthUserRepository extends R2dbcRepository<AuthUser, Long> {
     Mono<Boolean> existsByUsername(String username);
 
     Flux<AuthUser> findByTenantId(Long tenantId);
+
+    Flux<AuthUser> findByCustomerId(String customerId);
+
+    Flux<AuthUser> findByTenantIdAndCustomerId(Long tenantId, String customerId);
 }

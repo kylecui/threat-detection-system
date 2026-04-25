@@ -40,7 +40,7 @@ export default function ScopeSelector() {
     }
     setLoadingCustomers(true);
     apiClient
-      .get<Customer[]>(`/api/v1/customers/tenant/${tid}`)
+      .get<Customer[]>(`/api/v1/customers/by-tenant/${tid}`)
       .then((res) => setCustomers(Array.isArray(res.data) ? res.data : []))
       .catch(() => setCustomers([]))
       .finally(() => setLoadingCustomers(false));
