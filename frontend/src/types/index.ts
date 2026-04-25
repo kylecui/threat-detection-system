@@ -614,44 +614,24 @@ export interface UpdateUserRequest {
 }
 
 // ============================================================
-// 多区域部署 (Multi-Region)
+// 管道健康 (Pipeline Health)
 // ============================================================
 
-/** 区域标识 */
-export type RegionId = 'auto' | 'east' | 'west' | 'cn';
-
-/** 区域配置 */
-export interface RegionConfig {
-  id: RegionId;
-  label: string;
-  apiBase: string;
-  description: string;
+/** 单个服务状态 (来自后端聚合接口) */
+export interface PipelineServiceStatus {
+  status: 'UP' | 'DOWN';
+  latencyMs?: number;
 }
 
-/** 预定义区域端点 */
-export const REGION_ENDPOINTS: Record<RegionId, RegionConfig> = {
-  auto: {
-    id: 'auto',
-    label: '自动 (Auto)',
-    apiBase: '',
-    description: '根据网络延迟自动选择最近区域',
-  },
-  east: {
-    id: 'east',
-    label: 'US East',
-    apiBase: 'https://east.threat-detection.io',
-    description: '美国东部 (主区域)',
-  },
-  west: {
-    id: 'west',
-    label: 'US West',
-    apiBase: 'https://west.threat-detection.io',
-    description: '美国西部 (DR备份)',
-  },
-  cn: {
-    id: 'cn',
-    label: '中国 (China)',
-    apiBase: 'https://cn.threat-detection.io',
-    description: '中国区域 (数据主权隔离)',
-  },
-};
+/** 管道健康响应 */
+export interface PipelineHealthResponse {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  timestamp: string;
+  services: Record<string, PipelineServiceStatus>;
+  pipeline: {
+    lastEventReceived: string | null;
+    eventsLastHour: number | null;
+    kafkaLag: number | null;
+    flinkRunning: boolean | null;
+  };
+}

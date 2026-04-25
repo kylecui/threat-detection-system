@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ProLayout } from '@ant-design/pro-components';
 import { Button } from 'antd';
 import {
@@ -16,6 +16,10 @@ import {
   UserOutlined,
   ApiOutlined,
 } from '@ant-design/icons';
+import { AuthProvider, useAuth, type AppRole } from './contexts/AuthContext';
+import { ScopeProvider } from './contexts/ScopeContext';
+import RouteGuard from './components/RouteGuard';
+import ScopeSelector from './components/ScopeSelector';
 import Dashboard from './pages/Dashboard';
 import ThreatList from './pages/ThreatList';
 import Analytics from './pages/Analytics';
@@ -24,62 +28,43 @@ import AlertCenter from './pages/AlertCenter';
 import CustomerMgmt from './pages/CustomerMgmt';
 import ThreatIntel from './pages/ThreatIntel';
 import MlDetection from './pages/MlDetection';
-import SystemMonitor from './pages/SystemMonitor';
+import PipelineHealth from './pages/PipelineHealth';
 import LoginPage from './pages/Login';
 import TenantMgmt from './pages/TenantMgmt';
 import UserMgmt from './pages/UserMgmt';
 import DeviceMgmt from './pages/DeviceMgmt';
 
-function isAuthenticated(): boolean {
-  return !!localStorage.getItem('token');
+interface MenuRoute {
+  path: string;
+  name: string;
+  icon: React.ReactNode;
+  requiredRoles?: AppRole[];
 }
 
-function RequireAuth({ children }: { children: React.ReactNode }) {
-  const location = useLocation();
-  if (!isAuthenticated()) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-  return <>{children}</>;
-}
-
-function handleLogout() {
-  localStorage.removeItem('token');
-  localStorage.removeItem('refreshToken');
-  localStorage.removeItem('user');
-  localStorage.removeItem('customer_id');
-  window.location.href = '/login';
-}
-
-function getCurrentUser(): { displayName?: string; username?: string; roles?: string[] } | null {
-  try {
-    const raw = localStorage.getItem('user');
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
+const ALL_MENU_ROUTES: MenuRoute[] = [
+  { path: '/dashboard', name: '仪表盘', icon: <DashboardOutlined /> },
+  { path: '/threats', name: '威胁列表', icon: <WarningOutlined /> },
+  { path: '/alerts', name: '告警中心', icon: <BellOutlined /> },
+  { path: '/analytics', name: '数据分析', icon: <BarChartOutlined /> },
+  { path: '/customers', name: '客户管理', icon: <TeamOutlined />, requiredRoles: ['SUPER_ADMIN', 'TENANT_ADMIN'] },
+  { path: '/devices', name: '设备管理', icon: <ApiOutlined /> },
+  { path: '/threat-intel', name: '威胁情报', icon: <GlobalOutlined /> },
+  { path: '/ml', name: 'ML检测', icon: <ExperimentOutlined /> },
+  { path: '/pipeline', name: '管道健康', icon: <CloudServerOutlined />, requiredRoles: ['SUPER_ADMIN', 'TENANT_ADMIN'] },
+  { path: '/tenants', name: '租户管理', icon: <ApartmentOutlined />, requiredRoles: ['SUPER_ADMIN'] },
+  { path: '/users', name: '用户管理', icon: <UserOutlined />, requiredRoles: ['SUPER_ADMIN', 'TENANT_ADMIN'] },
+  { path: '/settings', name: '系统设置', icon: <SettingOutlined /> },
+];
 
 function AppLayout() {
-  const user = getCurrentUser();
-  const roles = user?.roles || [];
-  const isSuperAdmin = roles.includes('SUPER_ADMIN');
-  const isTenantAdmin = roles.includes('TENANT_ADMIN');
-  const isAdminRole = isSuperAdmin || isTenantAdmin;
+  const { user, logout, isSuperAdmin } = useAuth();
+  const roles = user?.roles ?? [];
 
-  const menuRoutes = [
-    { path: '/dashboard', name: '仪表盘', icon: <DashboardOutlined /> },
-    { path: '/threats', name: '威胁列表', icon: <WarningOutlined /> },
-    { path: '/alerts', name: '告警中心', icon: <BellOutlined /> },
-    { path: '/analytics', name: '数据分析', icon: <BarChartOutlined /> },
-    { path: '/customers', name: '客户管理', icon: <TeamOutlined /> },
-    { path: '/devices', name: '设备管理', icon: <ApiOutlined /> },
-    { path: '/threat-intel', name: '威胁情报', icon: <GlobalOutlined /> },
-    { path: '/ml', name: 'ML检测', icon: <ExperimentOutlined /> },
-    { path: '/system', name: '系统监控', icon: <CloudServerOutlined /> },
-    ...(isSuperAdmin ? [{ path: '/tenants', name: '租户管理', icon: <ApartmentOutlined /> }] : []),
-    ...(isAdminRole ? [{ path: '/users', name: '用户管理', icon: <UserOutlined /> }] : []),
-    { path: '/settings', name: '系统设置', icon: <SettingOutlined /> },
-  ];
+  const menuRoutes = ALL_MENU_ROUTES.filter((route) => {
+    if (!route.requiredRoles) return true;
+    if (isSuperAdmin) return true;
+    return route.requiredRoles.some((r) => roles.includes(r));
+  });
 
   return (
     <ProLayout
@@ -94,11 +79,12 @@ function AppLayout() {
         render: (_props, dom) => (
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {dom}
+            <ScopeSelector />
             <Button
               type="text"
               size="small"
               icon={<LogoutOutlined />}
-              onClick={handleLogout}
+              onClick={logout}
               style={{ color: 'rgba(0,0,0,0.45)' }}
             />
           </span>
@@ -124,7 +110,7 @@ function AppLayout() {
         <Route path="/devices" element={<DeviceMgmt />} />
         <Route path="/threat-intel" element={<ThreatIntel />} />
         <Route path="/ml" element={<MlDetection />} />
-        <Route path="/system" element={<SystemMonitor />} />
+        <Route path="/pipeline" element={<PipelineHealth />} />
         <Route path="/tenants" element={<TenantMgmt />} />
         <Route path="/users" element={<UserMgmt />} />
         <Route path="/settings" element={<Settings />} />
@@ -136,14 +122,18 @@ function AppLayout() {
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/*" element={
-          <RequireAuth>
-            <AppLayout />
-          </RequireAuth>
-        } />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/*" element={
+            <RouteGuard>
+              <ScopeProvider>
+                <AppLayout />
+              </ScopeProvider>
+            </RouteGuard>
+          } />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

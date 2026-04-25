@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
+  Alert,
   Card,
   Row,
   Col,
@@ -440,6 +441,12 @@ const Analytics = () => {
 
       {/* ── Top 攻击者 ── */}
       <Card title="Top 攻击者排行" bordered={false}>
+        <Alert
+          type="warning"
+          banner
+          message="攻击者排行基于最近200条记录的客户端聚合，可能不代表完整数据。后续版本将接入后端聚合接口。"
+          style={{ marginBottom: 16 }}
+        />
         <Table
           columns={attackerColumns}
           dataSource={topAttackers}

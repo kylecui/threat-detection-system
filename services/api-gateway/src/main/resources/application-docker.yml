@@ -15,3 +15,13 @@ logging:
   level:
     root: INFO
     com.threatdetection.gateway: INFO
+
+gateway:
+  health-check:
+    data-ingestion-url: ${DATA_INGESTION_HEALTH_URL:http://data-ingestion:8080/actuator/health}
+    stream-processing-url: ${STREAM_PROCESSING_HEALTH_URL:http://stream-processing:8081/overview}
+    threat-assessment-url: ${THREAT_ASSESSMENT_HEALTH_URL:http://threat-assessment:8083/api/v1/assessment/health}
+    alert-management-url: ${ALERT_MANAGEMENT_HEALTH_URL:http://alert-management:8082/actuator/health}
+    customer-management-url: ${CUSTOMER_MANAGEMENT_HEALTH_URL:http://customer-management:8084/actuator/health}
+    threat-intelligence-url: ${THREAT_INTELLIGENCE_HEALTH_URL:http://threat-intelligence:8085/actuator/health}
+    ml-detection-url: ${ML_DETECTION_HEALTH_URL:http://ml-detection:8086/health}

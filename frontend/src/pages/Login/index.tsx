@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, Form, Input, Button, Typography, Space, message } from 'antd';
 import { LockOutlined, UserOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import apiClient from '../../services/api';
+import { useAuth, type AuthUser } from '@/contexts/AuthContext';
 
 const { Title, Text } = Typography;
 
@@ -14,22 +15,24 @@ interface LoginForm {
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleLogin = async (values: LoginForm) => {
     setLoading(true);
     try {
       const { data } = await apiClient.post('/api/v1/auth/login', values);
       if (data.token) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('refreshToken', data.refreshToken);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        if (data.user?.customerId) {
-          localStorage.setItem('customer_id', data.user.customerId);
-        }
-        if (data.user?.tenantId) {
-          localStorage.setItem('tenant_id', String(data.user.tenantId));
-        }
-        message.success(`欢迎, ${data.user?.displayName || data.user?.username}`);
+        const user: AuthUser = {
+          id: data.user?.id ?? 0,
+          username: data.user?.username ?? values.username,
+          displayName: data.user?.displayName,
+          email: data.user?.email,
+          roles: data.user?.roles ?? [],
+          customerId: data.user?.customerId || undefined,
+          tenantId: data.user?.tenantId || undefined,
+        };
+        login(data.token, data.refreshToken, user);
+        message.success(`欢迎, ${user.displayName || user.username}`);
         navigate('/dashboard', { replace: true });
       } else {
         message.error('登录失败：用户名或密码错误');

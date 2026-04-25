@@ -1,14 +1,6 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { message } from 'antd';
-import { REGION_ENDPOINTS, type RegionId } from '@/types';
 
-/**
- * snake_case → camelCase 键名转换 (安全网)
- *
- * 所有后端服务已统一使用 camelCase JSON 输出。
- * 此转换器作为安全网保留在响应拦截器中，
- * 对 camelCase 键无副作用，可兼容过渡期间的残留 snake_case。
- */
 function snakeToCamel(str: string): string {
   return str.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
 }
@@ -29,31 +21,8 @@ function convertKeys(obj: unknown): unknown {
   return obj;
 }
 
-/**
- * 区域路由优先级: localStorage.region → VITE_API_BASE_URL → /api
- */
-function getRegionBaseURL(): string {
-  const regionId = (localStorage.getItem('region') || 'auto') as RegionId;
-  const regionConfig = REGION_ENDPOINTS[regionId];
-
-  // 'auto' 或空 apiBase → 回退到环境变量或默认值
-  if (!regionConfig || !regionConfig.apiBase) {
-    const envBase = import.meta.env.VITE_API_BASE_URL;
-    return envBase !== undefined && envBase !== null ? envBase : '/api';
-  }
-  return regionConfig.apiBase;
-}
-
-/**
- * Axios实例配置
- * 
- * API网关地址:
- * - 开发环境: http://localhost:8888
- * - 生产环境: /api (Nginx代理)
- * - 多区域: https://{region}.threat-detection.io
- */
 const apiClient: AxiosInstance = axios.create({
-  baseURL: getRegionBaseURL(),
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -75,11 +44,6 @@ export function getCustomerId(): string | undefined {
   return undefined;
 }
 
-export function switchRegion(regionId: RegionId): void {
-  localStorage.setItem('region', regionId);
-  apiClient.defaults.baseURL = getRegionBaseURL();
-}
-
 /**
  * 请求拦截器
  */
@@ -90,15 +54,22 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // Skip customer_id injection for auth, system-config, tenant, and user management endpoints
     const url = config.url || '';
-    if (!url.includes('/api/v1/auth/') && !url.includes('/api/v1/system-config')
-        && !url.includes('/api/v1/tenants') && !url.includes('/api/v1/users')
-        && !url.includes('/tenant')
-        && !url.includes('/api/v1/tire-plugins')
-        && !url.includes('/api/v1/llm-providers')
-        && !url.includes('/api/v1/config-assignments')
-        && !url.includes('/api/v1/user-config')) {
+    const skipScopeUrls = [
+      '/api/v1/auth/',
+      '/api/v1/system-config',
+      '/api/v1/tenants',
+      '/api/v1/users',
+      '/tenant',
+      '/api/v1/tire-plugins',
+      '/api/v1/llm-providers',
+      '/api/v1/config-assignments',
+      '/api/v1/user-config',
+      '/api/v1/system/health',
+    ];
+    const shouldInjectScope = !skipScopeUrls.some((prefix) => url.includes(prefix));
+
+    if (shouldInjectScope) {
       const customerId = getCustomerId();
       if (customerId) {
         if (config.params) {
@@ -107,6 +78,15 @@ apiClient.interceptors.request.use(
           config.params = { customer_id: customerId };
         }
       }
+    }
+
+    const tenantId = localStorage.getItem('scope_tenant_id') || localStorage.getItem('tenant_id');
+    const scopeCustomerId = localStorage.getItem('scope_customer_id') || localStorage.getItem('customer_id');
+    if (tenantId && config.headers) {
+      config.headers['X-Tenant-Id'] = tenantId;
+    }
+    if (scopeCustomerId && scopeCustomerId !== '__all__' && config.headers) {
+      config.headers['X-Customer-Id'] = scopeCustomerId;
     }
 
     console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.params);

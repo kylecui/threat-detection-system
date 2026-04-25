@@ -75,6 +75,14 @@ gateway:
     enabled: ${RATE_LIMIT_ENABLED:true}
     capacity: ${RATE_LIMIT_CAPACITY:100}  # 令牌桶容量
     refill-rate: ${RATE_LIMIT_REFILL_RATE:10}  # 每秒填充令牌数
+  health-check:
+    data-ingestion-url: ${DATA_INGESTION_HEALTH_URL:http://localhost:8080/actuator/health}
+    stream-processing-url: ${STREAM_PROCESSING_HEALTH_URL:http://localhost:8081/overview}
+    threat-assessment-url: ${THREAT_ASSESSMENT_HEALTH_URL:http://localhost:8083/api/v1/assessment/health}
+    alert-management-url: ${ALERT_MANAGEMENT_HEALTH_URL:http://localhost:8082/actuator/health}
+    customer-management-url: ${CUSTOMER_MANAGEMENT_HEALTH_URL:http://localhost:8084/actuator/health}
+    threat-intelligence-url: ${THREAT_INTELLIGENCE_HEALTH_URL:http://localhost:8085/actuator/health}
+    ml-detection-url: ${ML_DETECTION_HEALTH_URL:http://localhost:8086/health}
 
 # 日志配置
 logging:
