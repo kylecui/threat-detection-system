@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -86,10 +87,36 @@ public class ThreatQueryService {
      * @return 分页结果
      */
     public Page<ThreatAssessmentDetailResponse> getAssessmentList(String customerId, int page, int size) {
-        log.info("Querying assessment list: customerId={}, page={}, size={}", customerId, page, size);
-        
+        return getAssessmentList(customerId, page, size, null, null, null, null);
+    }
+
+    public Page<ThreatAssessmentDetailResponse> getAssessmentList(String customerId,
+                                                                  int page,
+                                                                  int size,
+                                                                  String threatLevel,
+                                                                  Instant startTime,
+                                                                  Instant endTime,
+                                                                  String attackMac) {
+        log.info("Querying assessment list: customerId={}, page={}, size={}, threatLevel={}, startTime={}, endTime={}, attackMac={}",
+                customerId, page, size, threatLevel, startTime, endTime, attackMac);
+
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "assessmentTime"));
-        Page<ThreatAssessment> assessmentPage = repository.findByCustomerIdOrderByAssessmentTimeDesc(customerId, pageable);
+        Specification<ThreatAssessment> spec = Specification.where((root, query, cb) -> cb.equal(root.get("customerId"), customerId));
+
+        if (threatLevel != null && !threatLevel.isBlank()) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("threatLevel"), threatLevel.trim()));
+        }
+        if (startTime != null) {
+            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("assessmentTime"), startTime));
+        }
+        if (endTime != null) {
+            spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("assessmentTime"), endTime));
+        }
+        if (attackMac != null && !attackMac.isBlank()) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("attackMac"), attackMac.trim()));
+        }
+
+        Page<ThreatAssessment> assessmentPage = repository.findAll(spec, pageable);
         
         return assessmentPage.map(this::convertToDetailResponse);
     }
@@ -355,6 +382,32 @@ public class ThreatQueryService {
                 })
                 .collect(Collectors.toList());
     }
+
+    public List<TopAttackerResponse> getTopAttackers(String customerId, int limit, int hours) {
+        log.info("Getting top attackers: customerId={}, limit={}, hours={}", customerId, limit, hours);
+
+        int safeLimit = Math.max(limit, 1);
+        int safeHours = Math.max(hours, 1);
+        Instant since = Instant.now().minus(safeHours, ChronoUnit.HOURS);
+
+        List<Object[]> rows = repository.findTopAttackers(customerId, since, safeLimit);
+        return rows.stream().map(this::convertToTopAttackerResponse).collect(Collectors.toList());
+    }
+
+    public List<TopAttackerResponse> getTenantTopAttackers(List<String> customerIds, int limit, int hours) {
+        log.info("Getting tenant top attackers: customerIds={}, limit={}, hours={}", customerIds, limit, hours);
+
+        if (customerIds == null || customerIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        int safeLimit = Math.max(limit, 1);
+        int safeHours = Math.max(hours, 1);
+        Instant since = Instant.now().minus(safeHours, ChronoUnit.HOURS);
+
+        List<Object[]> rows = repository.findTopAttackersForCustomers(customerIds, since, safeLimit);
+        return rows.stream().map(this::convertToTopAttackerResponse).collect(Collectors.toList());
+    }
     
     /**
      * 转换实体到详情响应DTO
@@ -439,5 +492,30 @@ public class ThreatQueryService {
         point.setHighCount(highCount);
         point.setMediumCount(mediumCount);
         return point;
+    }
+
+    private TopAttackerResponse convertToTopAttackerResponse(Object[] row) {
+        String attackMac = row[0] != null ? String.valueOf(row[0]) : null;
+        String attackIp = row[1] != null ? String.valueOf(row[1]) : null;
+        long totalCount = row[2] != null ? ((Number) row[2]).longValue() : 0L;
+
+        double maxThreatScore;
+        if (row[3] instanceof BigDecimal bigDecimal) {
+            maxThreatScore = bigDecimal.doubleValue();
+        } else if (row[3] instanceof Number number) {
+            maxThreatScore = number.doubleValue();
+        } else {
+            maxThreatScore = 0.0;
+        }
+
+        String maxThreatLevel = row[4] != null ? String.valueOf(row[4]) : null;
+
+        return TopAttackerResponse.builder()
+                .attackMac(attackMac)
+                .attackIp(attackIp)
+                .totalCount(totalCount)
+                .maxThreatScore(maxThreatScore)
+                .maxThreatLevel(maxThreatLevel)
+                .build();
     }
 }

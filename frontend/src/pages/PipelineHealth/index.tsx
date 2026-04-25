@@ -10,6 +10,7 @@ import {
   Table,
   Alert,
   Tooltip,
+  Statistic,
 } from 'antd';
 import {
   CheckCircleOutlined,
@@ -17,9 +18,13 @@ import {
   ReloadOutlined,
   ArrowRightOutlined,
   WarningOutlined,
+  ClockCircleOutlined,
+  ThunderboltOutlined,
+  DashboardOutlined,
 } from '@ant-design/icons';
 import type { PipelineHealthResponse, PipelineServiceStatus } from '@/types';
 import systemService from '@/services/system';
+import dayjs from 'dayjs';
 
 const SERVICE_LABELS: Record<string, string> = {
   'data-ingestion': '数据摄取',
@@ -47,6 +52,7 @@ const STATUS_MAP = {
 } as const;
 
 const AUTO_REFRESH_MS = 10_000;
+const EVENT_STALE_THRESHOLD_MS = 5 * 60 * 1000;
 
 const PipelineHealth = () => {
   const [loading, setLoading] = useState(true);
@@ -84,9 +90,29 @@ const PipelineHealth = () => {
 
   const downServices = serviceEntries.filter((s) => s.data.status === 'DOWN');
 
+  // ──────── 告警信息 ────────
   const warnings: string[] = [];
   if (downServices.length > 0) {
     warnings.push(`${downServices.map((s) => s.label).join('、')} 服务异常`);
+  }
+
+  const pipeline = health?.pipeline;
+  const lastEventTime = pipeline?.lastEventReceived ? dayjs(pipeline.lastEventReceived) : null;
+  const eventStale = lastEventTime
+    ? Date.now() - lastEventTime.valueOf() > EVENT_STALE_THRESHOLD_MS
+    : false;
+
+  if (eventStale) {
+    const ago = lastEventTime
+      ? `${Math.max(1, Math.floor((Date.now() - lastEventTime.valueOf()) / 60000))} 分钟前`
+      : '未知';
+    warnings.push(`超过5分钟未接收到新事件 (最后: ${ago})，请检查Logstash连接`);
+  }
+  if (pipeline?.kafkaLag !== null && pipeline?.kafkaLag !== undefined && pipeline.kafkaLag > 100) {
+    warnings.push(`Kafka消费者延迟较高: ${pipeline.kafkaLag} 条消息`);
+  }
+  if (pipeline?.flinkRunning === false) {
+    warnings.push('Flink作业未运行，实时处理已停止');
   }
 
   const getStageStatus = (services: string[]): 'UP' | 'DOWN' | 'PARTIAL' => {
@@ -187,16 +213,71 @@ const PipelineHealth = () => {
         <Alert type="error" showIcon message={error} />
       )}
 
-      {warnings.length > 0 &&
-        warnings.map((w, i) => (
-          <Alert
-            key={i}
-            type="warning"
-            showIcon
-            icon={<WarningOutlined />}
-            message={w}
-          />
-        ))}
+      {warnings.map((w, i) => (
+        <Alert
+          key={i}
+          type="warning"
+          showIcon
+          icon={<WarningOutlined />}
+          message={w}
+        />
+      ))}
+
+      {/* Pipeline Metrics */}
+      {pipeline && (
+        <Row gutter={16}>
+          <Col xs={24} sm={12} lg={6}>
+            <Card>
+              <Statistic
+                title="最后事件接收"
+                value={
+                  lastEventTime
+                    ? lastEventTime.format('HH:mm:ss')
+                    : '无数据'
+                }
+                prefix={<ClockCircleOutlined />}
+                valueStyle={eventStale ? { color: '#ff4d4f' } : undefined}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <Card>
+              <Statistic
+                title="近1小时事件数"
+                value={pipeline.eventsLastHour ?? '-'}
+                prefix={<ThunderboltOutlined />}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <Card>
+              <Statistic
+                title="Kafka消费延迟"
+                value={pipeline.kafkaLag ?? '-'}
+                suffix="条"
+                prefix={<DashboardOutlined />}
+                valueStyle={
+                  pipeline.kafkaLag !== null && pipeline.kafkaLag !== undefined && pipeline.kafkaLag > 100
+                    ? { color: '#ff4d4f' }
+                    : undefined
+                }
+              />
+            </Card>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <Card>
+              <Statistic
+                title="Flink状态"
+                value={pipeline.flinkRunning === true ? '运行中' : pipeline.flinkRunning === false ? '已停止' : '未知'}
+                prefix={pipeline.flinkRunning ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+                valueStyle={
+                  pipeline.flinkRunning === false ? { color: '#ff4d4f' } : pipeline.flinkRunning === true ? { color: '#52c41a' } : undefined
+                }
+              />
+            </Card>
+          </Col>
+        </Row>
+      )}
 
       {/* Pipeline Flow */}
       <Row gutter={16} align="middle">

@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  Alert,
   Card,
   Row,
   Col,
@@ -22,49 +21,13 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons';
 import { Line, Pie, Column } from '@ant-design/charts';
-import type { Statistics, ThreatAssessment, ChartDataPoint, Customer } from '@/types';
+import type { Statistics, ThreatAssessment, ChartDataPoint, Customer, TopAttacker } from '@/types';
 import { ThreatLevel } from '@/types';
 import threatService from '@/services/threat';
 import { getCustomerId } from '@/services/api';
 import dayjs from 'dayjs';
 
-type TopAttacker = {
-  attackMac: string;
-  attackIp?: string;
-  attackCount: number;
-  threatScore: number;
-  uniquePorts: number;
-  uniqueIps: number;
-};
-
 type PortDatum = { port: string; count: number };
-
-function deriveTopAttackers(assessments: ThreatAssessment[], limit: number): TopAttacker[] {
-  const map = new Map<string, TopAttacker>();
-  for (const a of assessments) {
-    const key = a.attackMac;
-    const existing = map.get(key);
-    if (existing) {
-      existing.attackCount += a.attackCount;
-      existing.threatScore = Math.max(existing.threatScore, a.threatScore);
-      existing.uniquePorts = Math.max(existing.uniquePorts, a.uniquePorts);
-      existing.uniqueIps = Math.max(existing.uniqueIps, a.uniqueIps);
-      if (!existing.attackIp && a.attackIp) existing.attackIp = a.attackIp;
-    } else {
-      map.set(key, {
-        attackMac: a.attackMac,
-        attackIp: a.attackIp,
-        attackCount: a.attackCount,
-        threatScore: a.threatScore,
-        uniquePorts: a.uniquePorts,
-        uniqueIps: a.uniqueIps,
-      });
-    }
-  }
-  return Array.from(map.values())
-    .sort((a, b) => b.threatScore - a.threatScore)
-    .slice(0, limit);
-}
 
 const Overview = () => {
   const [loading, setLoading] = useState(true);
@@ -105,24 +68,23 @@ const Overview = () => {
       let stats: Statistics;
       let trend: ChartDataPoint[];
       let ports: ChartDataPoint[];
-      let assessments: ThreatAssessment[];
+      let attackers: TopAttacker[];
       let recent: ThreatAssessment[];
+
+      const hours = hoursMap[trendRange];
 
       if (useTenantAll && allCustomerIds.length > 0) {
         const results = await Promise.all([
           threatService.getTenantStatistics(allCustomerIds),
-          threatService.getTenantTrend(allCustomerIds, hoursMap[trendRange]).catch(() => []),
-          threatService.getTenantPortDistribution(allCustomerIds, hoursMap[trendRange]).catch(() => []),
-          threatService
-            .getTenantThreatList(allCustomerIds, { page: 0, page_size: 200 })
-            .then((res) => res.content || [])
-            .catch(() => []),
+          threatService.getTenantTrend(allCustomerIds, hours).catch(() => []),
+          threatService.getTenantPortDistribution(allCustomerIds, hours).catch(() => []),
+          threatService.getTopAttackers(allCustomerIds[0], 10, hours).catch(() => []),
           threatService
             .getTenantThreatList(allCustomerIds, { page: 0, page_size: 10 })
             .then((res) => res.content || [])
             .catch(() => []),
         ]);
-        [stats, trend, ports, assessments, recent] = results;
+        [stats, trend, ports, attackers, recent] = results;
       } else {
         const targetCustomerId = isTenantAdmin ? selectedCustomer : customerId;
         if (!targetCustomerId || targetCustomerId === '__all__') {
@@ -136,12 +98,9 @@ const Overview = () => {
 
         const results = await Promise.all([
           threatService.getStatistics(targetCustomerId),
-          threatService.getThreatTrend(targetCustomerId, hoursMap[trendRange]).catch(() => []),
-          threatService.getPortDistribution(targetCustomerId, hoursMap[trendRange]).catch(() => []),
-          threatService
-            .getThreatList({ customer_id: targetCustomerId, page: 0, page_size: 200 })
-            .then((res) => res.content || [])
-            .catch(() => []),
+          threatService.getThreatTrend(targetCustomerId, hours).catch(() => []),
+          threatService.getPortDistribution(targetCustomerId, hours).catch(() => []),
+          threatService.getTopAttackers(targetCustomerId, 10, hours).catch(() => []),
           threatService
             .getThreatList({
               customer_id: targetCustomerId,
@@ -153,7 +112,7 @@ const Overview = () => {
             .then((res) => res.content || [])
             .catch(() => []),
         ]);
-        [stats, trend, ports, assessments, recent] = results;
+        [stats, trend, ports, attackers, recent] = results;
       }
 
       setStatistics(stats);
@@ -175,7 +134,7 @@ const Overview = () => {
       }));
       setPortData(formattedPorts.slice(0, 15));
 
-      setTopAttackers(deriveTopAttackers(assessments, 10));
+      setTopAttackers(attackers || []);
     } catch (error) {
       console.error('Failed to load overview data:', error);
       message.error('加载总览数据失败');
@@ -345,20 +304,36 @@ const Overview = () => {
     },
     {
       title: '攻击次数',
-      dataIndex: 'attackCount',
-      key: 'attackCount',
-      sorter: (a: TopAttacker, b: TopAttacker) => a.attackCount - b.attackCount,
+      dataIndex: 'totalCount',
+      key: 'totalCount',
+      sorter: (a: TopAttacker, b: TopAttacker) => a.totalCount - b.totalCount,
     },
     {
-      title: '威胁分数',
-      dataIndex: 'threatScore',
-      key: 'threatScore',
+      title: '最高威胁分数',
+      dataIndex: 'maxThreatScore',
+      key: 'maxThreatScore',
       render: (score: number) => (
         <span style={{ color: score > 200 ? '#cf1322' : score > 100 ? '#fa8c16' : '#1890ff' }}>
           {score?.toFixed(2)}
         </span>
       ),
-      sorter: (a: TopAttacker, b: TopAttacker) => a.threatScore - b.threatScore,
+      sorter: (a: TopAttacker, b: TopAttacker) => a.maxThreatScore - b.maxThreatScore,
+    },
+    {
+      title: '最高威胁等级',
+      dataIndex: 'maxThreatLevel',
+      key: 'maxThreatLevel',
+      width: 120,
+      render: (level: string) => {
+        const colorMap: Record<string, string> = {
+          CRITICAL: 'red',
+          HIGH: 'orange',
+          MEDIUM: 'gold',
+          LOW: 'blue',
+          INFO: 'default',
+        };
+        return <Tag color={colorMap[level] || 'default'}>{level}</Tag>;
+      },
     },
   ];
 
@@ -495,12 +470,6 @@ const Overview = () => {
         </Col>
         <Col xs={24} lg={12}>
           <Card title="Top 攻击者排行" bordered={false}>
-            <Alert
-              type="warning"
-              banner
-              message="攻击者排行基于最近200条记录的客户端聚合，可能不代表完整数据。后续版本将接入后端聚合接口。"
-              style={{ marginBottom: 12 }}
-            />
             <Table
               columns={attackerColumns}
               dataSource={topAttackers}

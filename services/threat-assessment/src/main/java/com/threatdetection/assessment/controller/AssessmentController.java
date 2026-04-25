@@ -15,6 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -151,13 +153,34 @@ public class AssessmentController {
             @RequestParam(defaultValue = "0") int page,
             
             @Parameter(description = "Page size", required = false)
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
 
-        logger.info("Querying assessment list: customerId={}, page={}, size={}", customerId, page, size);
+            @Parameter(description = "Threat level filter", required = false)
+            @RequestParam(name = "threat_level", required = false) String threatLevel,
+
+            @Parameter(description = "Start time in ISO-8601", required = false)
+            @RequestParam(name = "start_time", required = false) String startTime,
+
+            @Parameter(description = "End time in ISO-8601", required = false)
+            @RequestParam(name = "end_time", required = false) String endTime,
+
+            @Parameter(description = "Attacker MAC filter", required = false)
+            @RequestParam(name = "attack_mac", required = false) String attackMac) {
+
+        logger.info("Querying assessment list: customerId={}, page={}, size={}, threatLevel={}, startTime={}, endTime={}, attackMac={}",
+                customerId, page, size, threatLevel, startTime, endTime, attackMac);
 
         try {
-            Page<ThreatAssessmentDetailResponse> result = threatQueryService.getAssessmentList(customerId, page, size);
+            Instant parsedStartTime = startTime != null && !startTime.isBlank() ? Instant.parse(startTime) : null;
+            Instant parsedEndTime = endTime != null && !endTime.isBlank() ? Instant.parse(endTime) : null;
+
+            Page<ThreatAssessmentDetailResponse> result = threatQueryService.getAssessmentList(
+                    customerId, page, size, threatLevel, parsedStartTime, parsedEndTime, attackMac);
             return ResponseEntity.ok(result);
+        } catch (DateTimeParseException e) {
+            logger.warn("Invalid time format when querying assessment list: customerId={}, startTime={}, endTime={}",
+                    customerId, startTime, endTime, e);
+            return ResponseEntity.badRequest().build();
         } catch (Exception e) {
             logger.error("Error querying assessment list: customerId={}", customerId, e);
             return ResponseEntity.internalServerError().build();
@@ -308,6 +331,40 @@ public class AssessmentController {
             return ResponseEntity.ok(distribution);
         } catch (Exception e) {
             logger.error("Error getting tenant port distribution: customerIds={}", customerIds, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/top-attackers")
+    public ResponseEntity<List<TopAttackerResponse>> getTopAttackers(
+            @RequestParam(name = "customer_id") String customerId,
+            @RequestParam(name = "limit", defaultValue = "10") int limit,
+            @RequestParam(name = "hours", defaultValue = "24") int hours) {
+
+        logger.info("Getting top attackers: customerId={}, limit={}, hours={}", customerId, limit, hours);
+
+        try {
+            List<TopAttackerResponse> response = threatQueryService.getTopAttackers(customerId, limit, hours);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Error getting top attackers: customerId={}", customerId, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/top-attackers/tenant")
+    public ResponseEntity<List<TopAttackerResponse>> getTenantTopAttackers(
+            @RequestParam(name = "customer_ids") List<String> customerIds,
+            @RequestParam(name = "limit", defaultValue = "10") int limit,
+            @RequestParam(name = "hours", defaultValue = "24") int hours) {
+
+        logger.info("Getting tenant top attackers: customerIds={}, limit={}, hours={}", customerIds, limit, hours);
+
+        try {
+            List<TopAttackerResponse> response = threatQueryService.getTenantTopAttackers(customerIds, limit, hours);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Error getting tenant top attackers: customerIds={}", customerIds, e);
             return ResponseEntity.internalServerError().build();
         }
     }

@@ -4,6 +4,7 @@ import com.threatdetection.assessment.model.ThreatAssessment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -18,7 +19,7 @@ import java.util.List;
  * <p>支持按客户ID、攻击MAC、威胁等级、时间范围查询
  */
 @Repository
-public interface ThreatAssessmentRepository extends JpaRepository<ThreatAssessment, Long> {
+public interface ThreatAssessmentRepository extends JpaRepository<ThreatAssessment, Long>, JpaSpecificationExecutor<ThreatAssessment> {
 
     /**
      * 按客户ID分页查询 (降序)
@@ -153,4 +154,36 @@ public interface ThreatAssessmentRepository extends JpaRepository<ThreatAssessme
            "ORDER BY ta.assessmentTime DESC")
     List<ThreatAssessment> findRecent24HoursForCustomers(@Param("customerIds") List<String> customerIds,
                                                           @Param("since") Instant since);
+
+    @Query(value = "SELECT attack_mac, " +
+            "MAX(attack_ip) as attack_ip, " +
+            "COUNT(*) as total_count, " +
+            "MAX(threat_score) as max_threat_score, " +
+            "MAX(threat_level) as max_threat_level " +
+            "FROM threat_assessments " +
+            "WHERE customer_id = :customerId " +
+            "AND assessment_time >= :since " +
+            "GROUP BY attack_mac " +
+            "ORDER BY total_count DESC " +
+            "LIMIT :limit",
+            nativeQuery = true)
+    List<Object[]> findTopAttackers(@Param("customerId") String customerId,
+                                    @Param("since") Instant since,
+                                    @Param("limit") int limit);
+
+    @Query(value = "SELECT attack_mac, " +
+            "MAX(attack_ip) as attack_ip, " +
+            "COUNT(*) as total_count, " +
+            "MAX(threat_score) as max_threat_score, " +
+            "MAX(threat_level) as max_threat_level " +
+            "FROM threat_assessments " +
+            "WHERE customer_id IN (:customerIds) " +
+            "AND assessment_time >= :since " +
+            "GROUP BY attack_mac " +
+            "ORDER BY total_count DESC " +
+            "LIMIT :limit",
+            nativeQuery = true)
+    List<Object[]> findTopAttackersForCustomers(@Param("customerIds") List<String> customerIds,
+                                                @Param("since") Instant since,
+                                                @Param("limit") int limit);
 }

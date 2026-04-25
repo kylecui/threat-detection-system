@@ -124,6 +124,15 @@ export interface Statistics {
   levelDistribution: Record<string, number>;
 }
 
+/** Top攻击者 (后端聚合) */
+export interface TopAttacker {
+  attackMac: string;
+  attackIp: string;
+  totalCount: number;
+  maxThreatScore: number;
+  maxThreatLevel: string;
+}
+
 // ============================================================
 // 告警管理 (Alert Management) - 端口 8082
 // ============================================================

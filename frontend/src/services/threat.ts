@@ -6,6 +6,7 @@ import type {
   PaginatedResponse,
   ThreatQueryFilter,
   ChartDataPoint,
+  TopAttacker,
 } from '@/types';
 
 /**
@@ -80,6 +81,17 @@ class ThreatService {
     return response.data;
   }
 
+  /**
+   * 获取Top攻击者 (后端聚合)
+   */
+  async getTopAttackers(customerId: string, limit: number = 10, hours: number = 24): Promise<TopAttacker[]> {
+    const response = await apiClient.get<TopAttacker[]>(
+      '/api/v1/assessment/top-attackers',
+      { params: { customer_id: customerId, limit, hours } }
+    );
+    return response.data;
+  }
+
   async getCustomersByTenant(tenantId: number): Promise<Customer[]> {
     const response = await apiClient.get<Customer[]>(
       `/api/v1/customers/by-tenant/${tenantId}`
@@ -134,6 +146,67 @@ class ThreatService {
    */
   async batchDeleteThreats(ids: number[]): Promise<void> {
     await apiClient.post('/api/v1/assessment/assessments/batch-delete', { ids });
+  }
+
+  /**
+   * 导出当前页威胁数据为CSV字符串
+   */
+  exportThreatsToCsv(threats: ThreatAssessment[]): string {
+    const headers = [
+      'id',
+      'customerId',
+      'assessmentTime',
+      'attackMac',
+      'attackIp',
+      'threatLevel',
+      'threatScore',
+      'attackCount',
+      'uniqueIps',
+      'uniquePorts',
+      'uniqueDevices',
+      'portList',
+      'portRiskScore',
+      'detectionTier',
+      'createdAt',
+      'mitigationRecommendations',
+    ];
+
+    const escape = (value: unknown): string => {
+      const text = String(value ?? '');
+      if (text.includes('"') || text.includes(',') || text.includes('\n')) {
+        return `"${text.replace(/"/g, '""')}"`;
+      }
+      return text;
+    };
+
+    const rows = threats.map((item) => [
+      item.id,
+      item.customerId,
+      item.assessmentTime,
+      item.attackMac,
+      item.attackIp ?? '',
+      item.threatLevel,
+      item.threatScore,
+      item.attackCount,
+      item.uniqueIps,
+      item.uniquePorts,
+      item.uniqueDevices,
+      item.portList ?? '',
+      item.portRiskScore ?? '',
+      item.detectionTier ?? '',
+      item.createdAt,
+      item.mitigationRecommendations?.join('; ') ?? '',
+    ]);
+
+    const lines = [headers.join(','), ...rows.map((row) => row.map((cell) => escape(cell)).join(','))];
+    return lines.join('\n');
+  }
+
+  /**
+   * 导出当前页威胁数据为JSON字符串
+   */
+  exportThreatsToJson(threats: ThreatAssessment[]): string {
+    return JSON.stringify(threats, null, 2);
   }
 }
 
