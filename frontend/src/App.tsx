@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { ProLayout } from '@ant-design/pro-components';
-import { Button } from 'antd';
+import { Button, ConfigProvider, theme } from 'antd';
+import zhCN from 'antd/locale/zh_CN';
 import {
   DashboardOutlined,
   WarningOutlined,
@@ -18,9 +19,12 @@ import {
   ApiOutlined,
   RobotOutlined,
   AppstoreOutlined,
+  SunOutlined,
+  MoonOutlined,
 } from '@ant-design/icons';
 import { AuthProvider, useAuth, type AppRole } from './contexts/AuthContext';
 import { ScopeProvider } from './contexts/ScopeContext';
+import { useTheme } from './contexts/ThemeContext';
 import RouteGuard from './components/RouteGuard';
 import ErrorBoundary from './components/ErrorBoundary';
 import ScopeSelector from './components/ScopeSelector';
@@ -154,6 +158,7 @@ function filterMenuRoutes(routes: MenuRoute[], roles: AppRole[], isSuperAdmin: b
 
 function AppLayout() {
   const { user, logout, isSuperAdmin } = useAuth();
+  const { isDarkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const roles = user?.roles ?? [];
@@ -161,79 +166,96 @@ function AppLayout() {
   const menuRoutes = filterMenuRoutes(ALL_MENU_ROUTES, roles, isSuperAdmin);
 
   return (
-    <ProLayout
-      title="威胁检测系统"
-      logo={<DashboardOutlined />}
-      layout="mix"
-      fixedHeader
-      fixSiderbar
-      avatarProps={{
-        title: user?.displayName || user?.username || 'User',
-        size: 'small',
-        render: (_props, dom) => (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {dom}
-            <ScopeSelector />
-            <Button
-              type="text"
-              size="small"
-              icon={<LogoutOutlined />}
-              onClick={logout}
-              style={{ color: 'rgba(0,0,0,0.45)' }}
-            />
-          </span>
-        ),
+    <ConfigProvider
+      locale={zhCN}
+      theme={{
+        algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        token: {
+          colorPrimary: '#1890ff',
+          borderRadius: 6,
+        },
       }}
-      route={{
-        path: '/',
-        routes: menuRoutes,
-      }}
-      location={{ pathname: location.pathname }}
-      breadcrumbRender={(routers = []) => routers}
-      menuItemRender={(item, dom) => (
-        <div onClick={() => navigate(item.path || '/')} style={{ cursor: 'pointer' }}>
-          {dom}
-        </div>
-      )}
     >
-      <ErrorBoundary>
-        <Routes>
-        <Route path="/" element={<Navigate to="/overview" replace />} />
-        <Route path="/overview" element={<Overview />} />
+      <ProLayout
+        title="威胁检测系统"
+        logo={<DashboardOutlined />}
+        layout="mix"
+        fixedHeader
+        fixSiderbar
+        avatarProps={{
+          title: user?.displayName || user?.username || 'User',
+          size: 'small',
+          render: (_props, dom) => (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {dom}
+              <Button
+                type="text"
+                size="small"
+                icon={isDarkMode ? <SunOutlined /> : <MoonOutlined />}
+                onClick={toggleTheme}
+              />
+              <ScopeSelector />
+              <Button
+                type="text"
+                size="small"
+                icon={<LogoutOutlined />}
+                onClick={logout}
+                style={{ color: 'rgba(0,0,0,0.45)' }}
+              />
+            </span>
+          ),
+        }}
+        route={{
+          path: '/',
+          routes: menuRoutes,
+        }}
+        location={{ pathname: location.pathname }}
+        breadcrumbRender={(routers = []) => routers}
+        menuItemRender={(item, dom) => (
+          <div onClick={() => navigate(item.path || '/')} style={{ cursor: 'pointer' }}>
+            {dom}
+          </div>
+        )}
+      >
+        <ErrorBoundary>
+          <Routes>
+          <Route path="/" element={<Navigate to="/overview" replace />} />
+          <Route path="/overview" element={<Overview />} />
 
-        <Route path="/investigate" element={<Navigate to="/investigate/alerts" replace />} />
-        <Route path="/investigate/alerts" element={<AlertCenter />} />
-        <Route path="/investigate/threats" element={<ThreatList />} />
-        <Route path="/investigate/intel" element={<ThreatIntel />} />
+          <Route path="/investigate" element={<Navigate to="/investigate/alerts" replace />} />
+          <Route path="/investigate/alerts" element={<AlertCenter />} />
+          <Route path="/investigate/threats" element={<ThreatList />} />
+          <Route path="/investigate/intel" element={<ThreatIntel />} />
 
-        <Route path="/operate" element={<Navigate to="/operate/pipeline" replace />} />
-        <Route path="/operate/pipeline" element={<PipelineHealth />} />
-        <Route path="/operate/ml" element={<MlDetection />} />
+          <Route path="/operate" element={<Navigate to="/operate/pipeline" replace />} />
+          <Route path="/operate/pipeline" element={<PipelineHealth />} />
+          <Route path="/operate/ml" element={<MlDetection />} />
 
-        <Route path="/admin" element={<Navigate to="/admin/customers" replace />} />
-        <Route path="/admin/customers" element={<CustomersAndDevices />} />
-        <Route path="/admin/users" element={<UserMgmt />} />
-        <Route path="/admin/tenants" element={<TenantMgmt />} />
+          <Route path="/admin" element={<Navigate to="/admin/customers" replace />} />
+          <Route path="/admin/customers" element={<CustomersAndDevices />} />
+          <Route path="/admin/users" element={<UserMgmt />} />
+          <Route path="/admin/tenants" element={<TenantMgmt />} />
 
-        <Route path="/config" element={<Navigate to="/config/general" replace />} />
-        <Route path="/config/general" element={<GeneralConfig />} />
-        <Route path="/config/notifications" element={<NotificationConfig />} />
-        <Route path="/config/integrations" element={<IntegrationConfig />} />
-        <Route path="/config/ai" element={<AIConfig />} />
-        <Route path="/config/plugins" element={<PluginConfig />} />
+          <Route path="/config" element={<Navigate to="/config/general" replace />} />
+          <Route path="/config/general" element={<GeneralConfig />} />
+          <Route path="/config/notifications" element={<NotificationConfig />} />
+          <Route path="/config/integrations" element={<IntegrationConfig />} />
+          <Route path="/config/ai" element={<AIConfig />} />
+          <Route path="/config/plugins" element={<PluginConfig />} />
 
-        <Route path="/threats" element={<Navigate to="/investigate/threats" replace />} />
-        <Route path="/alerts" element={<Navigate to="/investigate/alerts" replace />} />
-        <Route path="/threat-intel" element={<Navigate to="/investigate/intel" replace />} />
-        <Route path="/pipeline" element={<Navigate to="/operate/pipeline" replace />} />
-        <Route path="/ml" element={<Navigate to="/operate/ml" replace />} />
-        <Route path="/customers-devices" element={<Navigate to="/admin/customers" replace />} />
-        <Route path="/tenants" element={<Navigate to="/admin/tenants" replace />} />
-        <Route path="/users" element={<Navigate to="/admin/users" replace />} />
-        <Route path="/configuration" element={<Navigate to="/config/general" replace />} />
-      </Routes>
-      </ErrorBoundary>
-    </ProLayout>
+          <Route path="/threats" element={<Navigate to="/investigate/threats" replace />} />
+          <Route path="/alerts" element={<Navigate to="/investigate/alerts" replace />} />
+          <Route path="/threat-intel" element={<Navigate to="/investigate/intel" replace />} />
+          <Route path="/pipeline" element={<Navigate to="/operate/pipeline" replace />} />
+          <Route path="/ml" element={<Navigate to="/operate/ml" replace />} />
+          <Route path="/customers-devices" element={<Navigate to="/admin/customers" replace />} />
+          <Route path="/tenants" element={<Navigate to="/admin/tenants" replace />} />
+          <Route path="/users" element={<Navigate to="/admin/users" replace />} />
+          <Route path="/configuration" element={<Navigate to="/config/general" replace />} />
+        </Routes>
+        </ErrorBoundary>
+      </ProLayout>
+    </ConfigProvider>
   );
 }
 
