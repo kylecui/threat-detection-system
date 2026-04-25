@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react';
 import { Select, Space } from 'antd';
 import { ApartmentOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import Cookies from 'js-cookie';
 import { useAuth } from '@/contexts/AuthContext';
 import { useScope } from '@/contexts/ScopeContext';
 import type { Customer, Tenant } from '@/types';
 import apiClient from '@/services/api';
+
+const CUSTOMER_COOKIE_KEY = 'tds_selected_customer';
+const COOKIE_OPTIONS = { expires: 30, sameSite: 'lax' as const };
 
 export default function ScopeSelector() {
   const { t } = useTranslation();
@@ -53,6 +57,8 @@ export default function ScopeSelector() {
           style={{ width: 160 }}
           value={tenantId}
           onChange={(v) => {
+            Cookies.remove(CUSTOMER_COOKIE_KEY);
+            localStorage.removeItem('scope_customer_id');
             setTenantId(v);
             setCustomerId(undefined);
           }}
@@ -66,7 +72,14 @@ export default function ScopeSelector() {
         placeholder={t('scope.selectCustomer')}
         style={{ width: 200 }}
         value={customerId}
-        onChange={setCustomerId}
+        onChange={(value) => {
+          if (value) {
+            Cookies.set(CUSTOMER_COOKIE_KEY, value, COOKIE_OPTIONS);
+          } else {
+            Cookies.remove(CUSTOMER_COOKIE_KEY);
+          }
+          setCustomerId(value);
+        }}
         loading={loadingCustomers}
         allowClear
         options={[
