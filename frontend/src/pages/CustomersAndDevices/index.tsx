@@ -278,7 +278,13 @@ const CustomersTab = () => {
             title="确定删除该客户?"
             onConfirm={() => handleDelete(record.customerId)}
           >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+            <Button
+              type="link"
+              size="small"
+              danger
+              aria-label={`删除客户 ${record.customerId}`}
+              icon={<DeleteOutlined />}
+            />
           </Popconfirm>
         </Space>
       ),
@@ -335,7 +341,13 @@ const CustomersTab = () => {
             title="确定解绑?"
             onConfirm={() => handleDeleteDevice(record.devSerial)}
           >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+            <Button
+              type="link"
+              size="small"
+              danger
+              aria-label={`删除设备 ${record.devSerial}`}
+              icon={<DeleteOutlined />}
+            />
           </Popconfirm>
         </Space>
       ),

@@ -6,11 +6,12 @@ import {
   Tag,
   Space,
   Button,
-  Spin,
+  Skeleton,
   Table,
   Alert,
   Tooltip,
   Statistic,
+  Grid,
 } from 'antd';
 import {
   CheckCircleOutlined,
@@ -55,6 +56,8 @@ const AUTO_REFRESH_MS = 10_000;
 const EVENT_STALE_THRESHOLD_MS = 5 * 60 * 1000;
 
 const PipelineHealth = () => {
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.sm;
   const [loading, setLoading] = useState(true);
   const [health, setHealth] = useState<PipelineHealthResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +80,25 @@ const PipelineHealth = () => {
     loadHealth();
     const interval = setInterval(loadHealth, AUTO_REFRESH_MS);
     return () => clearInterval(interval);
+  }, [loadHealth]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const target = e.target as HTMLElement;
+        if (
+          target.tagName === 'INPUT'
+          || target.tagName === 'TEXTAREA'
+          || target.isContentEditable
+        ) {
+          return;
+        }
+        void loadHealth();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [loadHealth]);
 
   const serviceEntries: { name: string; label: string; data: PipelineServiceStatus }[] =
@@ -172,9 +194,23 @@ const PipelineHealth = () => {
 
   if (loading && !health) {
     return (
-      <div style={{ textAlign: 'center', padding: 100 }}>
-        <Spin size="large" tip="检查管道健康状态..." />
-      </div>
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Card>
+          <Skeleton active paragraph={{ rows: 1 }} />
+        </Card>
+        <Row gutter={16}>
+          {[1, 2, 3, 4].map((i) => (
+            <Col xs={24} sm={12} lg={6} key={i}>
+              <Card>
+                <Skeleton active paragraph={{ rows: 1 }} />
+              </Card>
+            </Col>
+          ))}
+        </Row>
+        <Card>
+          <Skeleton active paragraph={{ rows: 6 }} />
+        </Card>
+      </Space>
     );
   }
 
@@ -202,7 +238,12 @@ const PipelineHealth = () => {
             </Space>
           </Col>
           <Col>
-            <Button icon={<ReloadOutlined />} onClick={loadHealth} loading={loading}>
+            <Button
+              aria-label="刷新管道健康状态"
+              icon={<ReloadOutlined />}
+              onClick={loadHealth}
+              loading={loading}
+            >
               刷新
             </Button>
           </Col>
@@ -280,15 +321,27 @@ const PipelineHealth = () => {
       )}
 
       {/* Pipeline Flow */}
-      <Row gutter={16} align="middle">
+      <Row gutter={[16, 16]} align="middle">
         {PIPELINE_STAGES.map((stage, idx) => {
           const status = getStageStatus(stage.services);
           return (
-            <Col key={stage.key} style={{ display: 'flex', alignItems: 'center' }}>
+            <Col
+              key={stage.key}
+              xs={24}
+              sm={8}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: isMobile ? 'column' : 'row',
+                gap: 8,
+              }}
+            >
               <Card
                 size="small"
                 style={{
-                  width: 200,
+                  width: '100%',
+                  maxWidth: 260,
                   borderTop: `3px solid ${stageColor(status)}`,
                   textAlign: 'center',
                 }}
@@ -312,7 +365,13 @@ const PipelineHealth = () => {
               </Card>
               {idx < PIPELINE_STAGES.length - 1 && (
                 <ArrowRightOutlined
-                  style={{ fontSize: 20, color: '#999', margin: '0 8px' }}
+                  style={{
+                    fontSize: 20,
+                    color: '#999',
+                    margin: isMobile ? '8px 0 0' : '0 8px',
+                    transform: isMobile ? 'rotate(90deg)' : 'none',
+                  }}
+                  className="pipeline-stage-arrow"
                 />
               )}
             </Col>
@@ -321,7 +380,7 @@ const PipelineHealth = () => {
       </Row>
 
       {/* Service Status Table */}
-      <Card title="服务状态详情" bordered={false}>
+      <Card title="服务状态详情" variant="borderless">
         <Table
           columns={columns}
           dataSource={serviceEntries}

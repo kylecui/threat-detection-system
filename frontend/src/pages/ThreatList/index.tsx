@@ -6,7 +6,10 @@ import {
   Descriptions,
   Divider,
   Drawer,
+  Grid,
   Input,
+  Row,
+  Col,
   Modal,
   Select,
   Space,
@@ -107,6 +110,8 @@ function triggerBlobDownload(content: string, fileName: string, mimeType: string
  * 5) 保持原分页行为与字段映射
  */
 const ThreatList = () => {
+  const screens = Grid.useBreakpoint();
+
   // ─────────────────────────────────────────────────────────────
   // 基础列表状态
   // ─────────────────────────────────────────────────────────────
@@ -458,6 +463,7 @@ const ThreatList = () => {
           <Button
             type="link"
             danger
+            aria-label={`删除威胁记录 ${record.id}`}
             icon={<DeleteOutlined />}
             onClick={(event) => {
               event.stopPropagation();
@@ -483,46 +489,62 @@ const ThreatList = () => {
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       {/* ────────────────────────── 顶部过滤与导出栏 ────────────────────────── */}
-      <Card bordered={false} title="威胁列表">
+      <Card variant="borderless" title="威胁列表">
         <Space
           direction="vertical"
           size="middle"
           style={{ width: '100%' }}
         >
-          <Space wrap size="middle" style={{ width: '100%' }}>
-            <Select<ThreatLevelFilterValue>
-              style={{ width: 160 }}
-              value={threatLevelFilter}
-              options={THREAT_LEVEL_OPTIONS}
-              onChange={(value) => setThreatLevelFilter(value)}
-              placeholder="威胁等级"
-            />
+          <Row gutter={[16, 16]} style={{ width: '100%' }}>
+            <Col xs={24} sm={12} lg={6}>
+              <Select<ThreatLevelFilterValue>
+                style={{ width: '100%' }}
+                value={threatLevelFilter}
+                options={THREAT_LEVEL_OPTIONS}
+                onChange={(value) => setThreatLevelFilter(value)}
+                placeholder="威胁等级"
+              />
+            </Col>
 
-            <RangePicker
-              value={timeRangeFilter}
-              onChange={(value) => setTimeRangeFilter(value)}
-              placeholder={['开始日期', '结束日期']}
-              allowClear
-            />
+            <Col xs={24} sm={12} lg={8}>
+              <RangePicker
+                style={{ width: '100%' }}
+                value={timeRangeFilter}
+                onChange={(value) => setTimeRangeFilter(value)}
+                placeholder={['开始日期', '结束日期']}
+                allowClear
+              />
+            </Col>
 
-            <Search
-              style={{ width: 260 }}
-              value={attackMacInput}
-              onChange={(event) => setAttackMacInput(event.target.value)}
-              onSearch={(value) => {
-                setAttackMacInput(value);
-                setDebouncedAttackMac(value.trim());
-              }}
-              placeholder="搜索攻击者MAC"
-              allowClear
-            />
+            <Col xs={24} sm={12} lg={6}>
+              <Search
+                style={{ width: '100%' }}
+                value={attackMacInput}
+                onChange={(event) => setAttackMacInput(event.target.value)}
+                onSearch={(value) => {
+                  setAttackMacInput(value);
+                  setDebouncedAttackMac(value.trim());
+                }}
+                placeholder="搜索攻击者MAC"
+                allowClear
+              />
+            </Col>
 
-            <Button onClick={resetFilters}>重置筛选</Button>
+            <Col xs={12} sm={6} lg={2}>
+              <Button style={{ width: '100%' }} onClick={resetFilters}>重置筛选</Button>
+            </Col>
 
-            <Button icon={<ReloadOutlined />} onClick={loadThreats}>
-              刷新
-            </Button>
-          </Space>
+            <Col xs={12} sm={6} lg={2}>
+              <Button
+                style={{ width: '100%' }}
+                aria-label="刷新威胁列表"
+                icon={<ReloadOutlined />}
+                onClick={loadThreats}
+              >
+                刷新
+              </Button>
+            </Col>
+          </Row>
 
           <Divider style={{ margin: '4px 0' }} />
 
@@ -557,6 +579,7 @@ const ThreatList = () => {
                 <Space>
                   <Button
                     danger
+                    aria-label="批量删除所选威胁记录"
                     icon={<DeleteOutlined />}
                     onClick={handleBatchDelete}
                   >
@@ -605,10 +628,10 @@ const ThreatList = () => {
           </Space>
         }
         placement="right"
-        width={600}
+        width={screens.md ? 600 : '100%'}
         open={drawerOpen}
         onClose={closeDetailDrawer}
-        destroyOnClose
+        destroyOnHidden
       >
         {drawerLoading && (
           <div style={{ textAlign: 'center', padding: 48 }}>
@@ -683,6 +706,7 @@ const ThreatList = () => {
             <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
               <Button
                 danger
+                aria-label={`删除威胁记录 ${activeThreatDetail.id}`}
                 icon={<DeleteOutlined />}
                 onClick={() => handleDelete(activeThreatDetail.id)}
               >

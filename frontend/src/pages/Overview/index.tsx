@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   Row,
@@ -7,7 +8,7 @@ import {
   Table,
   Tag,
   Space,
-  Spin,
+  Skeleton,
   message,
   Select,
   Button,
@@ -25,11 +26,13 @@ import type { Statistics, ThreatAssessment, ChartDataPoint, Customer, TopAttacke
 import { ThreatLevel } from '@/types';
 import threatService from '@/services/threat';
 import { getCustomerId } from '@/services/api';
+import EmptyState from '@/components/EmptyState';
 import dayjs from 'dayjs';
 
 type PortDatum = { port: string; count: number };
 
 const Overview = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [trendData, setTrendData] = useState<ChartDataPoint[]>([]);
@@ -163,6 +166,25 @@ const Overview = () => {
     loadData();
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
+  }, [loadData]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const target = e.target as HTMLElement;
+        if (
+          target.tagName === 'INPUT'
+          || target.tagName === 'TEXTAREA'
+          || target.isContentEditable
+        ) {
+          return;
+        }
+        void loadData();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [loadData]);
 
   // ──────── 威胁等级标签 ────────
@@ -339,9 +361,32 @@ const Overview = () => {
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: '100px' }}>
-        <Spin size="large" tip="加载总览数据..." />
-      </div>
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Card>
+          <Skeleton active paragraph={{ rows: 1 }} />
+        </Card>
+        <Row gutter={16}>
+          {[1, 2, 3, 4].map((i) => (
+            <Col xs={24} sm={12} lg={6} key={i}>
+              <Card>
+                <Skeleton active paragraph={{ rows: 1 }} />
+              </Card>
+            </Col>
+          ))}
+        </Row>
+        <Row gutter={16}>
+          <Col xs={24} lg={14}>
+            <Card>
+              <Skeleton active paragraph={{ rows: 8 }} />
+            </Card>
+          </Col>
+          <Col xs={24} lg={10}>
+            <Card>
+              <Skeleton active paragraph={{ rows: 8 }} />
+            </Card>
+          </Col>
+        </Row>
+      </Space>
     );
   }
 
@@ -349,15 +394,15 @@ const Overview = () => {
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       {/* ── 操作栏 ── */}
       <Card size="small">
-        <Row justify="space-between" align="middle">
-          <Col>
-            <Space>
+        <Row gutter={[12, 12]} justify="space-between" align="middle">
+          <Col xs={24} md={18}>
+            <Space wrap>
               <span style={{ fontWeight: 600 }}>威胁总览</span>
               {isTenantAdmin && (
                 <>
                   <span>客户筛选:</span>
                   <Select
-                    style={{ width: 300 }}
+                    style={{ width: '100%', minWidth: 200, maxWidth: 300 }}
                     value={selectedCustomer}
                     onChange={(v) => setSelectedCustomer(v)}
                     options={[
@@ -381,8 +426,8 @@ const Overview = () => {
               />
             </Space>
           </Col>
-          <Col>
-            <Button icon={<ReloadOutlined />} onClick={loadData}>
+          <Col xs={24} md={6} style={{ textAlign: 'right' }}>
+            <Button aria-label="刷新总览数据" icon={<ReloadOutlined />} onClick={loadData}>
               刷新
             </Button>
           </Col>
@@ -437,21 +482,25 @@ const Overview = () => {
         <Col xs={24} lg={14}>
           <Card
             title={`威胁趋势 (${trendRange === '24h' ? '24小时' : trendRange === '7d' ? '7天' : '30天'})`}
-            bordered={false}
+            variant="borderless"
           >
             {trendData.length > 0 ? (
-              <Line {...trendConfig} height={320} />
+              <div role="img" aria-label="威胁趋势图表">
+                <Line {...trendConfig} height={320} />
+              </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>暂无趋势数据</div>
+              <EmptyState description="暂无趋势数据" image="simple" />
             )}
           </Card>
         </Col>
         <Col xs={24} lg={10}>
-          <Card title="威胁等级分布" bordered={false}>
+          <Card title="威胁等级分布" variant="borderless">
             {levelDistData.length > 0 ? (
-              <Pie {...levelPieConfig} height={320} />
+              <div role="img" aria-label="威胁等级分布图表">
+                <Pie {...levelPieConfig} height={320} />
+              </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>暂无数据</div>
+              <EmptyState image="simple" />
             )}
           </Card>
         </Col>
@@ -460,16 +509,18 @@ const Overview = () => {
       {/* ── 端口分布 + Top攻击者 ── */}
       <Row gutter={16}>
         <Col xs={24} lg={12}>
-          <Card title="端口攻击分布 (Top 15)" bordered={false}>
+          <Card title="端口攻击分布 (Top 15)" variant="borderless">
             {portData.length > 0 ? (
-              <Column {...portBarConfig} height={350} />
+              <div role="img" aria-label="端口攻击分布图表">
+                <Column {...portBarConfig} height={350} />
+              </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>暂无数据</div>
+              <EmptyState image="simple" />
             )}
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Top 攻击者排行" bordered={false}>
+          <Card title="Top 攻击者排行" variant="borderless">
             <Table
               columns={attackerColumns}
               dataSource={topAttackers}
@@ -484,9 +535,13 @@ const Overview = () => {
       {/* ── 最新威胁 ── */}
       <Card
         title="最新威胁"
-        bordered={false}
+        variant="borderless"
         extra={
-          <Button type="link" onClick={() => { window.location.href = '/threats'; }}>
+          <Button
+            type="link"
+            aria-label="查看全部威胁"
+            onClick={() => navigate('/investigate/threats')}
+          >
             查看全部 &rarr;
           </Button>
         }
