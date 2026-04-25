@@ -25,3 +25,4 @@ gateway:
     customer-management-url: ${CUSTOMER_MANAGEMENT_HEALTH_URL:http://customer-management:8084/actuator/health}
     threat-intelligence-url: ${THREAT_INTELLIGENCE_HEALTH_URL:http://threat-intelligence:8085/actuator/health}
     ml-detection-url: ${ML_DETECTION_HEALTH_URL:http://ml-detection:8086/health}
+    kafka-bootstrap: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}

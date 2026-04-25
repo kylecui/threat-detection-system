@@ -10,7 +10,10 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -54,6 +57,9 @@ public class SystemHealthController {
     @Value("${gateway.health-check.ml-detection-url:http://localhost:8086/health}")
     private String mlDetectionHealthUrl;
 
+    @Value("${gateway.health-check.kafka-bootstrap:${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}}")
+    private String kafkaBootstrap;
+
     @GetMapping("/health")
     public Mono<Map<String, Object>> getSystemHealth() {
         List<ServiceTarget> targets = List.of(
@@ -66,10 +72,14 @@ public class SystemHealthController {
                 new ServiceTarget("ml-detection", mlDetectionHealthUrl)
         );
 
-        return Flux.fromIterable(targets)
+        Mono<List<ServiceCheckResult>> serviceChecks = Flux.fromIterable(targets)
                 .flatMap(this::checkServiceHealth)
-                .collectList()
-                .map(this::buildResponse);
+                .collectList();
+
+        Mono<String> kafkaCheck = checkKafkaHealth();
+
+        return Mono.zip(serviceChecks, kafkaCheck)
+                .map(tuple -> buildResponse(tuple.getT1(), tuple.getT2()));
     }
 
     private Mono<ServiceCheckResult> checkServiceHealth(ServiceTarget target) {
@@ -107,7 +117,7 @@ public class SystemHealthController {
                 .onErrorResume(ex -> Mono.just(new ServiceCheckResult(target.name(), "DOWN", toLatencyMs(startedAt), Map.of())));
     }
 
-    private Map<String, Object> buildResponse(List<ServiceCheckResult> results) {
+    private Map<String, Object> buildResponse(List<ServiceCheckResult> results, String kafkaStatus) {
         Map<String, Object> services = new LinkedHashMap<>();
 
         for (ServiceCheckResult result : results) {
@@ -117,7 +127,7 @@ public class SystemHealthController {
             services.put(result.name(), detail);
         }
 
-        services.put("kafka", Map.of("status", resolveInfraStatus(results, "kafka")));
+        services.put("kafka", Map.of("status", kafkaStatus));
         services.put("redis", Map.of("status", resolveInfraStatus(results, "redis")));
         services.put("postgres", Map.of("status", resolveInfraStatus(results, "postgres")));
 
@@ -208,6 +218,34 @@ public class SystemHealthController {
 
     private long toLatencyMs(long startedAt) {
         return Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
+    }
+
+    /**
+     * Direct TCP connect to Kafka broker to verify it is reachable.
+     * Runs on boundedElastic scheduler to avoid blocking the event loop.
+     */
+    private Mono<String> checkKafkaHealth() {
+        return Mono.fromCallable(() -> {
+            String host = kafkaBootstrap;
+            int port = 9092;
+            int colonIdx = kafkaBootstrap.lastIndexOf(':');
+            if (colonIdx > 0) {
+                host = kafkaBootstrap.substring(0, colonIdx);
+                try {
+                    port = Integer.parseInt(kafkaBootstrap.substring(colonIdx + 1));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(host, port), 2000);
+                return "UP";
+            } catch (Exception e) {
+                log.warn("Kafka health check failed ({}:{}): {}", host, port, e.getMessage());
+                return "DOWN";
+            }
+        }).subscribeOn(Schedulers.boundedElastic())
+          .timeout(HEALTH_TIMEOUT)
+          .onErrorReturn("DOWN");
     }
 
     private record ServiceTarget(String name, String url) {}
