@@ -1,12 +1,15 @@
-import { defineConfig } from 'vite';
+/// <reference types="vitest/config" />
+import { defineConfig, type UserConfig as ViteUserConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import type { InlineConfig as VitestInlineConfig } from 'vitest/node';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+type TestableViteConfig = ViteUserConfig & { test?: VitestInlineConfig };
 
 // https://vitejs.dev/config/
-export default defineConfig({
+const config: TestableViteConfig = {
   plugins: [react()],
   
   // 路径别名
@@ -35,7 +38,7 @@ export default defineConfig({
           proxy.on('error', (err, _req, _res) => {
             console.log('proxy error', err);
           });
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
+          proxy.on('proxyReq', (_proxyReq, req, _res) => {
             console.log('Sending Request to the Target:', req.method, req.url);
           });
           proxy.on('proxyRes', (proxyRes, req, _res) => {
@@ -72,4 +75,17 @@ export default defineConfig({
   optimizeDeps: {
     include: ['react', 'react-dom', 'antd', '@ant-design/pro-components'],
   },
-});
+
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.ts',
+    css: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+    },
+  },
+};
+
+export default defineConfig(config);
