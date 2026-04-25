@@ -4,7 +4,6 @@ import { Button } from 'antd';
 import {
   DashboardOutlined,
   WarningOutlined,
-  BarChartOutlined,
   SettingOutlined,
   BellOutlined,
   TeamOutlined,
@@ -14,25 +13,22 @@ import {
   LogoutOutlined,
   ApartmentOutlined,
   UserOutlined,
-  ApiOutlined,
 } from '@ant-design/icons';
 import { AuthProvider, useAuth, type AppRole } from './contexts/AuthContext';
 import { ScopeProvider } from './contexts/ScopeContext';
 import RouteGuard from './components/RouteGuard';
 import ScopeSelector from './components/ScopeSelector';
-import Dashboard from './pages/Dashboard';
+import Overview from './pages/Overview';
 import ThreatList from './pages/ThreatList';
-import Analytics from './pages/Analytics';
-import Settings from './pages/Settings';
 import AlertCenter from './pages/AlertCenter';
-import CustomerMgmt from './pages/CustomerMgmt';
+import CustomersAndDevices from './pages/CustomersAndDevices';
 import ThreatIntel from './pages/ThreatIntel';
 import MlDetection from './pages/MlDetection';
 import PipelineHealth from './pages/PipelineHealth';
 import LoginPage from './pages/Login';
 import TenantMgmt from './pages/TenantMgmt';
 import UserMgmt from './pages/UserMgmt';
-import DeviceMgmt from './pages/DeviceMgmt';
+import Configuration from './pages/Configuration';
 
 interface MenuRoute {
   path: string;
@@ -42,18 +38,16 @@ interface MenuRoute {
 }
 
 const ALL_MENU_ROUTES: MenuRoute[] = [
-  { path: '/dashboard', name: '仪表盘', icon: <DashboardOutlined /> },
+  { path: '/overview', name: '威胁总览', icon: <DashboardOutlined /> },
   { path: '/threats', name: '威胁列表', icon: <WarningOutlined /> },
   { path: '/alerts', name: '告警中心', icon: <BellOutlined /> },
-  { path: '/analytics', name: '数据分析', icon: <BarChartOutlined /> },
-  { path: '/customers', name: '客户管理', icon: <TeamOutlined />, requiredRoles: ['SUPER_ADMIN', 'TENANT_ADMIN'] },
-  { path: '/devices', name: '设备管理', icon: <ApiOutlined /> },
+  { path: '/customers-devices', name: '客户与设备', icon: <TeamOutlined />, requiredRoles: ['SUPER_ADMIN', 'TENANT_ADMIN'] },
   { path: '/threat-intel', name: '威胁情报', icon: <GlobalOutlined /> },
   { path: '/ml', name: 'ML检测', icon: <ExperimentOutlined /> },
   { path: '/pipeline', name: '管道健康', icon: <CloudServerOutlined />, requiredRoles: ['SUPER_ADMIN', 'TENANT_ADMIN'] },
   { path: '/tenants', name: '租户管理', icon: <ApartmentOutlined />, requiredRoles: ['SUPER_ADMIN'] },
   { path: '/users', name: '用户管理', icon: <UserOutlined />, requiredRoles: ['SUPER_ADMIN', 'TENANT_ADMIN'] },
-  { path: '/settings', name: '系统设置', icon: <SettingOutlined /> },
+  { path: '/configuration', name: '系统配置', icon: <SettingOutlined /> },
 ];
 
 function AppLayout() {
@@ -101,19 +95,17 @@ function AppLayout() {
       )}
     >
       <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/" element={<Navigate to="/overview" replace />} />
+        <Route path="/overview" element={<Overview />} />
         <Route path="/threats" element={<ThreatList />} />
         <Route path="/alerts" element={<AlertCenter />} />
-        <Route path="/analytics" element={<Analytics />} />
-        <Route path="/customers" element={<CustomerMgmt />} />
-        <Route path="/devices" element={<DeviceMgmt />} />
+        <Route path="/customers-devices" element={<CustomersAndDevices />} />
         <Route path="/threat-intel" element={<ThreatIntel />} />
         <Route path="/ml" element={<MlDetection />} />
         <Route path="/pipeline" element={<PipelineHealth />} />
         <Route path="/tenants" element={<TenantMgmt />} />
         <Route path="/users" element={<UserMgmt />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/configuration" element={<Configuration />} />
       </Routes>
     </ProLayout>
   );

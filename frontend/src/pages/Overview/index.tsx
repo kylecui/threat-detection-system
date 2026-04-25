@@ -10,19 +10,20 @@ import {
   Space,
   Spin,
   message,
+  Select,
   Button,
   Segmented,
-  Select,
 } from 'antd';
 import {
-  ReloadOutlined,
-  RiseOutlined,
-  FallOutlined,
+  WarningOutlined,
   FireOutlined,
   AlertOutlined,
+  InfoCircleOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import { Line, Pie, Column } from '@ant-design/charts';
-import type { Statistics, ChartDataPoint, ThreatAssessment, Customer } from '@/types';
+import type { Statistics, ThreatAssessment, ChartDataPoint, Customer } from '@/types';
+import { ThreatLevel } from '@/types';
 import threatService from '@/services/threat';
 import { getCustomerId } from '@/services/api';
 import dayjs from 'dayjs';
@@ -36,7 +37,8 @@ type TopAttacker = {
   uniqueIps: number;
 };
 
-/** Derive top attackers from assessments data (client-side aggregation) */
+type PortDatum = { port: string; count: number };
+
 function deriveTopAttackers(assessments: ThreatAssessment[], limit: number): TopAttacker[] {
   const map = new Map<string, TopAttacker>();
   for (const a of assessments) {
@@ -64,24 +66,13 @@ function deriveTopAttackers(assessments: ThreatAssessment[], limit: number): Top
     .slice(0, limit);
 }
 
-type PortDatum = { port: string; count: number };
-
-/**
- * 数据分析页面
- *
- * 功能:
- * - 威胁统计概览
- * - 威胁趋势折线图 (24h / 7d / 30d)
- * - 威胁等级分布饼图
- * - 端口攻击分布柱状图
- * - Top 攻击者排行表
- */
-const Analytics = () => {
+const Overview = () => {
   const [loading, setLoading] = useState(true);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [trendData, setTrendData] = useState<ChartDataPoint[]>([]);
   const [portData, setPortData] = useState<PortDatum[]>([]);
   const [topAttackers, setTopAttackers] = useState<TopAttacker[]>([]);
+  const [recentThreats, setRecentThreats] = useState<ThreatAssessment[]>([]);
   const [trendRange, setTrendRange] = useState<string>('24h');
   const [tenantCustomers, setTenantCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<string>('__all__');
@@ -96,19 +87,17 @@ const Analytics = () => {
     : null;
   const isTenantAdmin = !!user?.roles?.includes('TENANT_ADMIN');
   const tenantId = user?.tenantId;
-
   const customerId = getCustomerId();
 
-  /** 加载所有分析数据 */
+  const hoursMap: Record<string, number> = {
+    '24h': 24,
+    '7d': 168,
+    '30d': 720,
+  };
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-
-      const hoursMap: Record<string, number> = {
-        '24h': 24,
-        '7d': 168,
-        '30d': 720,
-      };
 
       const useTenantAll = isTenantAdmin && selectedCustomer === '__all__';
       const allCustomerIds = tenantCustomers.map((c) => c.customerId).filter(Boolean);
@@ -117,9 +106,10 @@ const Analytics = () => {
       let trend: ChartDataPoint[];
       let ports: ChartDataPoint[];
       let assessments: ThreatAssessment[];
+      let recent: ThreatAssessment[];
 
       if (useTenantAll && allCustomerIds.length > 0) {
-        const tenantResults = await Promise.all([
+        const results = await Promise.all([
           threatService.getTenantStatistics(allCustomerIds),
           threatService.getTenantTrend(allCustomerIds, hoursMap[trendRange]).catch(() => []),
           threatService.getTenantPortDistribution(allCustomerIds, hoursMap[trendRange]).catch(() => []),
@@ -127,8 +117,12 @@ const Analytics = () => {
             .getTenantThreatList(allCustomerIds, { page: 0, page_size: 200 })
             .then((res) => res.content || [])
             .catch(() => []),
+          threatService
+            .getTenantThreatList(allCustomerIds, { page: 0, page_size: 10 })
+            .then((res) => res.content || [])
+            .catch(() => []),
         ]);
-        [stats, trend, ports, assessments] = tenantResults;
+        [stats, trend, ports, assessments, recent] = results;
       } else {
         const targetCustomerId = isTenantAdmin ? selectedCustomer : customerId;
         if (!targetCustomerId || targetCustomerId === '__all__') {
@@ -136,10 +130,11 @@ const Analytics = () => {
           setTrendData([]);
           setPortData([]);
           setTopAttackers([]);
+          setRecentThreats([]);
           return;
         }
 
-        const customerResults = await Promise.all([
+        const results = await Promise.all([
           threatService.getStatistics(targetCustomerId),
           threatService.getThreatTrend(targetCustomerId, hoursMap[trendRange]).catch(() => []),
           threatService.getPortDistribution(targetCustomerId, hoursMap[trendRange]).catch(() => []),
@@ -147,11 +142,22 @@ const Analytics = () => {
             .getThreatList({ customer_id: targetCustomerId, page: 0, page_size: 200 })
             .then((res) => res.content || [])
             .catch(() => []),
+          threatService
+            .getThreatList({
+              customer_id: targetCustomerId,
+              page: 0,
+              page_size: 10,
+              sort_by: 'assessment_time',
+              sort_order: 'desc',
+            })
+            .then((res) => res.content || [])
+            .catch(() => []),
         ]);
-        [stats, trend, ports, assessments] = customerResults;
+        [stats, trend, ports, assessments, recent] = results;
       }
 
       setStatistics(stats);
+      setRecentThreats(recent);
 
       const formattedTrend = (trend || []).map((item: any) => ({
         time:
@@ -169,20 +175,17 @@ const Analytics = () => {
       }));
       setPortData(formattedPorts.slice(0, 15));
 
-      setTopAttackers(deriveTopAttackers(assessments, 20));
+      setTopAttackers(deriveTopAttackers(assessments, 10));
     } catch (error) {
-      console.error('Failed to load analytics data:', error);
-      message.error('加载分析数据失败');
+      console.error('Failed to load overview data:', error);
+      message.error('加载总览数据失败');
     } finally {
       setLoading(false);
     }
   }, [customerId, isTenantAdmin, selectedCustomer, tenantCustomers, trendRange]);
 
   const loadTenantCustomers = useCallback(async () => {
-    if (!isTenantAdmin || !tenantId) {
-      return;
-    }
-
+    if (!isTenantAdmin || !tenantId) return;
     try {
       const customers = await threatService.getCustomersByTenant(tenantId);
       setTenantCustomers(customers || []);
@@ -193,17 +196,27 @@ const Analytics = () => {
     }
   }, [isTenantAdmin, tenantId]);
 
-  const handleCustomerChange = (value: string) => {
-    setSelectedCustomer(value);
-  };
-
   useEffect(() => {
     loadTenantCustomers();
   }, [loadTenantCustomers]);
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(loadData, 30000);
+    return () => clearInterval(interval);
   }, [loadData]);
+
+  // ──────── 威胁等级标签 ────────
+  const getThreatLevelTag = (level: ThreatLevel) => {
+    const colorMap = {
+      [ThreatLevel.CRITICAL]: 'red',
+      [ThreatLevel.HIGH]: 'orange',
+      [ThreatLevel.MEDIUM]: 'gold',
+      [ThreatLevel.LOW]: 'blue',
+      [ThreatLevel.INFO]: 'default',
+    };
+    return <Tag color={colorMap[level]}>{level}</Tag>;
+  };
 
   // ──────── 威胁等级分布数据 ────────
   const levelDistData = statistics
@@ -252,16 +265,61 @@ const Analytics = () => {
     xField: 'port',
     yField: 'count',
     color: '#5B8FF9',
-    label: {
-      position: 'top' as const,
-    },
-    xAxis: {
-      label: { autoRotate: true, autoHide: false },
-    },
+    label: { position: 'top' as const },
+    xAxis: { label: { autoRotate: true, autoHide: false } },
     yAxis: { title: { text: '攻击次数' } },
   };
 
-  // ──────── Top攻击者表格 ────────
+  // ──────── 最新威胁列表列定义 ────────
+  const recentColumns = [
+    {
+      title: '评估时间',
+      dataIndex: 'assessmentTime',
+      key: 'assessmentTime',
+      render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm:ss'),
+      width: 160,
+    },
+    {
+      title: '攻击者MAC',
+      dataIndex: 'attackMac',
+      key: 'attackMac',
+      render: (mac: string) => <code>{mac}</code>,
+    },
+    {
+      title: '威胁等级',
+      dataIndex: 'threatLevel',
+      key: 'threatLevel',
+      render: (level: ThreatLevel) => getThreatLevelTag(level),
+      width: 100,
+    },
+    {
+      title: '威胁分数',
+      dataIndex: 'threatScore',
+      key: 'threatScore',
+      render: (score: number) => score?.toFixed(2) || 'N/A',
+      width: 100,
+    },
+    {
+      title: '攻击次数',
+      dataIndex: 'attackCount',
+      key: 'attackCount',
+      width: 100,
+    },
+    {
+      title: '诱饵IP数',
+      dataIndex: 'uniqueIps',
+      key: 'uniqueIps',
+      width: 100,
+    },
+    {
+      title: '端口种类',
+      dataIndex: 'uniquePorts',
+      key: 'uniquePorts',
+      width: 100,
+    },
+  ];
+
+  // ──────── Top攻击者列表列定义 ────────
   const attackerColumns = [
     {
       title: '排名',
@@ -302,22 +360,12 @@ const Analytics = () => {
       ),
       sorter: (a: TopAttacker, b: TopAttacker) => a.threatScore - b.threatScore,
     },
-    {
-      title: '端口种类',
-      dataIndex: 'uniquePorts',
-      key: 'uniquePorts',
-    },
-    {
-      title: '诱饵IP数',
-      dataIndex: 'uniqueIps',
-      key: 'uniqueIps',
-    },
   ];
 
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '100px' }}>
-        <Spin size="large" tip="加载分析数据..." />
+        <Spin size="large" tip="加载总览数据..." />
       </div>
     );
   }
@@ -329,14 +377,14 @@ const Analytics = () => {
         <Row justify="space-between" align="middle">
           <Col>
             <Space>
-              <span style={{ fontWeight: 600 }}>数据分析</span>
+              <span style={{ fontWeight: 600 }}>威胁总览</span>
               {isTenantAdmin && (
                 <>
                   <span>客户筛选:</span>
                   <Select
                     style={{ width: 300 }}
                     value={selectedCustomer}
-                    onChange={handleCustomerChange}
+                    onChange={(v) => setSelectedCustomer(v)}
                     options={[
                       { label: '全部客户 (All)', value: '__all__' },
                       ...tenantCustomers.map((c) => ({
@@ -366,7 +414,7 @@ const Analytics = () => {
         </Row>
       </Card>
 
-      {/* ── 统计概览 ── */}
+      {/* ── 统计卡片: 总威胁数 / 严重 / 高危 / 中危 ── */}
       <Row gutter={16}>
         <Col xs={24} sm={12} lg={6}>
           <Card>
@@ -380,8 +428,8 @@ const Analytics = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="严重 + 高危"
-              value={(statistics?.criticalCount || 0) + (statistics?.highCount || 0)}
+              title="严重威胁"
+              value={statistics?.criticalCount || 0}
               valueStyle={{ color: '#cf1322' }}
               prefix={<FireOutlined />}
             />
@@ -390,45 +438,53 @@ const Analytics = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="最高分数"
-              value={statistics?.maxThreatScore?.toFixed(2) || '0.00'}
+              title="高危威胁"
+              value={statistics?.highCount || 0}
               valueStyle={{ color: '#fa8c16' }}
-              prefix={<RiseOutlined />}
+              prefix={<WarningOutlined />}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="平均分数"
-              value={statistics?.averageThreatScore?.toFixed(2) || '0.00'}
-              prefix={<FallOutlined />}
+              title="中危威胁"
+              value={statistics?.mediumCount || 0}
+              valueStyle={{ color: '#faad14' }}
+              prefix={<InfoCircleOutlined />}
             />
           </Card>
         </Col>
       </Row>
 
-      {/* ── 趋势图 ── */}
-      <Card title={`威胁趋势 (${trendRange === '24h' ? '24小时' : trendRange === '7d' ? '7天' : '30天'})`} bordered={false}>
-        {trendData.length > 0 ? (
-          <Line {...trendConfig} height={320} />
-        ) : (
-          <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>暂无趋势数据</div>
-        )}
-      </Card>
-
-      {/* ── 等级分布 + 端口分布 ── */}
+      {/* ── 趋势图 + 等级分布 ── */}
       <Row gutter={16}>
+        <Col xs={24} lg={14}>
+          <Card
+            title={`威胁趋势 (${trendRange === '24h' ? '24小时' : trendRange === '7d' ? '7天' : '30天'})`}
+            bordered={false}
+          >
+            {trendData.length > 0 ? (
+              <Line {...trendConfig} height={320} />
+            ) : (
+              <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>暂无趋势数据</div>
+            )}
+          </Card>
+        </Col>
         <Col xs={24} lg={10}>
           <Card title="威胁等级分布" bordered={false}>
             {levelDistData.length > 0 ? (
-              <Pie {...levelPieConfig} height={350} />
+              <Pie {...levelPieConfig} height={320} />
             ) : (
               <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>暂无数据</div>
             )}
           </Card>
         </Col>
-        <Col xs={24} lg={14}>
+      </Row>
+
+      {/* ── 端口分布 + Top攻击者 ── */}
+      <Row gutter={16}>
+        <Col xs={24} lg={12}>
           <Card title="端口攻击分布 (Top 15)" bordered={false}>
             {portData.length > 0 ? (
               <Column {...portBarConfig} height={350} />
@@ -437,26 +493,45 @@ const Analytics = () => {
             )}
           </Card>
         </Col>
+        <Col xs={24} lg={12}>
+          <Card title="Top 攻击者排行" bordered={false}>
+            <Alert
+              type="warning"
+              banner
+              message="攻击者排行基于最近200条记录的客户端聚合，可能不代表完整数据。后续版本将接入后端聚合接口。"
+              style={{ marginBottom: 12 }}
+            />
+            <Table
+              columns={attackerColumns}
+              dataSource={topAttackers}
+              rowKey="attackMac"
+              pagination={false}
+              size="small"
+            />
+          </Card>
+        </Col>
       </Row>
 
-      {/* ── Top 攻击者 ── */}
-      <Card title="Top 攻击者排行" bordered={false}>
-        <Alert
-          type="warning"
-          banner
-          message="攻击者排行基于最近200条记录的客户端聚合，可能不代表完整数据。后续版本将接入后端聚合接口。"
-          style={{ marginBottom: 16 }}
-        />
+      {/* ── 最新威胁 ── */}
+      <Card
+        title="最新威胁"
+        bordered={false}
+        extra={
+          <Button type="link" onClick={() => { window.location.href = '/threats'; }}>
+            查看全部 &rarr;
+          </Button>
+        }
+      >
         <Table
-          columns={attackerColumns}
-          dataSource={topAttackers}
-          rowKey="attackMac"
-          pagination={{ pageSize: 10 }}
-          size="middle"
+          columns={recentColumns}
+          dataSource={recentThreats}
+          rowKey="id"
+          pagination={false}
+          size="small"
         />
       </Card>
     </Space>
   );
 };
 
-export default Analytics;
+export default Overview;
