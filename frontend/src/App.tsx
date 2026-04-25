@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { ProLayout } from '@ant-design/pro-components';
 import { Button, ConfigProvider, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
+import enUS from 'antd/locale/en_US';
 import {
   DashboardOutlined,
   WarningOutlined,
@@ -176,7 +177,7 @@ function AppLayout() {
 
   return (
     <ConfigProvider
-      locale={zhCN}
+      locale={currentLang === 'en-US' ? enUS : zhCN}
       theme={{
         algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
@@ -219,7 +220,7 @@ function AppLayout() {
                 size="small"
                 icon={<LogoutOutlined />}
                 onClick={logout}
-                style={{ color: 'rgba(0,0,0,0.45)' }}
+                style={{ color: isDarkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }}
                 aria-label={t('app.logout')}
               />
             </span>
