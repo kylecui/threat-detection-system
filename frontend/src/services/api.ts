@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { message } from 'antd';
+import i18n from '@/i18n';
 
 function snakeToCamel(str: string): string {
   return str.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
@@ -113,39 +114,38 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     console.error('[API Response Error]', error);
 
-    // 处理不同的错误状态码
+    const t = i18n.t.bind(i18n);
     if (error.response) {
       const { status, data } = error.response;
       
       switch (status) {
         case 400:
-          message.error(`请求错误: ${(data as any)?.message || '参数错误'}`);
+          message.error(t('apiErrors.badRequest', { message: (data as any)?.message || t('apiErrors.defaultBadRequest') }));
           break;
         case 401:
-          message.error('未授权，请重新登录');
-          // 清除token并跳转登录页
+          message.error(t('apiErrors.unauthorized'));
           localStorage.removeItem('token');
           window.location.href = '/login';
           break;
         case 403:
-          message.error('没有权限访问该资源');
+          message.error(t('apiErrors.forbidden'));
           break;
         case 404:
-          message.error('请求的资源不存在');
+          message.error(t('apiErrors.notFound'));
           break;
         case 500:
-          message.error(`服务器错误: ${(data as any)?.message || '内部错误'}`);
+          message.error(t('apiErrors.serverError', { message: (data as any)?.message || t('apiErrors.defaultServerError') }));
           break;
         case 503:
-          message.error('服务暂时不可用，请稍后重试');
+          message.error(t('apiErrors.serviceUnavailable'));
           break;
         default:
-          message.error(`请求失败 (${status})`);
+          message.error(t('apiErrors.requestFailed', { status }));
       }
     } else if (error.request) {
-      message.error('网络错误，请检查网络连接');
+      message.error(t('apiErrors.networkError'));
     } else {
-      message.error(`请求配置错误: ${error.message}`);
+      message.error(t('apiErrors.configError', { message: error.message }));
     }
 
     return Promise.reject(error);
