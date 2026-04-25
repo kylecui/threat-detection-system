@@ -26,6 +26,7 @@ import {
   EditOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { getConfigsByCategory, batchUpdateConfigs, validateLlmConnection } from '@/services/config';
 import type { LlmValidateResult as ConfigLlmValidateResult } from '@/services/config';
 import {
@@ -63,6 +64,7 @@ const TI_API_KEY_NAMES = [
 ] as const;
 
 const AIConfig = () => {
+  const { t } = useTranslation();
   const [llmForm] = Form.useForm();
   const [llmProviderForm] = Form.useForm();
   const [assignmentForm] = Form.useForm();
@@ -125,7 +127,7 @@ const AIConfig = () => {
       const data = await listLlmProviders();
       setLlmProviders(data);
     } catch {
-      message.error('加载LLM服务商失败');
+      message.error(t('aiConfig.loadProvidersFailed'));
     } finally {
       setLlmProviderLoading(false);
     }
@@ -138,7 +140,7 @@ const AIConfig = () => {
       const data = await listConfigAssignments();
       setAssignments(data);
     } catch {
-      message.error('加载配置分配失败');
+      message.error(t('aiConfig.loadAssignmentsFailed'));
     } finally {
       setAssignmentLoading(false);
     }
@@ -165,7 +167,7 @@ const AIConfig = () => {
       });
       userConfigForm.setFieldsValue(formValues);
     } catch {
-      message.error('加载我的配置失败');
+      message.error(t('aiConfig.loadMyConfigFailed'));
     } finally {
       setUserConfigLoading(false);
     }
@@ -190,11 +192,11 @@ const AIConfig = () => {
       if (Object.keys(updates).length > 0) {
         await batchUpdateConfigs(updates);
       }
-      message.success('LLM配置已保存，请运行 apply-tire-config.sh 同步到集群');
+      message.success(t('aiConfig.globalSaved'));
       setRevealedKeys(new Set());
       loadLlmConfigs();
     } catch {
-      message.error('LLM配置保存失败');
+      message.error(t('aiConfig.globalSaveFailed'));
     } finally {
       setLlmSaving(false);
     }
@@ -207,15 +209,15 @@ const AIConfig = () => {
     };
     const apiKeyConfig = llmConfigs.find((c) => c.key === 'LLM_API_KEY');
     if (!values.LLM_API_KEY && apiKeyConfig?.hasValue) {
-      message.info('当前API Key为密文存储，请重新输入API Key后再测试连接');
+      message.info(t('aiConfig.reenterApiKeyForValidation'));
       return;
     }
     if (!values.LLM_API_KEY) {
-      message.warning('请先输入LLM API Key');
+      message.warning(t('aiConfig.enterLlmApiKeyFirst'));
       return;
     }
     if (!values.LLM_BASE_URL) {
-      message.warning('请先输入LLM Base URL');
+      message.warning(t('aiConfig.enterLlmBaseUrlFirst'));
       return;
     }
     try {
@@ -223,12 +225,12 @@ const AIConfig = () => {
       const result: ConfigLlmValidateResult = await validateLlmConnection(values.LLM_API_KEY, values.LLM_BASE_URL);
       if (result.ok) {
         setLlmModels(result.models || []);
-        message.success(`连接测试成功，获取到 ${result.models.length} 个模型`);
+        message.success(t('aiConfig.connectionTestSuccess', { count: result.models.length }));
       } else {
-        message.error(result.error || '连接测试失败');
+        message.error(result.error || t('aiConfig.connectionTestFailed'));
       }
     } catch {
-      message.error('连接测试失败');
+      message.error(t('aiConfig.connectionTestFailed'));
     } finally {
       setLlmValidating(false);
     }
@@ -252,10 +254,10 @@ const AIConfig = () => {
           <Space>
             {config.description || config.key}
             {config.isSecret && config.hasValue && (
-              <Tag color="green">已配置</Tag>
+              <Tag color="green">{t('common.configured')}</Tag>
             )}
             {config.isSecret && !config.hasValue && (
-              <Tag color="orange">未配置</Tag>
+              <Tag color="orange">{t('common.notConfigured')}</Tag>
             )}
           </Space>
         }
@@ -264,7 +266,7 @@ const AIConfig = () => {
       >
         {config.isSecret ? (
           <Input
-            placeholder={config.hasValue ? '留空则保留原值' : '请输入API Key'}
+            placeholder={config.hasValue ? t('common.keepEmptyToKeepValue') : t('aiConfig.enterApiKey')}
             type={isRevealed ? 'text' : 'password'}
             suffix={
               <Button
@@ -276,7 +278,7 @@ const AIConfig = () => {
             }
           />
         ) : (
-          <Input placeholder={`请输入 ${config.description || config.key}`} />
+          <Input placeholder={t('aiConfig.enterConfigValue', { key: config.description || config.key })} />
         )}
       </Form.Item>
     );
@@ -307,10 +309,10 @@ const AIConfig = () => {
       const values = await llmProviderForm.validateFields();
       if (editingProvider) {
         await updateLlmProvider(editingProvider.id, values as Partial<LlmProvider>);
-        message.success('LLM服务商已更新');
+        message.success(t('aiConfig.providerUpdated'));
       } else {
         await createLlmProvider(values as Partial<LlmProvider>);
-        message.success('LLM服务商已创建');
+        message.success(t('aiConfig.providerCreated'));
       }
       setLlmProviderModalOpen(false);
       llmProviderForm.resetFields();
@@ -325,13 +327,13 @@ const AIConfig = () => {
 
   const handleDeleteLlmProvider = (provider: LlmProvider) => {
     Modal.confirm({
-      title: `确定删除LLM服务商「${provider.name}」吗？`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('aiConfig.confirmDeleteProvider', { name: provider.name }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         await deleteLlmProvider(provider.id);
-        message.success('LLM服务商已删除');
+        message.success(t('aiConfig.providerDeleted'));
         loadLlmProviders();
         if (isAdmin) {
           loadAssignments();
@@ -345,12 +347,12 @@ const AIConfig = () => {
       setValidatingProviderId(providerId);
       const result: LlmValidateResult = await validateLlmProvider(providerId);
       if (result.ok) {
-        message.success(`连接测试成功，获取到 ${result.models.length} 个模型`);
+        message.success(t('aiConfig.connectionTestSuccess', { count: result.models.length }));
       } else {
-        message.error(result.error || '连接测试失败');
+        message.error(result.error || t('aiConfig.connectionTestFailed'));
       }
     } catch {
-      message.error('连接测试失败');
+      message.error(t('aiConfig.connectionTestFailed'));
     } finally {
       setValidatingProviderId(null);
     }
@@ -382,7 +384,7 @@ const AIConfig = () => {
         assignmentForm.setFieldValue(key, detail.tireApiKeys?.[key] || '');
       });
     } catch {
-      message.error('加载配置分配详情失败');
+      message.error(t('aiConfig.loadAssignmentDetailFailed'));
       return;
     }
 
@@ -405,7 +407,7 @@ const AIConfig = () => {
         lockLlm: values.lockLlm || false,
         lockTire: values.lockTire || false,
       });
-      message.success(editingAssignment ? '配置分配已更新' : '配置分配已创建');
+      message.success(editingAssignment ? t('aiConfig.assignmentUpdated') : t('aiConfig.assignmentCreated'));
       setAssignmentModalOpen(false);
       assignmentForm.resetFields();
       setEditingAssignment(null);
@@ -416,13 +418,13 @@ const AIConfig = () => {
 
   const handleRemoveAssignment = (assignment: ConfigAssignment) => {
     Modal.confirm({
-      title: `确定移除客户「${assignment.customerId}」的分配吗？`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('aiConfig.confirmRemoveAssignment', { customerId: assignment.customerId }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         await unassignConfig(assignment.customerId);
-        message.success('配置分配已移除');
+        message.success(t('aiConfig.assignmentRemoved'));
         loadAssignments();
       },
     });
@@ -445,10 +447,10 @@ const AIConfig = () => {
         useOwnLlm: values.useOwnLlm || false,
         useOwnTire: values.useOwnTire || false,
       });
-      message.success('我的配置已保存');
+      message.success(t('aiConfig.myConfigSaved'));
       await loadUserConfigs();
     } catch {
-      message.error('保存我的配置失败');
+      message.error(t('aiConfig.myConfigSaveFailed'));
     } finally {
       setUserConfigSaving(false);
     }
@@ -463,12 +465,12 @@ const AIConfig = () => {
 
   const llmProviderColumns: ColumnsType<LlmProvider> = [
     {
-      title: '名称',
+      title: t('common.name'),
       dataIndex: 'name',
       key: 'name',
     },
     {
-      title: '模型',
+      title: t('common.model'),
       dataIndex: 'model',
       key: 'model',
     },
@@ -483,23 +485,23 @@ const AIConfig = () => {
       dataIndex: 'hasApiKey',
       key: 'hasApiKey',
       render: (hasApiKey: boolean) => (
-        hasApiKey ? <Tag color="green">已配置</Tag> : <Tag color="orange">未配置</Tag>
+        hasApiKey ? <Tag color="green">{t('common.configured')}</Tag> : <Tag color="orange">{t('common.notConfigured')}</Tag>
       ),
     },
     {
-      title: '默认',
+      title: t('common.default'),
       dataIndex: 'isDefault',
       key: 'isDefault',
-      render: (isDefault: boolean) => (isDefault ? <Tag color="blue">默认</Tag> : null),
+      render: (isDefault: boolean) => (isDefault ? <Tag color="blue">{t('common.default')}</Tag> : null),
     },
     {
-      title: '启用',
+      title: t('common.enabled'),
       dataIndex: 'enabled',
       key: 'enabled',
-      render: (enabled: boolean) => (enabled ? <Tag color="green">开</Tag> : <Tag color="red">关</Tag>),
+      render: (enabled: boolean) => (enabled ? <Tag color="green">{t('common.on')}</Tag> : <Tag color="red">{t('common.off')}</Tag>),
     },
     {
-      title: '归属',
+      title: t('common.owner'),
       dataIndex: 'ownerType',
       key: 'ownerType',
       render: (ownerType: LlmProvider['ownerType']) => {
@@ -509,7 +511,7 @@ const AIConfig = () => {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'actions',
       render: (_: unknown, record: LlmProvider) => (
         <Space>
@@ -518,13 +520,13 @@ const AIConfig = () => {
             loading={validatingProviderId === record.id}
             onClick={() => handleValidateProvider(record.id)}
           >
-            连接测试
+            {t('aiConfig.connectionTest')}
           </Button>
           <Button icon={<EditOutlined />} onClick={() => openLlmProviderModal(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteLlmProvider(record)}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -533,36 +535,36 @@ const AIConfig = () => {
 
   const assignmentColumns: ColumnsType<ConfigAssignment> = [
     {
-      title: '客户ID',
+      title: t('common.customerId'),
       dataIndex: 'customerId',
       key: 'customerId',
     },
     {
-      title: 'LLM服务商',
+      title: t('aiConfig.llmProvider'),
       dataIndex: 'llmProviderId',
       key: 'llmProviderId',
       render: (llmProviderId?: number | null) => {
         if (llmProviderId === undefined || llmProviderId === null) {
-          return <Tag>未配置</Tag>;
+          return <Tag>{t('common.notConfigured')}</Tag>;
         }
         const provider = llmProviders.find((item) => item.id === llmProviderId);
         return provider ? `${provider.name} (${provider.model})` : String(llmProviderId);
       },
     },
     {
-      title: 'LLM锁定',
+      title: t('aiConfig.llmLocked'),
       dataIndex: 'lockLlm',
       key: 'lockLlm',
       render: (lockLlm?: boolean) => (
-        lockLlm ? <Tag color="green">已锁定</Tag> : <Tag>未锁定</Tag>
+        lockLlm ? <Tag color="green">{t('aiConfig.locked')}</Tag> : <Tag>{t('aiConfig.unlocked')}</Tag>
       ),
     },
     {
-      title: 'TI锁定',
+      title: t('aiConfig.tiLocked'),
       dataIndex: 'lockTire',
       key: 'lockTire',
       render: (lockTire?: boolean) => (
-        lockTire ? <Tag color="green">已锁定</Tag> : <Tag>未锁定</Tag>
+        lockTire ? <Tag color="green">{t('aiConfig.locked')}</Tag> : <Tag>{t('aiConfig.unlocked')}</Tag>
       ),
     },
     {
@@ -570,30 +572,30 @@ const AIConfig = () => {
       dataIndex: 'hasTireApiKeys',
       key: 'hasTireApiKeys',
       render: (hasTireApiKeys?: boolean) => (
-        hasTireApiKeys ? <Tag color="green">已配置</Tag> : <Tag color="orange">未配置</Tag>
+        hasTireApiKeys ? <Tag color="green">{t('common.configured')}</Tag> : <Tag color="orange">{t('common.notConfigured')}</Tag>
       ),
     },
     {
-      title: '分配者',
+      title: t('aiConfig.assignedBy'),
       dataIndex: 'assignedBy',
       key: 'assignedBy',
     },
     {
-      title: '分配时间',
+      title: t('aiConfig.assignedAt'),
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (createdAt?: string) => createdAt || '-',
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'actions',
       render: (_: unknown, record: ConfigAssignment) => (
         <Space>
           <Button icon={<EditOutlined />} onClick={() => openAssignmentModal(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button danger icon={<DeleteOutlined />} onClick={() => handleRemoveAssignment(record)}>
-            移除
+            {t('common.remove')}
           </Button>
         </Space>
       ),
@@ -606,13 +608,13 @@ const AIConfig = () => {
         <Card bordered={false}>
           <Spin spinning={llmLoading}>
             <Alert
-              message="大语言模型 (LLM) 配置"
-              description="用于TIRE威胁情报报告生成的LLM服务配置。支持OpenAI兼容API。保存后需运行 apply-tire-config.sh 同步到集群。"
+              message={t('aiConfig.globalTitle')}
+              description={t('aiConfig.globalDescription')}
               type="info"
               showIcon
               style={{ marginBottom: 24 }}
             />
-            <Divider orientation="left">全局LLM配置 (system_config)</Divider>
+            <Divider orientation="left">{t('aiConfig.globalLlmConfig')}</Divider>
             <Form
               form={llmForm}
               layout="vertical"
@@ -644,10 +646,10 @@ const AIConfig = () => {
                   >
                     <Select
                       mode="tags"
-                      placeholder="请选择或输入模型名称"
+                      placeholder={t('aiConfig.selectOrInputModel')}
                       options={[
                         ...llmModels.map((model) => ({ label: model, value: model })),
-                        { label: 'Other（可直接输入）', value: '__other__', disabled: true },
+                        { label: t('aiConfig.otherInputHint'), value: '__other__', disabled: true },
                       ]}
                       tokenSeparators={[',']}
                     />
@@ -656,8 +658,8 @@ const AIConfig = () => {
               })}
               {llmConfigs.length === 0 && (
                 <Alert
-                  message="未找到LLM配置项"
-                  description="请先执行 30-system-config.sql 初始化配置数据"
+                  message={t('aiConfig.noLlmConfigItems')}
+                  description={t('aiConfig.initHint')}
                   type="warning"
                 />
               )}
@@ -669,17 +671,17 @@ const AIConfig = () => {
                     icon={<SaveOutlined />}
                     loading={llmSaving}
                   >
-                    保存LLM配置
+                    {t('aiConfig.saveLlmConfig')}
                   </Button>
                   <Button
                     icon={<ApiOutlined />}
                     onClick={handleLlmValidate}
                     loading={llmValidating}
                   >
-                    测试连接
+                    {t('aiConfig.connectionTest')}
                   </Button>
                   <Button icon={<ReloadOutlined />} onClick={loadLlmConfigs}>
-                    刷新
+                    {t('common.refresh')}
                   </Button>
                 </Space>
               </Form.Item>
@@ -689,13 +691,13 @@ const AIConfig = () => {
       )}
 
       <Card bordered={false}>
-        <Divider orientation="left">LLM服务商管理</Divider>
+        <Divider orientation="left">{t('aiConfig.providerManagement')}</Divider>
         <Space style={{ marginBottom: 16 }}>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => openLlmProviderModal()}>
-            添加LLM服务商
+            {t('aiConfig.addLlmProvider')}
           </Button>
           <Button icon={<ReloadOutlined />} onClick={loadLlmProviders}>
-            刷新
+            {t('common.refresh')}
           </Button>
         </Space>
         <Table<LlmProvider>
@@ -709,16 +711,16 @@ const AIConfig = () => {
 
       {isAdmin && (
         <Card bordered={false}>
-          <Divider orientation="left">配置分配</Divider>
+          <Divider orientation="left">{t('aiConfig.configAssignment')}</Divider>
           <Space style={{ marginBottom: 16 }}>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => openAssignmentModal()}>
-              新建配置分配
+              {t('aiConfig.newConfigAssignment')}
             </Button>
             <Button icon={<ReloadOutlined />} onClick={loadAssignments}>
-              刷新分配
+              {t('aiConfig.refreshAssignments')}
             </Button>
             <Button icon={<ReloadOutlined />} onClick={loadLlmProviders}>
-              刷新服务商
+              {t('aiConfig.refreshProviders')}
             </Button>
           </Space>
           <Table<ConfigAssignment>
@@ -734,25 +736,25 @@ const AIConfig = () => {
       {isCustomerUser && (
         <Card bordered={false}>
           <Spin spinning={userConfigLoading}>
-            <Divider orientation="left">当前生效配置</Divider>
+            <Divider orientation="left">{t('aiConfig.currentEffectiveConfig')}</Divider>
             <Card size="small" style={{ marginBottom: 16 }}>
               <Descriptions column={1} size="small">
-                <Descriptions.Item label="LLM来源">
+                <Descriptions.Item label={t('aiConfig.llmSource')}>
                   <Tag color={resolveSourceColor(resolvedConfig?.llmSource)}>
                     {resolvedConfig?.llmSource || 'system_default'}
                   </Tag>
                 </Descriptions.Item>
-                <Descriptions.Item label="TI来源">
+                <Descriptions.Item label={t('aiConfig.tiSource')}>
                   <Tag color={resolveSourceColor(resolvedConfig?.tireSource)}>
                     {resolvedConfig?.tireSource || 'system_default'}
                   </Tag>
                 </Descriptions.Item>
-                <Descriptions.Item label="生效LLM服务商">
+                <Descriptions.Item label={t('aiConfig.effectiveLlmProvider')}>
                   {resolvedConfig?.providerName
                     ? `${resolvedConfig.providerName}${resolvedConfig.providerModel ? ` (${resolvedConfig.providerModel})` : ''}`
-                    : '未配置'}
+                    : t('common.notConfigured')}
                 </Descriptions.Item>
-                <Descriptions.Item label="生效TI API Keys">
+                <Descriptions.Item label={t('aiConfig.effectiveTiApiKeys')}>
                   <Space wrap>
                     {TI_API_KEY_NAMES.map((key) => (
                       resolvedConfig?.tireApiKeys?.[key]
@@ -763,7 +765,7 @@ const AIConfig = () => {
                         )
                         : (
                           <Tag key={key}>
-                            {key}: 未配置
+                            {key}: {t('common.notConfigured')}
                           </Tag>
                         )
                     ))}
@@ -772,21 +774,21 @@ const AIConfig = () => {
               </Descriptions>
             </Card>
 
-            <Divider orientation="left">自定义配置</Divider>
+            <Divider orientation="left">{t('aiConfig.customConfig')}</Divider>
             <Form form={userConfigForm} layout="vertical">
               {userConfig?.lockLlm ? (
                 <Alert
                   type="warning"
                   showIcon
-                  message="管理员已锁定LLM配置，无法修改"
+                  message={t('aiConfig.llmLockedByAdmin')}
                   style={{ marginBottom: 16 }}
                 />
               ) : (
                 <>
-                  <Form.Item label="使用自己的LLM配置" name="useOwnLlm" valuePropName="checked">
+                  <Form.Item label={t('aiConfig.useOwnLlmConfig')} name="useOwnLlm" valuePropName="checked">
                     <Switch />
                   </Form.Item>
-                  <Form.Item label="LLM服务商" name="llmProviderId">
+                  <Form.Item label={t('aiConfig.llmProvider')} name="llmProviderId">
                     <Select
                       allowClear
                       options={llmProviders.map((provider) => ({
@@ -804,17 +806,17 @@ const AIConfig = () => {
                 <Alert
                   type="warning"
                   showIcon
-                  message="管理员已锁定TI配置，无法修改"
+                  message={t('aiConfig.tiLockedByAdmin')}
                   style={{ marginBottom: 16 }}
                 />
               ) : (
                 <>
-                  <Form.Item label="使用自己的TI配置" name="useOwnTire" valuePropName="checked">
+                  <Form.Item label={t('aiConfig.useOwnTiConfig')} name="useOwnTire" valuePropName="checked">
                     <Switch />
                   </Form.Item>
                   {TI_API_KEY_NAMES.map((key) => (
                     <Form.Item key={key} label={key} name={key}>
-                      <Input.Password placeholder="留空则保留原值" />
+                      <Input.Password placeholder={t('common.keepEmptyToKeepValue')} />
                     </Form.Item>
                   ))}
                 </>
@@ -829,10 +831,10 @@ const AIConfig = () => {
                     loading={userConfigSaving}
                     disabled={userConfig?.lockLlm && userConfig?.lockTire}
                   >
-                    保存我的配置
+                    {t('aiConfig.saveMyConfig')}
                   </Button>
                   <Button icon={<ReloadOutlined />} onClick={loadUserConfigs}>
-                    刷新
+                    {t('common.refresh')}
                   </Button>
                 </Space>
               </Form.Item>
@@ -842,7 +844,7 @@ const AIConfig = () => {
       )}
 
       <Modal
-        title={editingProvider ? '编辑LLM服务商' : '添加LLM服务商'}
+        title={editingProvider ? t('aiConfig.editLlmProvider') : t('aiConfig.addLlmProvider')}
         open={llmProviderModalOpen}
         onCancel={() => {
           setLlmProviderModalOpen(false);
@@ -850,33 +852,33 @@ const AIConfig = () => {
           setEditingProvider(null);
         }}
         onOk={handleLlmProviderSubmit}
-        okText="保存"
-        cancelText="取消"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
       >
         <Form form={llmProviderForm} layout="vertical">
-          <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]}>
+          <Form.Item label={t('common.name')} name="name" rules={[{ required: true, message: t('aiConfig.validationNameRequired') }]}> 
             <Input />
           </Form.Item>
           <Form.Item label="API Key" name="apiKey">
-            <Input.Password placeholder="留空则保留原值" />
+            <Input.Password placeholder={t('common.keepEmptyToKeepValue')} />
           </Form.Item>
-          <Form.Item label="模型" name="model" rules={[{ required: true, message: '请输入模型' }]}>
+          <Form.Item label={t('common.model')} name="model" rules={[{ required: true, message: t('aiConfig.validationModelRequired') }]}> 
             <Input />
           </Form.Item>
-          <Form.Item label="Base URL" name="baseUrl" rules={[{ required: true, message: '请输入Base URL' }]}>
+          <Form.Item label="Base URL" name="baseUrl" rules={[{ required: true, message: t('aiConfig.validationBaseUrlRequired') }]}> 
             <Input />
           </Form.Item>
-          <Form.Item label="默认" name="isDefault" valuePropName="checked">
-            <Switch checkedChildren="是" unCheckedChildren="否" />
+          <Form.Item label={t('common.default')} name="isDefault" valuePropName="checked">
+            <Switch checkedChildren={t('common.yes')} unCheckedChildren={t('common.no')} />
           </Form.Item>
-          <Form.Item label="启用" name="enabled" valuePropName="checked" initialValue>
-            <Switch checkedChildren="开" unCheckedChildren="关" />
+          <Form.Item label={t('common.enabled')} name="enabled" valuePropName="checked" initialValue>
+            <Switch checkedChildren={t('common.on')} unCheckedChildren={t('common.off')} />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title={editingAssignment ? '编辑配置分配' : '配置分配'}
+        title={editingAssignment ? t('aiConfig.editAssignment') : t('aiConfig.assignment')}
         open={assignmentModalOpen}
         onCancel={() => {
           setAssignmentModalOpen(false);
@@ -884,14 +886,14 @@ const AIConfig = () => {
           setEditingAssignment(null);
         }}
         onOk={handleAssignmentSubmit}
-        okText="保存"
-        cancelText="取消"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
       >
         <Form form={assignmentForm} layout="vertical">
-          <Form.Item label="客户ID" name="customerId" rules={[{ required: true, message: '请输入客户ID' }]}>
+          <Form.Item label={t('common.customerId')} name="customerId" rules={[{ required: true, message: t('aiConfig.validationCustomerIdRequired') }]}> 
             <Input />
           </Form.Item>
-          <Form.Item label="LLM服务商" name="llmProviderId">
+          <Form.Item label={t('aiConfig.llmProvider')} name="llmProviderId">
             <Select
               allowClear
               options={llmProviders.map((provider) => ({
@@ -901,24 +903,24 @@ const AIConfig = () => {
             />
           </Form.Item>
 
-          <Divider orientation="left">威胁情报 API Keys</Divider>
+          <Divider orientation="left">{t('aiConfig.threatIntelApiKeys')}</Divider>
           {TI_API_KEY_NAMES.map((key) => (
             <Form.Item key={key} label={key} name={key}>
-              <Input.Password placeholder="留空则表示不修改" />
+              <Input.Password placeholder={t('aiConfig.keepEmptyNoChange')} />
             </Form.Item>
           ))}
 
-          <Divider orientation="left">锁定策略</Divider>
+          <Divider orientation="left">{t('aiConfig.lockStrategy')}</Divider>
           <Alert
             type="warning"
             showIcon
-            message="锁定后客户将无法使用自己的配置"
+            message={t('aiConfig.lockStrategyHint')}
             style={{ marginBottom: 16 }}
           />
-          <Form.Item label="锁定LLM配置" name="lockLlm" valuePropName="checked">
+          <Form.Item label={t('aiConfig.lockLlmConfig')} name="lockLlm" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item label="锁定TI配置" name="lockTire" valuePropName="checked">
+          <Form.Item label={t('aiConfig.lockTiConfig')} name="lockTire" valuePropName="checked">
             <Switch />
           </Form.Item>
         </Form>

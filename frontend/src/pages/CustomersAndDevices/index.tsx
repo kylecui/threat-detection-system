@@ -26,6 +26,7 @@ import {
 } from '@ant-design/icons';
 import { ProTable } from '@ant-design/pro-components';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import { useTranslation } from 'react-i18next';
 import type { Customer, Device, DeviceQuota } from '@/types';
 import { CustomerStatus, SubscriptionTier } from '@/types';
 import customerService from '@/services/customer';
@@ -48,6 +49,7 @@ const tierColorMap: Record<string, string> = {
 };
 
 const CustomersTab = () => {
+  const { t } = useTranslation();
   const customerActionRef = useRef<ActionType>();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -74,7 +76,7 @@ const CustomersTab = () => {
       setDevices(devList);
       setDeviceQuota(quota);
     } catch {
-      message.error('加载设备列表失败');
+      message.error(t('customersDevices.loadDevicesFailed'));
     } finally {
       setDevicesLoading(false);
     }
@@ -83,12 +85,12 @@ const CustomersTab = () => {
   const handleCreate = async (values: Partial<Customer>) => {
     try {
       await customerService.createCustomer(values);
-      message.success('客户创建成功');
+      message.success(t('customersDevices.customerCreated'));
       setCreateModalOpen(false);
       createForm.resetFields();
       customerActionRef.current?.reload();
     } catch {
-      message.error('创建失败');
+      message.error(t('common.createFailed'));
     }
   };
 
@@ -96,21 +98,21 @@ const CustomersTab = () => {
     if (!currentCustomer) return;
     try {
       await customerService.updateCustomer(currentCustomer.customerId, values);
-      message.success('客户更新成功');
+      message.success(t('customersDevices.customerUpdated'));
       setEditModalOpen(false);
       customerActionRef.current?.reload();
     } catch {
-      message.error('更新失败');
+      message.error(t('common.updateFailed'));
     }
   };
 
   const handleDelete = async (customerId: string) => {
     try {
       await customerService.deleteCustomer(customerId);
-      message.success('删除成功');
+      message.success(t('common.deleteSuccess'));
       customerActionRef.current?.reload();
     } catch {
-      message.error('删除失败');
+      message.error(t('common.deleteFailed'));
     }
   };
 
@@ -118,10 +120,10 @@ const CustomersTab = () => {
     if (!currentCustomer) return;
     try {
       await customerService.deleteDevice(currentCustomer.customerId, devSerial);
-      message.success('设备已删除');
+      message.success(t('customersDevices.deviceDeleted'));
       loadDevices(currentCustomer.customerId);
     } catch {
-      message.error('删除失败');
+      message.error(t('common.deleteFailed'));
     }
   };
 
@@ -132,12 +134,12 @@ const CustomersTab = () => {
       await customerService.addDevices(currentCustomer.customerId, [
         { devSerial: values.devSerial, description: values.description },
       ]);
-      message.success('设备绑定成功');
+      message.success(t('customersDevices.deviceBound'));
       setBindDeviceModalOpen(false);
       bindDeviceForm.resetFields();
       loadDevices(currentCustomer.customerId);
     } catch {
-      message.error('设备绑定失败');
+      message.error(t('customersDevices.bindDeviceFailed'));
     }
   };
 
@@ -150,11 +152,11 @@ const CustomersTab = () => {
         currentDevice.devSerial,
         { description: values.description, isActive: values.isActive },
       );
-      message.success('设备更新成功');
+      message.success(t('customersDevices.deviceUpdated'));
       setEditDeviceModalOpen(false);
       loadDevices(currentCustomer.customerId);
     } catch {
-      message.error('更新失败');
+      message.error(t('common.updateFailed'));
     }
   };
 
@@ -162,47 +164,47 @@ const CustomersTab = () => {
     if (!currentCustomer) return;
     try {
       await customerService.syncDevices(currentCustomer.customerId);
-      message.success('设备同步成功');
+      message.success(t('customersDevices.deviceSynced'));
       loadDevices(currentCustomer.customerId);
     } catch {
-      message.error('同步失败');
+      message.error(t('customersDevices.syncFailed'));
     }
   };
 
   const columns: ProColumns<Customer>[] = [
     {
-      title: '客户ID',
+      title: t('common.customerId'),
       dataIndex: 'customerId',
       copyable: true,
       width: 160,
     },
     {
-      title: '名称',
+      title: t('common.name'),
       dataIndex: 'name',
       width: 150,
     },
     {
-      title: '邮箱',
+      title: t('common.email'),
       dataIndex: 'email',
       width: 200,
       search: false,
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        ACTIVE: { text: '活跃', status: 'Success' },
-        INACTIVE: { text: '未激活', status: 'Default' },
-        SUSPENDED: { text: '已暂停', status: 'Error' },
+          ACTIVE: { text: t('customersDevices.active'), status: 'Success' },
+          INACTIVE: { text: t('customersDevices.inactive'), status: 'Default' },
+          SUSPENDED: { text: t('customersDevices.suspended'), status: 'Error' },
       },
       render: (_, record) => (
         <Tag color={statusColorMap[record.status]}>{record.status}</Tag>
       ),
     },
     {
-      title: '订阅等级',
+      title: t('customersDevices.subscriptionTier'),
       dataIndex: 'subscriptionTier',
       width: 120,
       search: false,
@@ -213,7 +215,7 @@ const CustomersTab = () => {
       ),
     },
     {
-      title: '防护主机',
+      title: t('customersDevices.protectedHosts'),
       width: 120,
       search: false,
       render: (_, record) => (
@@ -223,14 +225,14 @@ const CustomersTab = () => {
       ),
     },
     {
-      title: '告警',
+      title: t('customersDevices.alerts'),
       dataIndex: 'alertEnabled',
       width: 80,
       search: false,
-      render: (val) => (val ? <Tag color="green">开启</Tag> : <Tag>关闭</Tag>),
+      render: (val) => (val ? <Tag color="green">{t('common.enabled')}</Tag> : <Tag>{t('common.disabled')}</Tag>),
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       width: 170,
       search: false,
@@ -244,7 +246,7 @@ const CustomersTab = () => {
           : '-',
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 200,
       key: 'actions',
       search: false,
@@ -260,7 +262,7 @@ const CustomersTab = () => {
               setEditModalOpen(true);
             }}
           >
-            编辑
+            {t('common.edit')}
           </Button>
           <Button
             type="link"
@@ -272,17 +274,17 @@ const CustomersTab = () => {
               loadDevices(record.customerId);
             }}
           >
-            设备
+            {t('customersDevices.devices')}
           </Button>
           <Popconfirm
-            title="确定删除该客户?"
+            title={t('customersDevices.confirmDeleteCustomer')}
             onConfirm={() => handleDelete(record.customerId)}
           >
             <Button
               type="link"
               size="small"
               danger
-              aria-label={`删除客户 ${record.customerId}`}
+              aria-label={t('customersDevices.deleteCustomerAria', { customerId: record.customerId })}
               icon={<DeleteOutlined />}
             />
           </Popconfirm>
@@ -292,24 +294,24 @@ const CustomersTab = () => {
   ];
 
   const deviceColumns = [
-    { title: '序列号', dataIndex: 'devSerial', key: 'devSerial' },
-    { title: '描述', dataIndex: 'description', key: 'description' },
+    { title: t('customersDevices.serialNumber'), dataIndex: 'devSerial', key: 'devSerial' },
+    { title: t('common.description'), dataIndex: 'description', key: 'description' },
     {
-      title: '发现主机数',
+      title: t('customersDevices.discoveredHosts'),
       dataIndex: 'realHostCount',
       key: 'realHostCount',
       render: (val: number | null | undefined) => (val != null ? val : '-'),
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'isActive',
       key: 'isActive',
       render: (val: boolean) => (
-        <Tag color={val ? 'green' : 'default'}>{val ? '激活' : '未激活'}</Tag>
+        <Tag color={val ? 'green' : 'default'}>{val ? t('customersDevices.active') : t('customersDevices.inactive')}</Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (val: string | number) =>
@@ -320,7 +322,7 @@ const CustomersTab = () => {
           : '-',
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'actions',
       render: (_: unknown, record: Device) => (
         <Space size="small">
@@ -338,14 +340,14 @@ const CustomersTab = () => {
             }}
           />
           <Popconfirm
-            title="确定解绑?"
+            title={t('customersDevices.confirmUnbind')}
             onConfirm={() => handleDeleteDevice(record.devSerial)}
           >
             <Button
               type="link"
               size="small"
               danger
-              aria-label={`删除设备 ${record.devSerial}`}
+              aria-label={t('customersDevices.deleteDeviceAria', { devSerial: record.devSerial })}
               icon={<DeleteOutlined />}
             />
           </Popconfirm>
@@ -356,35 +358,35 @@ const CustomersTab = () => {
 
   const customerFormFields = (
     <>
-      <Form.Item name="customerId" label="客户ID" rules={[{ required: true }]}>
+      <Form.Item name="customerId" label={t('common.customerId')} rules={[{ required: true }]}>
         <Input />
       </Form.Item>
-      <Form.Item name="name" label="名称" rules={[{ required: true }]}>
+      <Form.Item name="name" label={t('common.name')} rules={[{ required: true }]}>
         <Input />
       </Form.Item>
       <Form.Item
         name="email"
-        label="邮箱"
+        label={t('common.email')}
         rules={[{ required: true, type: 'email' }]}
       >
         <Input />
       </Form.Item>
-      <Form.Item name="phone" label="电话">
+      <Form.Item name="phone" label={t('common.phone')}>
         <Input />
       </Form.Item>
-      <Form.Item name="address" label="地址">
+      <Form.Item name="address" label={t('common.address')}>
         <Input />
       </Form.Item>
-      <Form.Item name="status" label="状态" initialValue="ACTIVE">
+      <Form.Item name="status" label={t('common.status')} initialValue="ACTIVE">
         <Select
           options={[
-            { label: '活跃', value: 'ACTIVE' },
-            { label: '未激活', value: 'INACTIVE' },
-            { label: '已暂停', value: 'SUSPENDED' },
+            { label: t('customersDevices.active'), value: 'ACTIVE' },
+            { label: t('customersDevices.inactive'), value: 'INACTIVE' },
+            { label: t('customersDevices.suspended'), value: 'SUSPENDED' },
           ]}
         />
       </Form.Item>
-      <Form.Item name="subscriptionTier" label="订阅等级" initialValue="BASIC">
+      <Form.Item name="subscriptionTier" label={t('customersDevices.subscriptionTier')} initialValue="BASIC">
         <Select
           options={[
             { label: 'Basic', value: 'BASIC' },
@@ -396,12 +398,12 @@ const CustomersTab = () => {
       </Form.Item>
       <Form.Item
         name="maxDevices"
-        label="最大防护设备数 (授权在线设备数)"
+        label={t('customersDevices.maxProtectedDevices')}
         initialValue={10}
       >
         <Input type="number" />
       </Form.Item>
-      <Form.Item name="description" label="描述">
+      <Form.Item name="description" label={t('common.description')}>
         <Input.TextArea rows={2} />
       </Form.Item>
     </>
@@ -410,7 +412,7 @@ const CustomersTab = () => {
   return (
     <>
       <ProTable<Customer>
-        headerTitle="客户管理"
+        headerTitle={t('customersDevices.customerManagement')}
         actionRef={customerActionRef}
         rowKey="id"
         columns={columns}
@@ -441,20 +443,20 @@ const CustomersTab = () => {
               setCreateModalOpen(true);
             }}
           >
-            新建客户
+            {t('customersDevices.createCustomer')}
           </Button>,
           <Button
             key="refresh"
             icon={<ReloadOutlined />}
             onClick={() => customerActionRef.current?.reload()}
           >
-            刷新
+            {t('common.refresh')}
           </Button>,
         ]}
       />
 
       <Modal
-        title="新建客户"
+        title={t('customersDevices.createCustomer')}
         open={createModalOpen}
         onOk={() => createForm.submit()}
         onCancel={() => setCreateModalOpen(false)}
@@ -466,7 +468,7 @@ const CustomersTab = () => {
       </Modal>
 
       <Modal
-        title="编辑客户"
+        title={t('customersDevices.editCustomer')}
         open={editModalOpen}
         onOk={() => editForm.submit()}
         onCancel={() => setEditModalOpen(false)}
@@ -478,7 +480,7 @@ const CustomersTab = () => {
       </Modal>
 
       <Drawer
-        title={`设备管理 - ${currentCustomer?.name || ''}`}
+        title={t('customersDevices.deviceManagementTitle', { name: currentCustomer?.name || '' })}
         open={deviceDrawerOpen}
         onClose={() => setDeviceDrawerOpen(false)}
         width={800}
@@ -489,7 +491,7 @@ const CustomersTab = () => {
               icon={<SyncOutlined />}
               onClick={handleSyncDevices}
             >
-              同步
+              {t('customersDevices.sync')}
             </Button>
             <Button
               type="primary"
@@ -500,24 +502,24 @@ const CustomersTab = () => {
                 setBindDeviceModalOpen(true);
               }}
             >
-              绑定设备
+              {t('customersDevices.bindDevice')}
             </Button>
           </Space>
         }
       >
         {deviceQuota && (
           <Descriptions bordered size="small" style={{ marginBottom: 16 }}>
-            <Descriptions.Item label="客户ID">{deviceQuota.customerId}</Descriptions.Item>
-            <Descriptions.Item label="最大防护设备数">
+            <Descriptions.Item label={t('common.customerId')}>{deviceQuota.customerId}</Descriptions.Item>
+            <Descriptions.Item label={t('customersDevices.maxProtectedDevicesShort')}>
               {deviceQuota.maxDevices}
             </Descriptions.Item>
-            <Descriptions.Item label="当前防护主机数">
+            <Descriptions.Item label={t('customersDevices.currentProtectedHostCount')}>
               {deviceQuota.protectedHostCount ?? 0}
             </Descriptions.Item>
-            <Descriptions.Item label="终端设备数">
+            <Descriptions.Item label={t('customersDevices.deviceCount')}>
               {deviceQuota.currentDevices}
             </Descriptions.Item>
-            <Descriptions.Item label="剩余配额">
+            <Descriptions.Item label={t('customersDevices.remainingQuota')}>
               {deviceQuota.remainingQuota}
             </Descriptions.Item>
           </Descriptions>
@@ -533,50 +535,50 @@ const CustomersTab = () => {
       </Drawer>
 
       <Modal
-        title="绑定新设备"
+        title={t('customersDevices.bindNewDevice')}
         open={bindDeviceModalOpen}
         onOk={handleBindDevice}
         onCancel={() => {
           setBindDeviceModalOpen(false);
           bindDeviceForm.resetFields();
         }}
-        okText="绑定"
-        cancelText="取消"
+        okText={t('customersDevices.bind')}
+        cancelText={t('common.cancel')}
       >
         <Form form={bindDeviceForm} layout="vertical">
           <Form.Item
             name="devSerial"
-            label="设备序列号"
-            rules={[{ required: true, message: '请输入设备序列号' }]}
+            label={t('customersDevices.deviceSerial')}
+            rules={[{ required: true, message: t('customersDevices.validationDeviceSerialRequired') }]}
           >
-            <Input placeholder="例如: JZ-SNIFF-001" />
+            <Input placeholder={t('customersDevices.deviceSerialExample')} />
           </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={2} placeholder="设备描述（可选）" />
+          <Form.Item name="description" label={t('common.description')}>
+            <Input.TextArea rows={2} placeholder={t('customersDevices.deviceDescriptionOptional')} />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title="编辑设备"
+        title={t('customersDevices.editDevice')}
         open={editDeviceModalOpen}
         onOk={handleEditDevice}
         onCancel={() => setEditDeviceModalOpen(false)}
-        okText="保存"
-        cancelText="取消"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
       >
         <Form form={editDeviceForm} layout="vertical">
-          <Form.Item label="设备序列号">
+          <Form.Item label={t('customersDevices.deviceSerial')}>
             <Input value={currentDevice?.devSerial} disabled />
           </Form.Item>
-          <Form.Item name="description" label="描述">
+          <Form.Item name="description" label={t('common.description')}>
             <Input.TextArea rows={2} />
           </Form.Item>
-          <Form.Item name="isActive" label="状态">
+          <Form.Item name="isActive" label={t('common.status')}>
             <Select
               options={[
-                { label: '激活', value: true },
-                { label: '停用', value: false },
+                { label: t('customersDevices.active'), value: true },
+                { label: t('customersDevices.deactivated'), value: false },
               ]}
             />
           </Form.Item>
@@ -587,6 +589,7 @@ const CustomersTab = () => {
 };
 
 const DevicesTab = () => {
+  const { t } = useTranslation();
   const deviceActionRef = useRef<ActionType>();
   const [bindModalOpen, setBindModalOpen] = useState(false);
   const [bindForm] = Form.useForm();
@@ -636,12 +639,12 @@ const DevicesTab = () => {
       await customerService.addDevices(customerId, [
         { devSerial: values.devSerial, description: values.description },
       ]);
-      message.success('设备绑定成功');
+      message.success(t('customersDevices.deviceBound'));
       setBindModalOpen(false);
       bindForm.resetFields();
       deviceActionRef.current?.reload();
     } catch {
-      message.error('设备绑定失败');
+      message.error(t('customersDevices.bindDeviceFailed'));
     }
   };
 
@@ -649,48 +652,48 @@ const DevicesTab = () => {
     if (!customerId) return;
     try {
       await customerService.deleteDevice(customerId, devSerial);
-      message.success('设备已解绑');
+      message.success(t('customersDevices.deviceUnbound'));
       deviceActionRef.current?.reload();
     } catch {
-      message.error('解绑失败');
+      message.error(t('customersDevices.unbindFailed'));
     }
   };
 
   const columns: ProColumns<Device>[] = [
     {
-      title: '设备序列号',
+      title: t('customersDevices.deviceSerial'),
       dataIndex: 'devSerial',
       copyable: true,
       ellipsis: true,
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'isActive',
       valueType: 'select',
       valueEnum: {
-        true: { text: '活跃', status: 'Success' },
-        false: { text: '停用', status: 'Default' },
+          true: { text: t('customersDevices.active'), status: 'Success' },
+          false: { text: t('customersDevices.deactivated'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.isActive !== false ? 'success' : 'default'}>
-          {record.isActive !== false ? '活跃' : '停用'}
+          {record.isActive !== false ? t('customersDevices.active') : t('customersDevices.deactivated')}
         </Tag>
       ),
     },
     {
-      title: '描述',
+      title: t('common.description'),
       dataIndex: 'description',
       ellipsis: true,
       search: false,
     },
     {
-      title: '受保护主机数',
+      title: t('customersDevices.protectedHostCount'),
       dataIndex: 'realHostCount',
       search: false,
       sorter: true,
     },
     {
-      title: '绑定时间',
+      title: t('customersDevices.boundAt'),
       dataIndex: 'createdAt',
       valueType: 'dateTime',
       search: false,
@@ -699,16 +702,16 @@ const DevicesTab = () => {
         record.createdAt ? dayjs(record.createdAt).format('YYYY-MM-DD HH:mm') : '-',
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       render: (_, record) => (
         <Space>
           <Popconfirm
-            title="确认解绑此设备?"
+            title={t('customersDevices.confirmUnbindDevice')}
             onConfirm={() => handleUnbind(record.devSerial)}
           >
             <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-              解绑
+              {t('customersDevices.unbind')}
             </Button>
           </Popconfirm>
         </Space>
@@ -720,11 +723,11 @@ const DevicesTab = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Card size="small">
         <Space align="center" wrap>
-          <Text strong>选择客户：</Text>
+          <Text strong>{t('customersDevices.selectCustomer')}：</Text>
           <Select
             showSearch
             allowClear
-            placeholder="输入客户名称或ID搜索"
+            placeholder={t('customersDevices.searchCustomerPlaceholder')}
             value={customerId}
             onChange={handleCustomerChange}
             onSearch={handleCustomerSearch}
@@ -732,22 +735,22 @@ const DevicesTab = () => {
             options={customerOptions}
             filterOption={false}
             style={{ minWidth: 320 }}
-            notFoundContent={customerLoading ? '搜索中...' : '无匹配客户'}
+            notFoundContent={customerLoading ? t('customersDevices.searching') : t('customersDevices.noMatchingCustomer')}
           />
-          {customerId && <Text type="secondary">当前客户: {customerId}</Text>}
+          {customerId && <Text type="secondary">{t('customersDevices.currentCustomer')}: {customerId}</Text>}
         </Space>
       </Card>
 
       {!customerId ? (
         <Card>
           <div style={{ textAlign: 'center', padding: '48px 0', color: '#999' }}>
-            请先在上方选择一个客户，然后管理其设备。
+            {t('customersDevices.selectCustomerFirst')}
           </div>
         </Card>
       ) : (
         <>
           <ProTable<Device>
-            headerTitle="设备列表"
+            headerTitle={t('customersDevices.deviceList')}
             actionRef={deviceActionRef}
             rowKey="devSerial"
             columns={columns}
@@ -758,7 +761,7 @@ const DevicesTab = () => {
                 const data = await customerService.getDevices(customerId);
                 return { data, success: true, total: data.length };
               } catch {
-                message.error('加载设备列表失败');
+                message.error(t('customersDevices.loadDevicesFailed'));
                 return { data: [], success: false, total: 0 };
               }
             }}
@@ -768,7 +771,7 @@ const DevicesTab = () => {
                 icon={<ReloadOutlined />}
                 onClick={() => deviceActionRef.current?.reload()}
               >
-                刷新
+                {t('common.refresh')}
               </Button>,
               <Button
                 key="bind"
@@ -776,33 +779,33 @@ const DevicesTab = () => {
                 icon={<PlusOutlined />}
                 onClick={() => setBindModalOpen(true)}
               >
-                绑定设备
+                {t('customersDevices.bindDevice')}
               </Button>,
             ]}
             pagination={{ defaultPageSize: 20 }}
           />
 
           <Modal
-            title="绑定新设备"
+            title={t('customersDevices.bindNewDevice')}
             open={bindModalOpen}
             onOk={handleBind}
             onCancel={() => {
               setBindModalOpen(false);
               bindForm.resetFields();
             }}
-            okText="绑定"
-            cancelText="取消"
+            okText={t('customersDevices.bind')}
+            cancelText={t('common.cancel')}
           >
             <Form form={bindForm} layout="vertical">
               <Form.Item
                 name="devSerial"
-                label="设备序列号"
-                rules={[{ required: true, message: '请输入设备序列号' }]}
+                label={t('customersDevices.deviceSerial')}
+                rules={[{ required: true, message: t('customersDevices.validationDeviceSerialRequired') }]}
               >
-                <Input placeholder="例如: JZ-SNIFF-001" />
+                <Input placeholder={t('customersDevices.deviceSerialExample')} />
               </Form.Item>
-              <Form.Item name="description" label="描述">
-                <Input.TextArea rows={3} placeholder="设备描述（可选）" />
+              <Form.Item name="description" label={t('common.description')}>
+                <Input.TextArea rows={3} placeholder={t('customersDevices.deviceDescriptionOptional')} />
               </Form.Item>
             </Form>
           </Modal>
@@ -813,17 +816,18 @@ const DevicesTab = () => {
 };
 
 const CustomersAndDevices = () => {
+  const { t } = useTranslation();
   return (
     <Tabs
       items={[
         {
           key: 'customers',
-          label: '客户管理',
+          label: t('customersDevices.customerManagement'),
           children: <CustomersTab />,
         },
         {
           key: 'devices',
-          label: '设备管理',
+          label: t('customersDevices.deviceManagement'),
           children: <DevicesTab />,
         },
       ]}

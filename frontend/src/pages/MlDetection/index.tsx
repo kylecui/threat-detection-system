@@ -31,12 +31,14 @@ import type {
   MlTrainingStatus,
   MlDataReadiness,
 } from '@/types';
+import { useTranslation } from 'react-i18next';
 import mlService from '@/services/ml';
 
 /**
  * ML检测监控页面
  */
 const MlDetection = () => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [health, setHealth] = useState<MlHealthStatus | null>(null);
   const [models, setModels] = useState<MlModelInfo[]>([]);
@@ -89,9 +91,9 @@ const MlDetection = () => {
       if (!status.training) {
         setTraining(false);
         if (status.error) {
-          message.error(`训练失败: ${status.error}`);
+          message.error(t('mlDetection.trainingFailed', { error: status.error }));
         } else {
-          message.success('模型训练完成');
+          message.success(t('mlDetection.trainingComplete'));
           loadAll();
         }
         return false;
@@ -108,11 +110,11 @@ const MlDetection = () => {
     try {
       const result = await mlService.triggerTraining();
       if (result.status === 'already_running') {
-        message.warning('训练已在进行中');
+        message.warning(t('mlDetection.trainingAlreadyRunning'));
       } else if (result.status === 'training_started') {
-        message.success(`训练已启动 (Tier ${result.tiers.join(', ')})`);
+        message.success(t('mlDetection.trainingStarted', { tiers: result.tiers.join(', ') }));
       } else {
-        message.error(`训练启动失败: ${result.status}`);
+        message.error(t('mlDetection.trainingStartFailed', { status: result.status }));
         setTraining(false);
         return;
       }
@@ -124,7 +126,7 @@ const MlDetection = () => {
       };
       setTimeout(poll, 4000);
     } catch {
-      message.error('训练请求失败');
+      message.error(t('mlDetection.trainingRequestFailed'));
       setTraining(false);
     }
   };
@@ -137,16 +139,16 @@ const MlDetection = () => {
       if (result.status === 'ok') {
         const loadedCount = Object.values(result.modelsLoaded || {}).filter(Boolean).length;
         if (loadedCount > 0) {
-          message.success(`模型重载成功，已加载 ${loadedCount} 个模型`);
+          message.success(t('mlDetection.reloadSuccess', { count: loadedCount }));
         } else {
-          message.warning('模型重载完成，但未找到可用模型文件');
+          message.warning(t('mlDetection.reloadNoModelFound'));
         }
         loadAll();
       } else {
-        message.error(`重载失败: ${result.error || '未知错误'}`);
+        message.error(t('mlDetection.reloadFailed', { error: result.error || t('common.unknownError') }));
       }
     } catch {
-      message.error('模型重载失败');
+      message.error(t('mlDetection.reloadRequestFailed'));
     } finally {
       setReloading(false);
     }
@@ -168,7 +170,7 @@ const MlDetection = () => {
       render: (tier: number) => <Tag color="blue">Tier {tier}</Tag>,
     },
     {
-      title: '自编码器',
+      title: t('mlDetection.autoencoder'),
       dataIndex: 'available',
       key: 'available',
       width: 100,
@@ -182,21 +184,21 @@ const MlDetection = () => {
       render: (val: boolean | undefined) => val !== undefined ? statusIcon(val) : '-',
     },
     {
-      title: '阈值',
+      title: t('mlDetection.threshold'),
       dataIndex: 'threshold',
       key: 'threshold',
       width: 100,
       render: (val: number) => val?.toFixed(4),
     },
     {
-      title: '最优Alpha',
+      title: t('mlDetection.optimalAlpha'),
       dataIndex: 'optimalAlpha',
       key: 'optimalAlpha',
       width: 100,
       render: (val: number | undefined) => val?.toFixed(2) || '-',
     },
     {
-      title: '模型路径',
+      title: t('mlDetection.modelPath'),
       dataIndex: 'modelPath',
       key: 'modelPath',
       ellipsis: true,
@@ -206,7 +208,7 @@ const MlDetection = () => {
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: 100 }}>
-        <Spin size="large" tip="加载ML检测状态..." />
+        <Spin size="large" tip={t('mlDetection.loadingStatus')} />
       </div>
     );
   }
@@ -218,8 +220,8 @@ const MlDetection = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="服务状态"
-              value={health?.status === 'ok' ? '正常' : '异常'}
+              title={t('mlDetection.serviceStatus')}
+              value={health?.status === 'ok' ? t('mlDetection.normal') : t('mlDetection.abnormal')}
               valueStyle={{
                 color: health?.status === 'ok' ? '#3f8600' : '#cf1322',
               }}
@@ -230,8 +232,8 @@ const MlDetection = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="模型加载"
-              value={health?.modelLoaded ? '已加载' : '未加载'}
+              title={t('mlDetection.modelLoaded')}
+              value={health?.modelLoaded ? t('mlDetection.loaded') : t('mlDetection.notLoaded')}
               valueStyle={{
                 color: health?.modelLoaded ? '#3f8600' : '#cf1322',
               }}
@@ -242,8 +244,8 @@ const MlDetection = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="Kafka连接"
-              value={health?.kafkaConnected ? '已连接' : '未连接'}
+              title={t('mlDetection.kafkaConnection')}
+              value={health?.kafkaConnected ? t('mlDetection.connected') : t('mlDetection.notConnected')}
               valueStyle={{
                 color: health?.kafkaConnected ? '#3f8600' : '#cf1322',
               }}
@@ -260,17 +262,17 @@ const MlDetection = () => {
                 loading={training}
                 onClick={handleTrain}
               >
-                训练模型
+                {t('mlDetection.trainModel')}
               </Button>
               <Button
                 icon={<ReloadOutlined />}
                 loading={reloading}
                 onClick={handleReload}
               >
-                重载模型
+                {t('mlDetection.reloadModel')}
               </Button>
               <Button icon={<ReloadOutlined />} onClick={loadAll}>
-                刷新
+                {t('common.refresh')}
               </Button>
             </Space>
           </Card>
@@ -280,26 +282,26 @@ const MlDetection = () => {
       {!health?.modelLoaded && !training && (
         <Alert
           type="info"
-          message="未找到已训练的模型"
-          description="请点击「训练模型」按钮开始训练（需要系统中有足够的攻击数据）。训练完成后模型将自动加载。"
+          message={t('mlDetection.noTrainedModelFound')}
+          description={t('mlDetection.trainPrompt')}
           showIcon
         />
       )}
 
       {trainingStatus?.training && (
-        <Card title="训练进度" bordered={false}>
+        <Card title={t('mlDetection.trainingProgress')} bordered={false}>
           <Space direction="vertical" style={{ width: '100%' }}>
-            <Progress percent={99} status="active" format={() => '训练中...'} />
+            <Progress percent={99} status="active" format={() => t('mlDetection.training')} />
             <Descriptions column={2} size="small">
-              <Descriptions.Item label="训练层级">
+              <Descriptions.Item label={t('mlDetection.trainingTiers')}>
                 {trainingStatus.tiers.map((t) => (
                   <Tag key={t} color="processing">Tier {t}</Tag>
                 ))}
               </Descriptions.Item>
-              <Descriptions.Item label="启动时间">
+              <Descriptions.Item label={t('mlDetection.startedAt')}>
                 {trainingStatus.startedAt || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="已耗时">
+              <Descriptions.Item label={t('mlDetection.elapsed')}>
                 {trainingStatus.elapsedSeconds != null
                   ? `${Math.round(trainingStatus.elapsedSeconds)}s`
                   : '-'}
@@ -310,25 +312,25 @@ const MlDetection = () => {
       )}
 
       {trainingStatus && !trainingStatus.training && trainingStatus.completedAt && (
-        <Card title="上次训练结果" bordered={false}>
+        <Card title={t('mlDetection.lastTrainingResult')} bordered={false}>
           <Descriptions column={2} size="small">
-            <Descriptions.Item label="状态">
+            <Descriptions.Item label={t('common.status')}>
               {trainingStatus.error ? (
-                <Tag color="error">失败</Tag>
+                <Tag color="error">{t('common.failed')}</Tag>
               ) : (
-                <Tag color="success">成功</Tag>
+                <Tag color="success">{t('common.success')}</Tag>
               )}
             </Descriptions.Item>
-            <Descriptions.Item label="完成时间">
+            <Descriptions.Item label={t('mlDetection.completedAt')}>
               {trainingStatus.completedAt}
             </Descriptions.Item>
-            <Descriptions.Item label="耗时">
+            <Descriptions.Item label={t('mlDetection.elapsed')}>
               {trainingStatus.elapsedSeconds != null
                 ? `${Math.round(trainingStatus.elapsedSeconds)}s`
                 : '-'}
             </Descriptions.Item>
             {trainingStatus.error && (
-              <Descriptions.Item label="错误" span={2}>
+              <Descriptions.Item label={t('common.error')} span={2}>
                 <Tag color="error">{trainingStatus.error}</Tag>
               </Descriptions.Item>
             )}
@@ -337,27 +339,27 @@ const MlDetection = () => {
       )}
 
       {dataReadiness && (
-        <Card title="训练数据就绪状态" bordered={false} size="small">
+        <Card title={t('mlDetection.trainingDataReadiness')} bordered={false} size="small">
           <Descriptions column={3} size="small">
             {dataReadiness.sampleCounts &&
               Object.entries(dataReadiness.sampleCounts).map(([tier, count]) => (
-                <Descriptions.Item key={tier} label={`Tier ${tier} 样本数`}>
+                <Descriptions.Item key={tier} label={t('mlDetection.tierSampleCount', { tier })}>
                   <Tag color={count >= (dataReadiness.minimumRequired?.bigru ?? 20) ? 'green' : 'orange'}>
                     {count}
                   </Tag>
                 </Descriptions.Item>
               ))}
-            <Descriptions.Item label="最低要求 (自编码器)">
+            <Descriptions.Item label={t('mlDetection.minRequiredAutoencoder')}>
               {dataReadiness.minimumRequired?.autoencoder ?? '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="最低要求 (BiGRU)">
+            <Descriptions.Item label={t('mlDetection.minRequiredBigru')}>
               {dataReadiness.minimumRequired?.bigru ?? '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="数据就绪">
+            <Descriptions.Item label={t('mlDetection.dataReady')}>
               {dataReadiness.ready ? (
-                <Tag color="green">就绪</Tag>
+                <Tag color="green">{t('mlDetection.ready')}</Tag>
               ) : (
-                <Tag color="orange">不足</Tag>
+                <Tag color="orange">{t('mlDetection.insufficient')}</Tag>
               )}
             </Descriptions.Item>
           </Descriptions>
@@ -365,7 +367,7 @@ const MlDetection = () => {
       )}
 
       {/* 模型列表 */}
-      <Card title="模型状态" bordered={false}>
+      <Card title={t('mlDetection.modelStatus')} bordered={false}>
         <Table
           columns={modelColumns}
           dataSource={models}
@@ -379,15 +381,15 @@ const MlDetection = () => {
       <Row gutter={16}>
         {/* 序列缓冲区 */}
         <Col span={8}>
-          <Card title="序列缓冲区" bordered={false}>
+          <Card title={t('mlDetection.sequenceBuffer')} bordered={false}>
             <Descriptions column={1} size="small">
-              <Descriptions.Item label="启用">
-                {bufferStats?.enabled ? <Tag color="green">是</Tag> : <Tag>否</Tag>}
+              <Descriptions.Item label={t('common.enabled')}>
+                {bufferStats?.enabled ? <Tag color="green">{t('common.yes')}</Tag> : <Tag>{t('common.no')}</Tag>}
               </Descriptions.Item>
-              <Descriptions.Item label="总Key数">
+              <Descriptions.Item label={t('mlDetection.totalKeys')}>
                 {bufferStats?.totalKeys ?? '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="总窗口数">
+              <Descriptions.Item label={t('mlDetection.totalWindows')}>
                 {bufferStats?.totalWindows ?? '-'}
               </Descriptions.Item>
             </Descriptions>
@@ -396,10 +398,10 @@ const MlDetection = () => {
 
         {/* 漂移检测 */}
         <Col span={8}>
-          <Card title="漂移检测" bordered={false}>
+          <Card title={t('mlDetection.driftDetection')} bordered={false}>
             <Descriptions column={1} size="small">
-              <Descriptions.Item label="启用">
-                {driftStatus?.enabled ? <Tag color="green">是</Tag> : <Tag>否</Tag>}
+              <Descriptions.Item label={t('common.enabled')}>
+                {driftStatus?.enabled ? <Tag color="green">{t('common.yes')}</Tag> : <Tag>{t('common.no')}</Tag>}
               </Descriptions.Item>
               {driftStatus?.enabled &&
                 Object.entries(driftStatus)
@@ -416,22 +418,22 @@ const MlDetection = () => {
 
         {/* 影子评分 */}
         <Col span={8}>
-          <Card title="影子评分" bordered={false}>
+          <Card title={t('mlDetection.shadowScoring')} bordered={false}>
             <Descriptions column={1} size="small">
-              <Descriptions.Item label="启用">
-                {shadowStats?.enabled ? <Tag color="green">是</Tag> : <Tag>否</Tag>}
+              <Descriptions.Item label={t('common.enabled')}>
+                {shadowStats?.enabled ? <Tag color="green">{t('common.yes')}</Tag> : <Tag>{t('common.no')}</Tag>}
               </Descriptions.Item>
-              <Descriptions.Item label="Challenger加载">
+              <Descriptions.Item label={t('mlDetection.challengerLoaded')}>
                 {shadowStats?.challengerLoaded ? (
-                  <Tag color="green">是</Tag>
+                  <Tag color="green">{t('common.yes')}</Tag>
                 ) : (
-                  <Tag>否</Tag>
+                  <Tag>{t('common.no')}</Tag>
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="总比较次数">
+              <Descriptions.Item label={t('mlDetection.totalComparisons')}>
                 {shadowStats?.totalComparisons ?? 0}
               </Descriptions.Item>
-              <Descriptions.Item label="Challenger目录">
+              <Descriptions.Item label={t('mlDetection.challengerDir')}>
                 {shadowStats?.challengerDir || '-'}
               </Descriptions.Item>
             </Descriptions>
@@ -442,8 +444,8 @@ const MlDetection = () => {
       {!health && (
         <Alert
           type="warning"
-          message="ML检测服务不可达"
-          description="无法连接到ML检测服务 (端口8086)，请检查服务是否启动。"
+          message={t('mlDetection.serviceUnavailable')}
+          description={t('mlDetection.serviceUnavailableDesc')}
           showIcon
         />
       )}

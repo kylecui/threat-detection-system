@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Form, Input, Button, Typography, Space, message } from 'antd';
 import { LockOutlined, UserOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import apiClient from '../../services/api';
 import { useAuth, type AuthUser } from '@/contexts/AuthContext';
 
@@ -13,6 +14,7 @@ interface LoginForm {
 }
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -32,10 +34,10 @@ export default function LoginPage() {
           tenantId: data.user?.tenantId || undefined,
         };
         login(data.token, data.refreshToken, user);
-        message.success(`欢迎, ${user.displayName || user.username}`);
+        message.success(t('login.welcome', { name: user.displayName || user.username }));
         navigate('/dashboard', { replace: true });
       } else {
-        message.error('登录失败：用户名或密码错误');
+        message.error(t('login.errorInvalidCredentials'));
       }
     } catch {
       // error interceptor in api.ts already shows message
@@ -64,9 +66,9 @@ export default function LoginPage() {
           <div>
             <SafetyCertificateOutlined style={{ fontSize: 48, color: '#1677ff' }} />
             <Title level={3} style={{ marginTop: 12, marginBottom: 0 }}>
-              威胁检测系统
+              {t('login.title')}
             </Title>
-            <Text type="secondary">Cloud-Native Threat Detection Platform</Text>
+            <Text type="secondary">{t('login.subtitle')}</Text>
           </div>
 
           <Form<LoginForm>
@@ -78,27 +80,27 @@ export default function LoginPage() {
           >
             <Form.Item
               name="username"
-              rules={[{ required: true, message: '请输入用户名' }]}
+              rules={[{ required: true, message: t('login.validationUsernameRequired') }]}
             >
-              <Input prefix={<UserOutlined />} placeholder="用户名" />
+              <Input prefix={<UserOutlined />} placeholder={t('login.username')} />
             </Form.Item>
 
             <Form.Item
               name="password"
-              rules={[{ required: true, message: '请输入密码' }]}
+              rules={[{ required: true, message: t('login.validationPasswordRequired') }]}
             >
-              <Input.Password prefix={<LockOutlined />} placeholder="密码" />
+              <Input.Password prefix={<LockOutlined />} placeholder={t('login.password')} />
             </Form.Item>
 
             <Form.Item>
               <Button type="primary" htmlType="submit" loading={loading} block>
-                登录
+                {t('login.login')}
               </Button>
             </Form.Item>
           </Form>
 
           <Text type="secondary" style={{ fontSize: 12 }}>
-            默认管理员: admin / admin123
+            {t('login.defaultAdmin')}
           </Text>
         </Space>
       </Card>

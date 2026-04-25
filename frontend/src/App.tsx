@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { useMemo } from 'react';
 import { ProLayout } from '@ant-design/pro-components';
 import { Button, ConfigProvider, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
@@ -25,6 +26,8 @@ import {
 import { AuthProvider, useAuth, type AppRole } from './contexts/AuthContext';
 import { ScopeProvider } from './contexts/ScopeContext';
 import { useTheme } from './contexts/ThemeContext';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import RouteGuard from './components/RouteGuard';
 import ErrorBoundary from './components/ErrorBoundary';
 import ScopeSelector from './components/ScopeSelector';
@@ -52,32 +55,32 @@ interface MenuRoute {
   routes?: MenuRoute[];
 }
 
-const ALL_MENU_ROUTES: MenuRoute[] = [
-  { path: '/overview', name: '威胁总览', icon: <DashboardOutlined /> },
+const getAllMenuRoutes = (t: TFunction): MenuRoute[] => [
+  { path: '/overview', name: t('nav.overview'), icon: <DashboardOutlined /> },
   {
     path: '/investigate',
-    name: '调查',
+    name: t('nav.investigate'),
     icon: <SearchOutlined />,
     routes: [
-      { path: '/investigate/alerts', name: '告警中心', icon: <BellOutlined /> },
-      { path: '/investigate/threats', name: '威胁列表', icon: <WarningOutlined /> },
-      { path: '/investigate/intel', name: '威胁情报', icon: <GlobalOutlined /> },
+      { path: '/investigate/alerts', name: t('nav.alerts'), icon: <BellOutlined /> },
+      { path: '/investigate/threats', name: t('nav.threats'), icon: <WarningOutlined /> },
+      { path: '/investigate/intel', name: t('nav.intel'), icon: <GlobalOutlined /> },
     ],
   },
   {
     path: '/operate',
-    name: '运维',
+    name: t('nav.operate'),
     icon: <ToolOutlined />,
     routes: [
       {
         path: '/operate/pipeline',
-        name: '管道健康',
+        name: t('nav.pipeline'),
         icon: <CloudServerOutlined />,
         requiredRoles: ['SUPER_ADMIN', 'TENANT_ADMIN'],
       },
       {
         path: '/operate/ml',
-        name: 'ML检测',
+        name: t('nav.ml'),
         icon: <ExperimentOutlined />,
         requiredRoles: ['SUPER_ADMIN', 'TENANT_ADMIN'],
       },
@@ -85,24 +88,24 @@ const ALL_MENU_ROUTES: MenuRoute[] = [
   },
   {
     path: '/admin',
-    name: '管理',
+    name: t('nav.admin'),
     icon: <TeamOutlined />,
     routes: [
       {
         path: '/admin/customers',
-        name: '客户与设备',
+        name: t('nav.customersDevices'),
         icon: <TeamOutlined />,
         requiredRoles: ['SUPER_ADMIN', 'TENANT_ADMIN'],
       },
       {
         path: '/admin/users',
-        name: '用户管理',
+        name: t('nav.users'),
         icon: <UserOutlined />,
         requiredRoles: ['SUPER_ADMIN', 'TENANT_ADMIN'],
       },
       {
         path: '/admin/tenants',
-        name: '租户管理',
+        name: t('nav.tenants'),
         icon: <ApartmentOutlined />,
         requiredRoles: ['SUPER_ADMIN'],
       },
@@ -110,26 +113,26 @@ const ALL_MENU_ROUTES: MenuRoute[] = [
   },
   {
     path: '/config',
-    name: '配置',
+    name: t('nav.config'),
     icon: <SettingOutlined />,
     routes: [
       {
         path: '/config/general',
-        name: '基础设置',
+        name: t('nav.generalConfig'),
         icon: <SettingOutlined />,
         requiredRoles: ['SUPER_ADMIN', 'TENANT_ADMIN'],
       },
-      { path: '/config/notifications', name: '通知配置', icon: <BellOutlined /> },
+      { path: '/config/notifications', name: t('nav.notificationConfig'), icon: <BellOutlined /> },
       {
         path: '/config/integrations',
-        name: '集成配置',
+        name: t('nav.integrationConfig'),
         icon: <ApiOutlined />,
         requiredRoles: ['SUPER_ADMIN'],
       },
-      { path: '/config/ai', name: 'AI配置', icon: <RobotOutlined /> },
+      { path: '/config/ai', name: t('nav.aiConfig'), icon: <RobotOutlined /> },
       {
         path: '/config/plugins',
-        name: '插件配置',
+        name: t('nav.pluginConfig'),
         icon: <AppstoreOutlined />,
         requiredRoles: ['SUPER_ADMIN', 'TENANT_ADMIN'],
       },
@@ -159,11 +162,17 @@ function filterMenuRoutes(routes: MenuRoute[], roles: AppRole[], isSuperAdmin: b
 function AppLayout() {
   const { user, logout, isSuperAdmin } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const roles = user?.roles ?? [];
 
-  const menuRoutes = filterMenuRoutes(ALL_MENU_ROUTES, roles, isSuperAdmin);
+  const menuRoutes = useMemo(() => {
+    const allMenuRoutes = getAllMenuRoutes(t);
+    return filterMenuRoutes(allMenuRoutes, roles, isSuperAdmin);
+  }, [t, roles, isSuperAdmin]);
+
+  const currentLang = i18n.resolvedLanguage === 'en-US' ? 'en-US' : 'zh-CN';
 
   return (
     <ConfigProvider
@@ -177,13 +186,13 @@ function AppLayout() {
       }}
     >
       <ProLayout
-        title="威胁检测系统"
+        title={t('app.title')}
         logo={<DashboardOutlined />}
         layout="mix"
         fixedHeader
         fixSiderbar
         avatarProps={{
-          title: user?.displayName || user?.username || 'User',
+          title: user?.displayName || user?.username || t('app.user'),
           size: 'small',
           render: (_props, dom) => (
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -193,7 +202,17 @@ function AppLayout() {
                 size="small"
                 icon={isDarkMode ? <SunOutlined /> : <MoonOutlined />}
                 onClick={toggleTheme}
+                aria-label={t('app.toggleTheme')}
               />
+              <Button
+                type="text"
+                size="small"
+                onClick={() => i18n.changeLanguage(currentLang === 'zh-CN' ? 'en-US' : 'zh-CN')}
+                icon={<GlobalOutlined />}
+                aria-label={t('app.switchLanguage')}
+              >
+                {currentLang === 'zh-CN' ? 'EN' : '中'}
+              </Button>
               <ScopeSelector />
               <Button
                 type="text"
@@ -201,6 +220,7 @@ function AppLayout() {
                 icon={<LogoutOutlined />}
                 onClick={logout}
                 style={{ color: 'rgba(0,0,0,0.45)' }}
+                aria-label={t('app.logout')}
               />
             </span>
           ),

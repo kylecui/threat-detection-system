@@ -24,6 +24,7 @@ import {
 } from '@ant-design/icons';
 import { ProTable } from '@ant-design/pro-components';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import { useTranslation } from 'react-i18next';
 import type { ThreatIndicator, ThreatFeed, IpLookupResult, IntelStatistics } from '@/types';
 import { IntelSeverity } from '@/types';
 import intelService from '@/services/intel';
@@ -41,6 +42,7 @@ const severityColorMap: Record<string, string> = {
  * 威胁情报页面
  */
 const ThreatIntel = () => {
+  const { t } = useTranslation();
   const actionRef = useRef<ActionType>();
   const [statistics, setStatistics] = useState<IntelStatistics | null>(null);
   const [lookupIp, setLookupIp] = useState('');
@@ -60,7 +62,7 @@ const ThreatIntel = () => {
       const data = await intelService.getFeeds();
       setFeeds(data);
     } catch {
-      message.error('加载Feed列表失败');
+      message.error(t('threatIntel.messageLoadFeedsFailed'));
     } finally {
       setFeedsLoading(false);
     }
@@ -74,7 +76,7 @@ const ThreatIntel = () => {
       const result = await intelService.lookup(lookupIp.trim());
       setLookupResult(result);
     } catch {
-      message.error('查询失败');
+      message.error(t('threatIntel.messageLookupFailed'));
     } finally {
       setLookupLoading(false);
     }
@@ -84,10 +86,10 @@ const ThreatIntel = () => {
   const handlePollFeed = async (id: number) => {
     try {
       const result = await intelService.pollFeed(id);
-      message.success(`轮询完成，获取 ${result.polledCount || 0} 条指标`);
+      message.success(t('threatIntel.messagePollComplete', { count: result.polledCount || 0 }));
       loadFeeds();
     } catch {
-      message.error('轮询失败');
+      message.error(t('threatIntel.messagePollFailed'));
     }
   };
 
@@ -95,10 +97,10 @@ const ThreatIntel = () => {
   const handleDeleteIndicator = async (id: number) => {
     try {
       await intelService.deleteIndicator(id);
-      message.success('删除成功');
+      message.success(t('common.deleteSuccess'));
       actionRef.current?.reload();
     } catch {
-      message.error('删除失败');
+      message.error(t('common.deleteFailed'));
     }
   };
 
@@ -106,72 +108,72 @@ const ThreatIntel = () => {
   const handleSighting = async (id: number) => {
     try {
       await intelService.addSighting(id);
-      message.success('目击记录已添加');
+      message.success(t('threatIntel.messageSightingAdded'));
       actionRef.current?.reload();
     } catch {
-      message.error('操作失败');
+      message.error(t('common.operationFailed'));
     }
   };
 
   const indicatorColumns: ProColumns<ThreatIndicator>[] = [
-    { title: 'ID', dataIndex: 'id', width: 60, search: false },
+    { title: t('common.id'), dataIndex: 'id', width: 60, search: false },
     {
-      title: 'IOC值',
+      title: t('threatIntel.iocValue'),
       dataIndex: 'iocValue',
       copyable: true,
       width: 200,
     },
     {
-      title: 'IOC类型',
+      title: t('threatIntel.iocType'),
       dataIndex: 'iocType',
       width: 100,
       valueType: 'select',
       valueEnum: {
         IPV4: { text: 'IPv4' },
         IPV6: { text: 'IPv6' },
-        DOMAIN: { text: '域名' },
+        DOMAIN: { text: t('threatIntel.typeDomain') },
         URL: { text: 'URL' },
         MD5: { text: 'MD5' },
         SHA256: { text: 'SHA256' },
       },
     },
     {
-      title: '严重性',
+      title: t('common.severity'),
       dataIndex: 'severity',
       width: 90,
       valueType: 'select',
       valueEnum: {
-        CRITICAL: { text: '严重' },
-        HIGH: { text: '高' },
-        MEDIUM: { text: '中' },
-        LOW: { text: '低' },
-        INFO: { text: '信息' },
+         CRITICAL: { text: t('common.severityCritical') },
+         HIGH: { text: t('common.severityHigh') },
+         MEDIUM: { text: t('common.severityMedium') },
+         LOW: { text: t('common.severityLow') },
+         INFO: { text: t('common.severityInfo') },
       },
       render: (_, record) => (
         <Tag color={severityColorMap[record.severity]}>{record.severity}</Tag>
       ),
     },
     {
-      title: '置信度',
+      title: t('threatIntel.confidence'),
       dataIndex: 'confidence',
       width: 80,
       search: false,
       render: (val) => `${val}%`,
     },
     {
-      title: '来源',
+      title: t('common.source'),
       dataIndex: 'sourceName',
       width: 120,
       search: false,
     },
     {
-      title: '目击次数',
+      title: t('threatIntel.sightingCount'),
       dataIndex: 'sightingCount',
       width: 90,
       search: false,
     },
     {
-      title: '最后发现',
+      title: t('threatIntel.lastSeen'),
       dataIndex: 'lastSeenAt',
       width: 150,
       search: false,
@@ -179,7 +181,7 @@ const ThreatIntel = () => {
         record.lastSeenAt ? dayjs(record.lastSeenAt).format('YYYY-MM-DD HH:mm') : '-',
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 140,
       key: 'actions',
       search: false,
@@ -191,10 +193,10 @@ const ThreatIntel = () => {
             icon={<EyeOutlined />}
             onClick={() => handleSighting(record.id)}
           >
-            目击
+            {t('threatIntel.sighting')}
           </Button>
           <Popconfirm
-            title="确定删除?"
+            title={t('common.confirmDelete')}
             onConfirm={() => handleDeleteIndicator(record.id)}
           >
             <Button type="link" size="small" danger icon={<DeleteOutlined />} />
@@ -205,32 +207,32 @@ const ThreatIntel = () => {
   ];
 
   const feedColumns = [
-    { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-    { title: '名称', dataIndex: 'name', key: 'name', width: 150 },
+    { title: t('common.id'), dataIndex: 'id', key: 'id', width: 60 },
+    { title: t('common.name'), dataIndex: 'name', key: 'name', width: 150 },
     { title: 'URL', dataIndex: 'url', key: 'url', ellipsis: true },
-    { title: '类型', dataIndex: 'feedType', key: 'feedType', width: 100 },
+    { title: t('common.type'), dataIndex: 'feedType', key: 'feedType', width: 100 },
     {
-      title: '启用',
+      title: t('common.enabled'),
       dataIndex: 'enabled',
       key: 'enabled',
       width: 80,
       render: (enabled: boolean) => <Switch checked={enabled} disabled />,
     },
     {
-      title: '指标数',
+      title: t('threatIntel.indicatorCount'),
       dataIndex: 'indicatorCount',
       key: 'indicatorCount',
       width: 80,
     },
     {
-      title: '最后轮询',
+      title: t('threatIntel.lastPolled'),
       dataIndex: 'lastPolledAt',
       key: 'lastPolledAt',
       width: 150,
       render: (val: string) => val ? dayjs(val).format('YYYY-MM-DD HH:mm') : '-',
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'actions',
       width: 100,
       render: (_: unknown, record: ThreatFeed) => (
@@ -240,7 +242,7 @@ const ThreatIntel = () => {
           icon={<SyncOutlined />}
           onClick={() => handlePollFeed(record.id)}
         >
-          轮询
+          {t('threatIntel.poll')}
         </Button>
       ),
     },
@@ -252,13 +254,13 @@ const ThreatIntel = () => {
       <Row gutter={16}>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="总指标数" value={statistics?.totalIndicators || 0} />
+            <Statistic title={t('threatIntel.totalIndicators')} value={statistics?.totalIndicators || 0} />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="活跃指标"
+               title={t('threatIntel.activeIndicators')}
               value={statistics?.activeIndicators || 0}
               valueStyle={{ color: '#3f8600' }}
             />
@@ -266,13 +268,13 @@ const ThreatIntel = () => {
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="Feed数量" value={statistics?.totalFeeds || 0} />
+            <Statistic title={t('threatIntel.feedCount')} value={statistics?.totalFeeds || 0} />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="活跃Feed"
+               title={t('threatIntel.activeFeeds')}
               value={statistics?.activeFeeds || 0}
               valueStyle={{ color: '#1890ff' }}
             />
@@ -281,10 +283,10 @@ const ThreatIntel = () => {
       </Row>
 
       {/* IP查询 */}
-      <Card title="IP信誉查询" size="small">
+      <Card title={t('threatIntel.ipLookup')} size="small">
         <Space>
           <Input
-            placeholder="输入IP地址"
+            placeholder={t('threatIntel.inputIpAddress')}
             value={lookupIp}
             onChange={(e) => setLookupIp(e.target.value)}
             onPressEnter={handleLookup}
@@ -296,23 +298,23 @@ const ThreatIntel = () => {
             loading={lookupLoading}
             onClick={handleLookup}
           >
-            查询
+            {t('common.search')}
           </Button>
         </Space>
         {lookupResult && (
           <Descriptions bordered size="small" style={{ marginTop: 16 }}>
             <Descriptions.Item label="IP">{lookupResult.ip}</Descriptions.Item>
-            <Descriptions.Item label="发现">
+            <Descriptions.Item label={t('threatIntel.found')}>
               {lookupResult.found ? (
-                <Tag color="red">命中</Tag>
+                <Tag color="red">{t('threatIntel.hit')}</Tag>
               ) : (
-                <Tag color="green">未命中</Tag>
+                <Tag color="green">{t('threatIntel.notHit')}</Tag>
               )}
             </Descriptions.Item>
-            <Descriptions.Item label="信誉分">
+            <Descriptions.Item label={t('threatIntel.reputation')}>
               {lookupResult.reputation ?? '-'}
             </Descriptions.Item>
-            <Descriptions.Item label="匹配指标数" span={3}>
+            <Descriptions.Item label={t('threatIntel.matchedIndicators')} span={3}>
               {lookupResult.indicators?.length || 0}
             </Descriptions.Item>
           </Descriptions>
@@ -324,10 +326,10 @@ const ThreatIntel = () => {
         items={[
           {
             key: 'indicators',
-            label: '威胁指标',
+            label: t('threatIntel.threatIndicators'),
             children: (
               <ProTable<ThreatIndicator>
-                headerTitle="威胁指标管理"
+                headerTitle={t('threatIntel.threatIndicatorManagement')}
                 actionRef={actionRef}
                 rowKey="id"
                 columns={indicatorColumns}
@@ -352,7 +354,7 @@ const ThreatIntel = () => {
                 search={{ labelWidth: 'auto' }}
                 toolBarRender={() => [
                   <Button key="refresh" icon={<ReloadOutlined />} onClick={() => actionRef.current?.reload()}>
-                    刷新
+                    {t('common.refresh')}
                   </Button>,
                 ]}
               />
@@ -360,12 +362,12 @@ const ThreatIntel = () => {
           },
           {
             key: 'feeds',
-            label: 'Feed管理',
+            label: t('threatIntel.feedManagement'),
             children: (
               <Card>
                 <Space style={{ marginBottom: 16 }}>
                   <Button icon={<ReloadOutlined />} onClick={loadFeeds}>
-                    刷新
+                    {t('common.refresh')}
                   </Button>
                 </Space>
                 <Table

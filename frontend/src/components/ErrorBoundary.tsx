@@ -2,8 +2,9 @@
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Button, Result } from 'antd';
+import { withTranslation, type WithTranslation } from 'react-i18next';
 
-interface Props {
+interface Props extends WithTranslation {
   children: ReactNode;
   fallback?: ReactNode;
 }
@@ -27,7 +28,7 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('页面渲染错误:', error, errorInfo);
+    console.error('Page render error:', error, errorInfo);
   }
 
   private handleReload = (): void => {
@@ -36,7 +37,7 @@ class ErrorBoundary extends Component<Props, State> {
 
   public render(): ReactNode {
     const { hasError, error } = this.state;
-    const { children, fallback } = this.props;
+    const { children, fallback, t } = this.props;
 
     if (hasError) {
       if (fallback) {
@@ -46,11 +47,11 @@ class ErrorBoundary extends Component<Props, State> {
       return (
         <Result
           status="error"
-          title="页面加载出错"
-          subTitle={error?.message || '发生未知错误，请稍后重试'}
+          title={t('errorBoundary.pageLoadError')}
+          subTitle={error?.message || t('errorBoundary.unknownError')}
           extra={
             <Button type="primary" onClick={this.handleReload}>
-              重新加载
+              {t('errorBoundary.reload')}
             </Button>
           }
         />
@@ -61,4 +62,4 @@ class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-export default ErrorBoundary;
+export default withTranslation()(ErrorBoundary);

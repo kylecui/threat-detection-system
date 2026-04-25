@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Select, Space } from 'antd';
 import { ApartmentOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useScope } from '@/contexts/ScopeContext';
 import type { Customer, Tenant } from '@/types';
 import apiClient from '@/services/api';
 
 export default function ScopeSelector() {
+  const { t } = useTranslation();
   const { isSuperAdmin, isTenantAdmin, user } = useAuth();
   const { tenantId, customerId, setTenantId, setCustomerId } = useScope();
 
@@ -47,7 +49,7 @@ export default function ScopeSelector() {
       <ApartmentOutlined style={{ color: 'rgba(0,0,0,0.45)' }} />
       {isSuperAdmin && (
         <Select
-          placeholder="选择租户"
+          placeholder={t('scope.selectTenant')}
           style={{ width: 160 }}
           value={tenantId}
           onChange={(v) => {
@@ -61,14 +63,14 @@ export default function ScopeSelector() {
         />
       )}
       <Select
-        placeholder="选择客户"
+        placeholder={t('scope.selectCustomer')}
         style={{ width: 200 }}
         value={customerId}
         onChange={setCustomerId}
         loading={loadingCustomers}
         allowClear
         options={[
-          { label: '全部客户', value: '__all__' },
+          { label: t('scope.allCustomers'), value: '__all__' },
           ...customers.map((c) => ({
             label: `${c.name} (${c.customerId})`,
             value: c.customerId,

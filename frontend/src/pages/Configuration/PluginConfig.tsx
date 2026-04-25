@@ -24,6 +24,7 @@ import {
   EditOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { getConfigsByCategory, batchUpdateConfigs } from '@/services/config';
 import {
   listTirePlugins,
@@ -38,6 +39,7 @@ import type { SystemConfig } from '@/types';
 const { Text } = Typography;
 
 const PluginConfig = () => {
+  const { t } = useTranslation();
   const [pluginForm] = Form.useForm();
   const [customPluginForm] = Form.useForm();
 
@@ -89,7 +91,7 @@ const PluginConfig = () => {
       const data = await listTirePlugins();
       setCustomPlugins(data);
     } catch {
-      message.error('加载自定义插件失败');
+      message.error(t('pluginConfig.loadCustomPluginsFailed'));
     } finally {
       setCustomPluginLoading(false);
     }
@@ -118,10 +120,10 @@ const PluginConfig = () => {
       if (Object.keys(updates).length > 0) {
         await batchUpdateConfigs(updates);
       }
-      message.success('插件配置已保存，请运行 apply-tire-config.sh 同步到集群');
+      message.success(t('pluginConfig.saved'));
       loadPluginConfigs();
     } catch {
-      message.error('插件配置保存失败');
+      message.error(t('pluginConfig.saveFailed'));
     } finally {
       setPluginSaving(false);
     }
@@ -165,10 +167,10 @@ const PluginConfig = () => {
       const values = await customPluginForm.validateFields();
       if (editingPlugin) {
         await updateTirePlugin(editingPlugin.id, values as Partial<TireCustomPlugin>);
-        message.success('自定义插件已更新');
+        message.success(t('pluginConfig.customUpdated'));
       } else {
         await createTirePlugin(values as Partial<TireCustomPlugin>);
-        message.success('自定义插件已创建');
+        message.success(t('pluginConfig.customCreated'));
       }
       setCustomPluginModalOpen(false);
       customPluginForm.resetFields();
@@ -180,13 +182,13 @@ const PluginConfig = () => {
 
   const handleDeleteCustomPlugin = (plugin: TireCustomPlugin) => {
     Modal.confirm({
-      title: `确定删除插件「${plugin.name}」吗？`,
-      okText: '确定',
-      cancelText: '取消',
+      title: t('pluginConfig.confirmDeletePlugin', { name: plugin.name }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       okType: 'danger',
       onOk: async () => {
         await deleteTirePlugin(plugin.id);
-        message.success('自定义插件已删除');
+        message.success(t('pluginConfig.customDeleted'));
         loadCustomPlugins();
       },
     });
@@ -202,8 +204,8 @@ const PluginConfig = () => {
     reverse_dns: 'Reverse DNS',
     honeynet: 'Honeynet',
     internal_flow: 'Internal Flow',
-    threatbook: 'Threatbook (微步在线)',
-    tianjiyoumeng: 'TianjiYoumeng (天际友盟)',
+    threatbook: t('pluginConfig.pluginThreatbook'),
+    tianjiyoumeng: t('pluginConfig.pluginTianjiYoumeng'),
   };
 
   const pluginOrder = [
@@ -252,7 +254,7 @@ const PluginConfig = () => {
 
   const customPluginColumns: ColumnsType<TireCustomPlugin> = [
     {
-      title: '名称',
+      title: t('common.name'),
       dataIndex: 'name',
       key: 'name',
     },
@@ -262,34 +264,34 @@ const PluginConfig = () => {
       key: 'slug',
     },
     {
-      title: '插件URL',
+      title: t('pluginConfig.pluginUrl'),
       dataIndex: 'pluginUrl',
       key: 'pluginUrl',
       ellipsis: true,
     },
     {
-      title: '请求方式',
+      title: t('pluginConfig.requestMethod'),
       dataIndex: 'requestMethod',
       key: 'requestMethod',
     },
     {
-      title: '启用',
+      title: t('common.enabled'),
       dataIndex: 'enabled',
       key: 'enabled',
-      render: (enabled: boolean) => (enabled ? <Tag color="green">开</Tag> : <Tag color="red">关</Tag>),
+      render: (enabled: boolean) => (enabled ? <Tag color="green">{t('common.on')}</Tag> : <Tag color="red">{t('common.off')}</Tag>),
     },
     {
-      title: '优先级',
+      title: t('common.priority'),
       dataIndex: 'priority',
       key: 'priority',
     },
     {
-      title: '超时(秒)',
+      title: t('common.timeoutSeconds'),
       dataIndex: 'timeout',
       key: 'timeout',
     },
     {
-      title: '归属',
+      title: t('common.owner'),
       dataIndex: 'ownerType',
       key: 'ownerType',
       render: (ownerType: TireCustomPlugin['ownerType']) => {
@@ -299,15 +301,15 @@ const PluginConfig = () => {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'actions',
       render: (_: unknown, record: TireCustomPlugin) => (
         <Space>
           <Button icon={<EditOutlined />} onClick={() => openCustomPluginModal(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteCustomPlugin(record)}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -319,8 +321,8 @@ const PluginConfig = () => {
       {isSuperAdmin && (
         <Spin spinning={pluginLoading}>
           <Alert
-            message="TIRE插件配置"
-            description="可按需启用/禁用插件，并调整优先级和超时时间。保存后需运行 apply-tire-config.sh 同步到集群。"
+            message={t('pluginConfig.title')}
+            description={t('pluginConfig.description')}
             type="info"
             showIcon
             style={{ marginBottom: 24 }}
@@ -340,10 +342,10 @@ const PluginConfig = () => {
                 padding: '0 8px',
               }}
             >
-              <Text type="secondary">插件名称</Text>
-              <Text type="secondary">启用状态</Text>
-              <Text type="secondary">优先级</Text>
-              <Text type="secondary">超时（秒）</Text>
+              <Text type="secondary">{t('pluginConfig.pluginName')}</Text>
+              <Text type="secondary">{t('pluginConfig.enabledState')}</Text>
+              <Text type="secondary">{t('common.priority')}</Text>
+              <Text type="secondary">{t('common.timeoutSeconds')}</Text>
             </div>
             <Space direction="vertical" style={{ width: '100%' }} size={8}>
               {pluginRows.map((row) => (
@@ -358,13 +360,13 @@ const PluginConfig = () => {
                   >
                     <Text strong>{row.label}</Text>
                     <Form.Item name={row.enabledKey} valuePropName="checked" style={{ marginBottom: 0 }}>
-                      <Switch checkedChildren="开" unCheckedChildren="关" />
+                      <Switch checkedChildren={t('common.on')} unCheckedChildren={t('common.off')} />
                     </Form.Item>
                     <Form.Item name={row.priorityKey} style={{ marginBottom: 0 }}>
                       <InputNumber min={1} max={100} style={{ width: '100%' }} />
                     </Form.Item>
                     <Form.Item name={row.timeoutKey} style={{ marginBottom: 0 }}>
-                      <InputNumber min={5} max={300} addonAfter="秒" style={{ width: '100%' }} />
+                      <InputNumber min={5} max={300} addonAfter={t('common.secondShort')} style={{ width: '100%' }} />
                     </Form.Item>
                   </div>
                 </Card>
@@ -372,8 +374,8 @@ const PluginConfig = () => {
             </Space>
             {pluginRows.length === 0 && (
               <Alert
-                message="未找到插件配置项"
-                description="请先执行 30-system-config.sql 初始化配置数据"
+                message={t('pluginConfig.noConfigItems')}
+                description={t('pluginConfig.initHint')}
                 type="warning"
                 style={{ marginTop: 12 }}
               />
@@ -386,10 +388,10 @@ const PluginConfig = () => {
                   icon={<SaveOutlined />}
                   loading={pluginSaving}
                 >
-                  保存插件配置
+                  {t('pluginConfig.save')}
                 </Button>
                 <Button icon={<ReloadOutlined />} onClick={loadPluginConfigs}>
-                  刷新
+                  {t('common.refresh')}
                 </Button>
               </Space>
             </Form.Item>
@@ -397,15 +399,15 @@ const PluginConfig = () => {
         </Spin>
       )}
 
-      <Divider orientation="left">自定义插件</Divider>
+      <Divider orientation="left">{t('pluginConfig.customPlugins')}</Divider>
       <Space style={{ marginBottom: 16 }}>
         {isAdmin && (
           <Button type="primary" icon={<PlusOutlined />} onClick={() => openCustomPluginModal()}>
-            添加自定义插件
+            {t('pluginConfig.addCustomPlugin')}
           </Button>
         )}
         <Button icon={<ReloadOutlined />} onClick={loadCustomPlugins}>
-          刷新
+          {t('common.refresh')}
         </Button>
       </Space>
       <Table<TireCustomPlugin>
@@ -417,7 +419,7 @@ const PluginConfig = () => {
       />
 
       <Modal
-        title={editingPlugin ? '编辑自定义插件' : '添加自定义插件'}
+        title={editingPlugin ? t('pluginConfig.editCustomPlugin') : t('pluginConfig.addCustomPlugin')}
         open={customPluginModalOpen}
         onCancel={() => {
           setCustomPluginModalOpen(false);
@@ -425,26 +427,26 @@ const PluginConfig = () => {
           setEditingPlugin(null);
         }}
         onOk={handleCustomPluginSubmit}
-        okText="保存"
-        cancelText="取消"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
       >
         <Form form={customPluginForm} layout="vertical">
-          <Form.Item label="名称" name="name" rules={[{ required: true, message: '请输入名称' }]}>
+          <Form.Item label={t('common.name')} name="name" rules={[{ required: true, message: t('pluginConfig.validationNameRequired') }]}> 
             <Input />
           </Form.Item>
-          <Form.Item label="Slug" name="slug" rules={[{ required: true, message: '请输入Slug' }]}>
+          <Form.Item label="Slug" name="slug" rules={[{ required: true, message: t('pluginConfig.validationSlugRequired') }]}> 
             <Input />
           </Form.Item>
-          <Form.Item label="描述" name="description">
+          <Form.Item label={t('common.description')} name="description">
             <Input.TextArea rows={3} />
           </Form.Item>
-          <Form.Item label="插件URL" name="pluginUrl" rules={[{ required: true, message: '请输入插件URL' }]}>
+          <Form.Item label={t('pluginConfig.pluginUrl')} name="pluginUrl" rules={[{ required: true, message: t('pluginConfig.validationPluginUrlRequired') }]}> 
             <Input />
           </Form.Item>
           <Form.Item label="API Key" name="apiKey">
-            <Input.Password placeholder="留空则保留原值" />
+            <Input.Password placeholder={t('common.keepEmptyToKeepValue')} />
           </Form.Item>
-          <Form.Item label="认证类型" name="authType" initialValue="bearer">
+          <Form.Item label={t('pluginConfig.authType')} name="authType" initialValue="bearer">
             <Select
               options={[
                 { label: 'bearer', value: 'bearer' },
@@ -453,10 +455,10 @@ const PluginConfig = () => {
               ]}
             />
           </Form.Item>
-          <Form.Item label="认证头" name="authHeader" initialValue="Authorization">
+          <Form.Item label={t('pluginConfig.authHeader')} name="authHeader" initialValue="Authorization">
             <Input />
           </Form.Item>
-          <Form.Item label="解析类型" name="parserType" initialValue="json">
+          <Form.Item label={t('pluginConfig.parserType')} name="parserType" initialValue="json">
             <Select
               options={[
                 { label: 'json', value: 'json' },
@@ -465,7 +467,7 @@ const PluginConfig = () => {
               ]}
             />
           </Form.Item>
-          <Form.Item label="请求方式" name="requestMethod" initialValue="GET">
+          <Form.Item label={t('pluginConfig.requestMethod')} name="requestMethod" initialValue="GET">
             <Select
               options={[
                 { label: 'GET', value: 'GET' },
@@ -476,22 +478,22 @@ const PluginConfig = () => {
           <Form.Item noStyle shouldUpdate>
             {({ getFieldValue }) =>
               getFieldValue('requestMethod') === 'POST' ? (
-                <Form.Item label="请求体" name="requestBody">
-                  <Input.TextArea rows={3} />
-                </Form.Item>
+                  <Form.Item label={t('pluginConfig.requestBody')} name="requestBody">
+                    <Input.TextArea rows={3} />
+                  </Form.Item>
               ) : null
             }
           </Form.Item>
-          <Form.Item label="响应路径" name="responsePath">
+          <Form.Item label={t('pluginConfig.responsePath')} name="responsePath">
             <Input />
           </Form.Item>
-          <Form.Item label="启用" name="enabled" valuePropName="checked" initialValue>
-            <Switch checkedChildren="开" unCheckedChildren="关" />
+          <Form.Item label={t('common.enabled')} name="enabled" valuePropName="checked" initialValue>
+            <Switch checkedChildren={t('common.on')} unCheckedChildren={t('common.off')} />
           </Form.Item>
-          <Form.Item label="优先级" name="priority" initialValue={50}>
+          <Form.Item label={t('common.priority')} name="priority" initialValue={50}>
             <InputNumber min={1} max={100} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item label="超时(秒)" name="timeout" initialValue={30}>
+          <Form.Item label={t('common.timeoutSeconds')} name="timeout" initialValue={30}>
             <InputNumber min={5} max={300} style={{ width: '100%' }} />
           </Form.Item>
         </Form>

@@ -26,36 +26,38 @@ import {
 import type { PipelineHealthResponse, PipelineServiceStatus } from '@/types';
 import systemService from '@/services/system';
 import dayjs from 'dayjs';
-
-const SERVICE_LABELS: Record<string, string> = {
-  'data-ingestion': '数据摄取',
-  'stream-processing': '流处理 (Flink)',
-  'threat-assessment': '威胁评估',
-  'alert-management': '告警管理',
-  'customer-management': '客户管理',
-  'threat-intelligence': '威胁情报',
-  'ml-detection': 'ML检测',
-  kafka: 'Kafka',
-  redis: 'Redis',
-  postgres: 'PostgreSQL',
-};
-
-const PIPELINE_STAGES: { key: string; label: string; services: string[] }[] = [
-  { key: 'ingestion', label: '数据摄取', services: ['data-ingestion', 'kafka'] },
-  { key: 'processing', label: '实时处理', services: ['stream-processing', 'ml-detection'] },
-  { key: 'storage', label: '存储与评估', services: ['postgres', 'threat-assessment', 'alert-management'] },
-];
-
-const STATUS_MAP = {
-  healthy: { color: '#52c41a', text: '健康', tagColor: 'success' },
-  degraded: { color: '#faad14', text: '降级', tagColor: 'warning' },
-  unhealthy: { color: '#ff4d4f', text: '异常', tagColor: 'error' },
-} as const;
+import { useTranslation } from 'react-i18next';
 
 const AUTO_REFRESH_MS = 10_000;
 const EVENT_STALE_THRESHOLD_MS = 5 * 60 * 1000;
 
 const PipelineHealth = () => {
+  const { t } = useTranslation();
+  const SERVICE_LABELS: Record<string, string> = {
+    'data-ingestion': t('pipelineHealth.service.dataIngestion'),
+    'stream-processing': t('pipelineHealth.service.streamProcessing'),
+    'threat-assessment': t('pipelineHealth.service.threatAssessment'),
+    'alert-management': t('pipelineHealth.service.alertManagement'),
+    'customer-management': t('pipelineHealth.service.customerManagement'),
+    'threat-intelligence': t('pipelineHealth.service.threatIntelligence'),
+    'ml-detection': t('pipelineHealth.service.mlDetection'),
+    kafka: 'Kafka',
+    redis: 'Redis',
+    postgres: 'PostgreSQL',
+  };
+
+  const PIPELINE_STAGES: { key: string; label: string; services: string[] }[] = [
+    { key: 'ingestion', label: t('pipelineHealth.stage.ingestion'), services: ['data-ingestion', 'kafka'] },
+    { key: 'processing', label: t('pipelineHealth.stage.processing'), services: ['stream-processing', 'ml-detection'] },
+    { key: 'storage', label: t('pipelineHealth.stage.storage'), services: ['postgres', 'threat-assessment', 'alert-management'] },
+  ];
+
+  const STATUS_MAP = {
+    healthy: { color: '#52c41a', text: t('pipelineHealth.status.healthy'), tagColor: 'success' },
+    degraded: { color: '#faad14', text: t('pipelineHealth.status.degraded'), tagColor: 'warning' },
+    unhealthy: { color: '#ff4d4f', text: t('pipelineHealth.status.unhealthy'), tagColor: 'error' },
+  } as const;
+
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.sm;
   const [loading, setLoading] = useState(true);
@@ -70,7 +72,7 @@ const PipelineHealth = () => {
       setError(null);
       setLastRefresh(new Date().toLocaleTimeString('zh-CN'));
     } catch {
-      setError('无法连接到系统健康接口');
+      setError(t('pipelineHealth.errorCannotConnect'));
     } finally {
       setLoading(false);
     }
@@ -115,7 +117,7 @@ const PipelineHealth = () => {
   // ──────── 告警信息 ────────
   const warnings: string[] = [];
   if (downServices.length > 0) {
-    warnings.push(`${downServices.map((s) => s.label).join('、')} 服务异常`);
+    warnings.push(t('pipelineHealth.warningServicesAbnormal', { services: downServices.map((s) => s.label).join('、') }));
   }
 
   const pipeline = health?.pipeline;
@@ -126,15 +128,15 @@ const PipelineHealth = () => {
 
   if (eventStale) {
     const ago = lastEventTime
-      ? `${Math.max(1, Math.floor((Date.now() - lastEventTime.valueOf()) / 60000))} 分钟前`
-      : '未知';
-    warnings.push(`超过5分钟未接收到新事件 (最后: ${ago})，请检查Logstash连接`);
+      ? t('pipelineHealth.minutesAgo', { count: Math.max(1, Math.floor((Date.now() - lastEventTime.valueOf()) / 60000)) })
+      : t('common.unknown');
+    warnings.push(t('pipelineHealth.warningNoNewEvent', { ago }));
   }
   if (pipeline?.kafkaLag !== null && pipeline?.kafkaLag !== undefined && pipeline.kafkaLag > 100) {
-    warnings.push(`Kafka消费者延迟较高: ${pipeline.kafkaLag} 条消息`);
+    warnings.push(t('pipelineHealth.warningKafkaLag', { lag: pipeline.kafkaLag }));
   }
   if (pipeline?.flinkRunning === false) {
-    warnings.push('Flink作业未运行，实时处理已停止');
+    warnings.push(t('pipelineHealth.warningFlinkStopped'));
   }
 
   const getStageStatus = (services: string[]): 'UP' | 'DOWN' | 'PARTIAL' => {
@@ -154,13 +156,13 @@ const PipelineHealth = () => {
 
   const columns = [
     {
-      title: '服务名称',
+      title: t('pipelineHealth.serviceName'),
       dataIndex: 'label',
       key: 'label',
       width: 200,
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: ['data', 'status'],
       key: 'status',
       width: 100,
@@ -174,7 +176,7 @@ const PipelineHealth = () => {
       ),
     },
     {
-      title: '延迟',
+      title: t('pipelineHealth.latency'),
       dataIndex: ['data', 'latencyMs'],
       key: 'latencyMs',
       width: 120,
@@ -185,7 +187,7 @@ const PipelineHealth = () => {
       },
     },
     {
-      title: '标识',
+      title: t('pipelineHealth.identifier'),
       dataIndex: 'name',
       key: 'name',
       render: (name: string) => <code style={{ fontSize: 12 }}>{name}</code>,
@@ -223,7 +225,7 @@ const PipelineHealth = () => {
         <Row justify="space-between" align="middle">
           <Col>
             <Space size="large">
-              <span style={{ fontWeight: 600, fontSize: 16 }}>管道健康监控</span>
+              <span style={{ fontWeight: 600, fontSize: 16 }}>{t('pipelineHealth.title')}</span>
               <Tag
                 color={statusInfo.tagColor}
                 style={{ fontSize: 14, padding: '4px 16px' }}
@@ -232,19 +234,19 @@ const PipelineHealth = () => {
               </Tag>
               {lastRefresh && (
                 <span style={{ color: '#999', fontSize: 12 }}>
-                  最后刷新: {lastRefresh} (每10秒自动刷新)
+                  {t('pipelineHealth.lastRefresh')}: {lastRefresh} ({t('pipelineHealth.autoRefreshEvery10s')})
                 </span>
               )}
             </Space>
           </Col>
           <Col>
             <Button
-              aria-label="刷新管道健康状态"
+              aria-label={t('pipelineHealth.refreshAria')}
               icon={<ReloadOutlined />}
               onClick={loadHealth}
               loading={loading}
             >
-              刷新
+              {t('common.refresh')}
             </Button>
           </Col>
         </Row>
@@ -270,11 +272,11 @@ const PipelineHealth = () => {
           <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
-                title="最后事件接收"
+                title={t('pipelineHealth.lastEventReceived')}
                 value={
                   lastEventTime
                     ? lastEventTime.format('HH:mm:ss')
-                    : '无数据'
+                    : t('common.noData')
                 }
                 prefix={<ClockCircleOutlined />}
                 valueStyle={eventStale ? { color: '#ff4d4f' } : undefined}
@@ -284,7 +286,7 @@ const PipelineHealth = () => {
           <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
-                title="近1小时事件数"
+                title={t('pipelineHealth.eventsLastHour')}
                 value={pipeline.eventsLastHour ?? '-'}
                 prefix={<ThunderboltOutlined />}
               />
@@ -293,9 +295,9 @@ const PipelineHealth = () => {
           <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
-                title="Kafka消费延迟"
+                title={t('pipelineHealth.kafkaLag')}
                 value={pipeline.kafkaLag ?? '-'}
-                suffix="条"
+                suffix={t('pipelineHealth.messagesUnit')}
                 prefix={<DashboardOutlined />}
                 valueStyle={
                   pipeline.kafkaLag !== null && pipeline.kafkaLag !== undefined && pipeline.kafkaLag > 100
@@ -308,8 +310,8 @@ const PipelineHealth = () => {
           <Col xs={24} sm={12} lg={6}>
             <Card>
               <Statistic
-                title="Flink状态"
-                value={pipeline.flinkRunning === true ? '运行中' : pipeline.flinkRunning === false ? '已停止' : '未知'}
+                title={t('pipelineHealth.flinkStatus')}
+                value={pipeline.flinkRunning === true ? t('pipelineHealth.running') : pipeline.flinkRunning === false ? t('pipelineHealth.stopped') : t('common.unknown')}
                 prefix={pipeline.flinkRunning ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
                 valueStyle={
                   pipeline.flinkRunning === false ? { color: '#ff4d4f' } : pipeline.flinkRunning === true ? { color: '#52c41a' } : undefined
@@ -380,7 +382,7 @@ const PipelineHealth = () => {
       </Row>
 
       {/* Service Status Table */}
-      <Card title="服务状态详情" variant="borderless">
+      <Card title={t('pipelineHealth.serviceStatusDetails')} variant="borderless">
         <Table
           columns={columns}
           dataSource={serviceEntries}

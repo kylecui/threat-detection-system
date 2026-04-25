@@ -22,6 +22,7 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons';
 import { Line, Pie, Column } from '@ant-design/charts';
+import { useTranslation } from 'react-i18next';
 import type { Statistics, ThreatAssessment, ChartDataPoint, Customer, TopAttacker } from '@/types';
 import { ThreatLevel } from '@/types';
 import threatService from '@/services/threat';
@@ -32,6 +33,7 @@ import dayjs from 'dayjs';
 type PortDatum = { port: string; count: number };
 
 const Overview = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
@@ -127,7 +129,7 @@ const Overview = () => {
             ? dayjs(item.timestamp).format('MM-DD')
             : dayjs(item.timestamp).format('HH:mm'),
         value: item.count ?? item.value ?? 0,
-        category: '威胁数量',
+        category: t('overview.threatCount'),
       }));
       setTrendData(formattedTrend);
 
@@ -140,7 +142,7 @@ const Overview = () => {
       setTopAttackers(attackers || []);
     } catch (error) {
       console.error('Failed to load overview data:', error);
-      message.error('加载总览数据失败');
+      message.error(t('overview.messageLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -154,7 +156,7 @@ const Overview = () => {
       setSelectedCustomer('__all__');
     } catch (error) {
       console.error('Failed to load tenant customers:', error);
-      message.error('加载租户客户列表失败');
+      message.error(t('overview.messageLoadTenantCustomersFailed'));
     }
   }, [isTenantAdmin, tenantId]);
 
@@ -220,7 +222,7 @@ const Overview = () => {
     point: { size: 3, shape: 'circle' as const },
     color: '#1890ff',
     area: { style: { fillOpacity: 0.15 } },
-    yAxis: { title: { text: '威胁数量' } },
+    yAxis: { title: { text: t('overview.threatCount') } },
   };
 
   const levelPieConfig = {
@@ -234,7 +236,7 @@ const Overview = () => {
     },
     legend: { position: 'bottom' as const },
     statistic: {
-      title: { content: '总计' },
+      title: { content: t('common.total') },
       content: {
         content: String(statistics?.totalCount || 0),
       },
@@ -248,52 +250,52 @@ const Overview = () => {
     color: '#5B8FF9',
     label: { position: 'top' as const },
     xAxis: { label: { autoRotate: true, autoHide: false } },
-    yAxis: { title: { text: '攻击次数' } },
+    yAxis: { title: { text: t('overview.attackCount') } },
   };
 
   // ──────── 最新威胁列表列定义 ────────
   const recentColumns = [
     {
-      title: '评估时间',
+      title: t('overview.assessmentTime'),
       dataIndex: 'assessmentTime',
       key: 'assessmentTime',
       render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm:ss'),
       width: 160,
     },
     {
-      title: '攻击者MAC',
+      title: t('overview.attackMac'),
       dataIndex: 'attackMac',
       key: 'attackMac',
       render: (mac: string) => <code>{mac}</code>,
     },
     {
-      title: '威胁等级',
+      title: t('overview.threatLevel'),
       dataIndex: 'threatLevel',
       key: 'threatLevel',
       render: (level: ThreatLevel) => getThreatLevelTag(level),
       width: 100,
     },
     {
-      title: '威胁分数',
+      title: t('overview.threatScore'),
       dataIndex: 'threatScore',
       key: 'threatScore',
       render: (score: number) => score?.toFixed(2) || 'N/A',
       width: 100,
     },
     {
-      title: '攻击次数',
+      title: t('overview.attackCount'),
       dataIndex: 'attackCount',
       key: 'attackCount',
       width: 100,
     },
     {
-      title: '诱饵IP数',
+      title: t('overview.uniqueIps'),
       dataIndex: 'uniqueIps',
       key: 'uniqueIps',
       width: 100,
     },
     {
-      title: '端口种类',
+      title: t('overview.uniquePorts'),
       dataIndex: 'uniquePorts',
       key: 'uniquePorts',
       width: 100,
@@ -303,7 +305,7 @@ const Overview = () => {
   // ──────── Top攻击者列表列定义 ────────
   const attackerColumns = [
     {
-      title: '排名',
+      title: t('overview.rank'),
       key: 'rank',
       width: 60,
       render: (_: unknown, __: unknown, index: number) => (
@@ -313,25 +315,25 @@ const Overview = () => {
       ),
     },
     {
-      title: '攻击者MAC',
+      title: t('overview.attackMac'),
       dataIndex: 'attackMac',
       key: 'attackMac',
       render: (mac: string) => <code>{mac}</code>,
     },
     {
-      title: '攻击IP',
+      title: t('overview.attackIp'),
       dataIndex: 'attackIp',
       key: 'attackIp',
       render: (ip: string) => ip || '-',
     },
     {
-      title: '攻击次数',
+      title: t('overview.attackCount'),
       dataIndex: 'totalCount',
       key: 'totalCount',
       sorter: (a: TopAttacker, b: TopAttacker) => a.totalCount - b.totalCount,
     },
     {
-      title: '最高威胁分数',
+      title: t('overview.maxThreatScore'),
       dataIndex: 'maxThreatScore',
       key: 'maxThreatScore',
       render: (score: number) => (
@@ -342,7 +344,7 @@ const Overview = () => {
       sorter: (a: TopAttacker, b: TopAttacker) => a.maxThreatScore - b.maxThreatScore,
     },
     {
-      title: '最高威胁等级',
+      title: t('overview.maxThreatLevel'),
       dataIndex: 'maxThreatLevel',
       key: 'maxThreatLevel',
       width: 120,
@@ -397,16 +399,16 @@ const Overview = () => {
         <Row gutter={[12, 12]} justify="space-between" align="middle">
           <Col xs={24} md={18}>
             <Space wrap>
-              <span style={{ fontWeight: 600 }}>威胁总览</span>
+              <span style={{ fontWeight: 600 }}>{t('overview.title')}</span>
               {isTenantAdmin && (
                 <>
-                  <span>客户筛选:</span>
+                  <span>{t('overview.customerFilter')}:</span>
                   <Select
                     style={{ width: '100%', minWidth: 200, maxWidth: 300 }}
                     value={selectedCustomer}
                     onChange={(v) => setSelectedCustomer(v)}
                     options={[
-                      { label: '全部客户 (All)', value: '__all__' },
+                      { label: t('overview.allCustomers'), value: '__all__' },
                       ...tenantCustomers.map((c) => ({
                         label: `${c.name} (${c.customerId})`,
                         value: c.customerId,
@@ -419,16 +421,16 @@ const Overview = () => {
                 value={trendRange}
                 onChange={(v) => setTrendRange(v as string)}
                 options={[
-                  { label: '24小时', value: '24h' },
-                  { label: '7天', value: '7d' },
-                  { label: '30天', value: '30d' },
+                  { label: t('overview.range24h'), value: '24h' },
+                  { label: t('overview.range7d'), value: '7d' },
+                  { label: t('overview.range30d'), value: '30d' },
                 ]}
               />
             </Space>
           </Col>
           <Col xs={24} md={6} style={{ textAlign: 'right' }}>
-            <Button aria-label="刷新总览数据" icon={<ReloadOutlined />} onClick={loadData}>
-              刷新
+            <Button aria-label={t('overview.refreshAria')} icon={<ReloadOutlined />} onClick={loadData}>
+              {t('common.refresh')}
             </Button>
           </Col>
         </Row>
@@ -439,7 +441,7 @@ const Overview = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="总威胁数"
+              title={t('overview.totalThreats')}
               value={statistics?.totalCount || 0}
               prefix={<AlertOutlined />}
             />
@@ -448,7 +450,7 @@ const Overview = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="严重威胁"
+              title={t('overview.criticalThreats')}
               value={statistics?.criticalCount || 0}
               valueStyle={{ color: '#cf1322' }}
               prefix={<FireOutlined />}
@@ -458,7 +460,7 @@ const Overview = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="高危威胁"
+              title={t('overview.highThreats')}
               value={statistics?.highCount || 0}
               valueStyle={{ color: '#fa8c16' }}
               prefix={<WarningOutlined />}
@@ -468,7 +470,7 @@ const Overview = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="中危威胁"
+              title={t('overview.mediumThreats')}
               value={statistics?.mediumCount || 0}
               valueStyle={{ color: '#faad14' }}
               prefix={<InfoCircleOutlined />}
@@ -481,22 +483,22 @@ const Overview = () => {
       <Row gutter={16}>
         <Col xs={24} lg={14}>
           <Card
-            title={`威胁趋势 (${trendRange === '24h' ? '24小时' : trendRange === '7d' ? '7天' : '30天'})`}
+            title={`${t('overview.threatTrend')} (${trendRange === '24h' ? t('overview.range24h') : trendRange === '7d' ? t('overview.range7d') : t('overview.range30d')})`}
             variant="borderless"
           >
             {trendData.length > 0 ? (
-              <div role="img" aria-label="威胁趋势图表">
+              <div role="img" aria-label={t('overview.trendChartAria')}>
                 <Line {...trendConfig} height={320} />
               </div>
             ) : (
-              <EmptyState description="暂无趋势数据" image="simple" />
+              <EmptyState description={t('overview.noTrendData')} image="simple" />
             )}
           </Card>
         </Col>
         <Col xs={24} lg={10}>
-          <Card title="威胁等级分布" variant="borderless">
+          <Card title={t('overview.threatLevelDistribution')} variant="borderless">
             {levelDistData.length > 0 ? (
-              <div role="img" aria-label="威胁等级分布图表">
+              <div role="img" aria-label={t('overview.levelChartAria')}>
                 <Pie {...levelPieConfig} height={320} />
               </div>
             ) : (
@@ -509,9 +511,9 @@ const Overview = () => {
       {/* ── 端口分布 + Top攻击者 ── */}
       <Row gutter={16}>
         <Col xs={24} lg={12}>
-          <Card title="端口攻击分布 (Top 15)" variant="borderless">
+          <Card title={t('overview.portDistributionTop15')} variant="borderless">
             {portData.length > 0 ? (
-              <div role="img" aria-label="端口攻击分布图表">
+              <div role="img" aria-label={t('overview.portChartAria')}>
                 <Column {...portBarConfig} height={350} />
               </div>
             ) : (
@@ -520,7 +522,7 @@ const Overview = () => {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Top 攻击者排行" variant="borderless">
+          <Card title={t('overview.topAttackers')} variant="borderless">
             <Table
               columns={attackerColumns}
               dataSource={topAttackers}
@@ -534,15 +536,15 @@ const Overview = () => {
 
       {/* ── 最新威胁 ── */}
       <Card
-        title="最新威胁"
+        title={t('overview.latestThreats')}
         variant="borderless"
         extra={
           <Button
             type="link"
-            aria-label="查看全部威胁"
+            aria-label={t('overview.viewAllAria')}
             onClick={() => navigate('/investigate/threats')}
           >
-            查看全部 &rarr;
+            {t('overview.viewAll')} &rarr;
           </Button>
         }
       >

@@ -29,6 +29,7 @@ import {
 import type { TableColumnsType, TableProps } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import threatService from '@/services/threat';
 import type { ThreatAssessment, ThreatQueryFilter } from '@/types';
 import { ThreatLevel } from '@/types';
@@ -46,15 +47,6 @@ const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 20;
 const SEARCH_DEBOUNCE_MS = 450;
 
-const THREAT_LEVEL_OPTIONS: Array<{ label: string; value: ThreatLevelFilterValue }> = [
-  { label: '全部', value: 'ALL' },
-  { label: ThreatLevel.CRITICAL, value: ThreatLevel.CRITICAL },
-  { label: ThreatLevel.HIGH, value: ThreatLevel.HIGH },
-  { label: ThreatLevel.MEDIUM, value: ThreatLevel.MEDIUM },
-  { label: ThreatLevel.LOW, value: ThreatLevel.LOW },
-  { label: ThreatLevel.INFO, value: ThreatLevel.INFO },
-];
-
 const THREAT_LEVEL_COLOR_MAP: Record<ThreatLevel, string> = {
   [ThreatLevel.CRITICAL]: 'red',
   [ThreatLevel.HIGH]: 'orange',
@@ -70,7 +62,7 @@ function formatDateTime(value?: string): string {
 }
 
 function formatNumber(value?: number): string {
-  if (typeof value !== 'number' || Number.isNaN(value)) return 'N/A';
+  if (typeof value !== 'number' || Number.isNaN(value)) return '-';
   return value.toFixed(2);
 }
 
@@ -110,7 +102,17 @@ function triggerBlobDownload(content: string, fileName: string, mimeType: string
  * 5) 保持原分页行为与字段映射
  */
 const ThreatList = () => {
+  const { t } = useTranslation();
   const screens = Grid.useBreakpoint();
+
+  const threatLevelOptions: Array<{ label: string; value: ThreatLevelFilterValue }> = [
+    { label: t('common.all'), value: 'ALL' },
+    { label: ThreatLevel.CRITICAL, value: ThreatLevel.CRITICAL },
+    { label: ThreatLevel.HIGH, value: ThreatLevel.HIGH },
+    { label: ThreatLevel.MEDIUM, value: ThreatLevel.MEDIUM },
+    { label: ThreatLevel.LOW, value: ThreatLevel.LOW },
+    { label: ThreatLevel.INFO, value: ThreatLevel.INFO },
+  ];
 
   // ─────────────────────────────────────────────────────────────
   // 基础列表状态
@@ -200,7 +202,7 @@ const ThreatList = () => {
       setThreats(response.content || []);
       setTotal(response.totalElements || 0);
     } catch {
-      message.error('加载威胁列表失败');
+      message.error(t('threatList.messageLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -224,7 +226,7 @@ const ThreatList = () => {
       const detail = await threatService.getThreatDetail(id);
       setActiveThreatDetail(detail);
     } catch {
-      message.error('加载威胁详情失败');
+      message.error(t('threatList.messageLoadDetailFailed'));
       setActiveThreatDetail(null);
     } finally {
       setDrawerLoading(false);
@@ -248,16 +250,16 @@ const ThreatList = () => {
   // ─────────────────────────────────────────────────────────────
   const handleDelete = useCallback((id: number) => {
     Modal.confirm({
-      title: '确认删除',
+      title: t('common.confirmDelete'),
       icon: <ExclamationCircleOutlined />,
-      content: `确定要删除威胁记录 #${id} 吗？`,
-      okText: '删除',
+      content: t('threatList.confirmDeleteRecord', { id }),
+      okText: t('common.delete'),
       okType: 'danger',
-      cancelText: '取消',
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           await threatService.deleteThreat(id);
-          message.success('删除成功');
+          message.success(t('common.deleteSuccess'));
 
           if (activeThreatId === id) {
             closeDetailDrawer();
@@ -266,11 +268,11 @@ const ThreatList = () => {
           setSelectedRowKeys((prev) => prev.filter((key) => key !== id));
           await loadThreats();
         } catch {
-          message.error('删除失败');
+          message.error(t('common.deleteFailed'));
         }
       },
     });
-  }, [activeThreatId, closeDetailDrawer, loadThreats]);
+  }, [activeThreatId, closeDetailDrawer, loadThreats, t]);
 
   const handleBatchDelete = useCallback(() => {
     const ids = selectedRowKeys
@@ -278,21 +280,21 @@ const ThreatList = () => {
       .filter((id) => Number.isFinite(id));
 
     if (ids.length === 0) {
-      message.warning('请先选择要删除的记录');
+      message.warning(t('threatList.selectRecordsFirst'));
       return;
     }
 
     Modal.confirm({
-      title: '确认批量删除',
+      title: t('threatList.confirmBatchDeleteTitle'),
       icon: <ExclamationCircleOutlined />,
-      content: `确定要删除已选择的 ${ids.length} 条记录吗？`,
-      okText: '批量删除',
+      content: t('threatList.confirmBatchDeleteContent', { count: ids.length }),
+      okText: t('threatList.batchDelete'),
       okType: 'danger',
-      cancelText: '取消',
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           await threatService.batchDeleteThreats(ids);
-          message.success(`已删除 ${ids.length} 条记录`);
+          message.success(t('threatList.batchDeleted', { count: ids.length }));
           setSelectedRowKeys([]);
 
           if (activeThreatId && ids.includes(activeThreatId)) {
@@ -301,38 +303,38 @@ const ThreatList = () => {
 
           await loadThreats();
         } catch {
-          message.error('批量删除失败');
+          message.error(t('threatList.messageBatchDeleteFailed'));
         }
       },
     });
-  }, [selectedRowKeys, activeThreatId, closeDetailDrawer, loadThreats]);
+  }, [selectedRowKeys, activeThreatId, closeDetailDrawer, loadThreats, t]);
 
   // ─────────────────────────────────────────────────────────────
   // 导出逻辑（当前页）
   // ─────────────────────────────────────────────────────────────
   const exportCsv = useCallback(() => {
     if (threats.length === 0) {
-      message.warning('当前页无可导出数据');
+      message.warning(t('threatList.noExportDataCurrentPage'));
       return;
     }
 
     const csv = threatService.exportThreatsToCsv(threats);
     const fileName = `threat-list-${dayjs().format('YYYYMMDD-HHmmss')}.csv`;
     triggerBlobDownload(csv, fileName, 'text/csv;charset=utf-8;');
-    message.success('CSV 导出成功');
-  }, [threats]);
+    message.success(t('threatList.csvExportSuccess'));
+  }, [threats, t]);
 
   const exportJson = useCallback(() => {
     if (threats.length === 0) {
-      message.warning('当前页无可导出数据');
+      message.warning(t('threatList.noExportDataCurrentPage'));
       return;
     }
 
     const json = threatService.exportThreatsToJson(threats);
     const fileName = `threat-list-${dayjs().format('YYYYMMDD-HHmmss')}.json`;
     triggerBlobDownload(json, fileName, 'application/json;charset=utf-8;');
-    message.success('JSON 导出成功');
-  }, [threats]);
+    message.success(t('threatList.jsonExportSuccess'));
+  }, [threats, t]);
 
   // ─────────────────────────────────────────────────────────────
   // 筛选重置
@@ -372,7 +374,7 @@ const ThreatList = () => {
   const renderMitigationList = useCallback((recommendations?: string[]) => {
     const list = normalizeMitigationRecommendations(recommendations);
     if (list.length === 0) {
-      return <Text type="secondary">暂无建议</Text>;
+      return <Text type="secondary">{t('threatList.noRecommendations')}</Text>;
     }
 
     return (
@@ -382,7 +384,7 @@ const ThreatList = () => {
         ))}
       </ul>
     );
-  }, []);
+  }, [t]);
 
   // ─────────────────────────────────────────────────────────────
   // 表格列定义
@@ -396,66 +398,66 @@ const ThreatList = () => {
         width: 80,
       },
       {
-        title: '评估时间',
+        title: t('threatList.assessmentTime'),
         dataIndex: 'assessmentTime',
         key: 'assessmentTime',
         width: 180,
         render: (time: string) => formatDateTime(time),
       },
       {
-        title: '攻击者MAC',
+        title: t('threatList.attackMac'),
         dataIndex: 'attackMac',
         key: 'attackMac',
         width: 180,
         render: (mac: string) => <code>{mac}</code>,
       },
       {
-        title: '攻击者IP',
+        title: t('threatList.attackIp'),
         dataIndex: 'attackIp',
         key: 'attackIp',
         width: 150,
         render: (ip?: string) => ip || '-',
       },
       {
-        title: '威胁等级',
+        title: t('threatList.threatLevel'),
         dataIndex: 'threatLevel',
         key: 'threatLevel',
         width: 120,
         render: (level: ThreatLevel) => renderThreatLevelTag(level),
       },
       {
-        title: '威胁分数',
+        title: t('threatList.threatScore'),
         dataIndex: 'threatScore',
         key: 'threatScore',
         width: 110,
         render: (score: number) => formatNumber(score),
       },
       {
-        title: '攻击次数',
+        title: t('threatList.attackCount'),
         dataIndex: 'attackCount',
         key: 'attackCount',
         width: 100,
       },
       {
-        title: '诱饵IP数',
+        title: t('threatList.uniqueIps'),
         dataIndex: 'uniqueIps',
         key: 'uniqueIps',
         width: 100,
       },
       {
-        title: '端口种类',
+        title: t('threatList.uniquePorts'),
         dataIndex: 'uniquePorts',
         key: 'uniquePorts',
         width: 100,
       },
       {
-        title: '设备数',
+        title: t('threatList.uniqueDevices'),
         dataIndex: 'uniqueDevices',
         key: 'uniqueDevices',
         width: 80,
       },
       {
-        title: '操作',
+        title: t('common.actions'),
         key: 'action',
         fixed: 'right',
         width: 120,
@@ -463,19 +465,19 @@ const ThreatList = () => {
           <Button
             type="link"
             danger
-            aria-label={`删除威胁记录 ${record.id}`}
+            aria-label={t('threatList.deleteThreatRecordAria', { id: record.id })}
             icon={<DeleteOutlined />}
             onClick={(event) => {
               event.stopPropagation();
               handleDelete(record.id);
             }}
           >
-            删除
+            {t('common.delete')}
           </Button>
         ),
       },
     ],
-    [handleDelete, renderThreatLevelTag],
+    [handleDelete, renderThreatLevelTag, t],
   );
 
   const rowSelection = useMemo<TableProps<ThreatAssessment>['rowSelection']>(
@@ -489,7 +491,7 @@ const ThreatList = () => {
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       {/* ────────────────────────── 顶部过滤与导出栏 ────────────────────────── */}
-      <Card variant="borderless" title="威胁列表">
+      <Card variant="borderless" title={t('threatList.title')}>
         <Space
           direction="vertical"
           size="middle"
@@ -500,9 +502,9 @@ const ThreatList = () => {
               <Select<ThreatLevelFilterValue>
                 style={{ width: '100%' }}
                 value={threatLevelFilter}
-                options={THREAT_LEVEL_OPTIONS}
+                options={threatLevelOptions}
                 onChange={(value) => setThreatLevelFilter(value)}
-                placeholder="威胁等级"
+                placeholder={t('threatList.threatLevel')}
               />
             </Col>
 
@@ -511,7 +513,7 @@ const ThreatList = () => {
                 style={{ width: '100%' }}
                 value={timeRangeFilter}
                 onChange={(value) => setTimeRangeFilter(value)}
-                placeholder={['开始日期', '结束日期']}
+                placeholder={[t('threatList.startDate'), t('threatList.endDate')]}
                 allowClear
               />
             </Col>
@@ -525,23 +527,23 @@ const ThreatList = () => {
                   setAttackMacInput(value);
                   setDebouncedAttackMac(value.trim());
                 }}
-                placeholder="搜索攻击者MAC"
+                placeholder={t('threatList.searchAttackMac')}
                 allowClear
               />
             </Col>
 
             <Col xs={12} sm={6} lg={2}>
-              <Button style={{ width: '100%' }} onClick={resetFilters}>重置筛选</Button>
+              <Button style={{ width: '100%' }} onClick={resetFilters}>{t('threatList.resetFilters')}</Button>
             </Col>
 
             <Col xs={12} sm={6} lg={2}>
               <Button
                 style={{ width: '100%' }}
-                aria-label="刷新威胁列表"
+                aria-label={t('threatList.refreshAria')}
                 icon={<ReloadOutlined />}
                 onClick={loadThreats}
               >
-                刷新
+                {t('common.refresh')}
               </Button>
             </Col>
           </Row>
@@ -556,15 +558,15 @@ const ThreatList = () => {
             }}
           >
             <Space>
-              <Button icon={<DownloadOutlined />} onClick={exportCsv}>
-                导出 CSV
-              </Button>
-              <Button icon={<DownloadOutlined />} onClick={exportJson}>
-                导出 JSON
-              </Button>
-            </Space>
+                <Button icon={<DownloadOutlined />} onClick={exportCsv}>
+                {t('threatList.exportCsv')}
+                </Button>
+                <Button icon={<DownloadOutlined />} onClick={exportJson}>
+                {t('threatList.exportJson')}
+                </Button>
+              </Space>
 
-            <Text type="secondary">共 {total} 条</Text>
+            <Text type="secondary">{t('common.totalItems', { count: total })}</Text>
           </Space>
 
           {selectedRowKeys.length > 0 && (
@@ -574,18 +576,18 @@ const ThreatList = () => {
             >
               <Space style={{ width: '100%', justifyContent: 'space-between' }}>
                 <Text>
-                  已选 <Text strong>{selectedRowKeys.length}</Text> 项
+                  {t('threatList.selected')} <Text strong>{selectedRowKeys.length}</Text> {t('threatList.items')}
                 </Text>
                 <Space>
                   <Button
                     danger
-                    aria-label="批量删除所选威胁记录"
+                    aria-label={t('threatList.batchDeleteAria')}
                     icon={<DeleteOutlined />}
                     onClick={handleBatchDelete}
                   >
-                    批量删除
+                    {t('threatList.batchDelete')}
                   </Button>
-                  <Button onClick={() => setSelectedRowKeys([])}>清空选择</Button>
+                  <Button onClick={() => setSelectedRowKeys([])}>{t('threatList.clearSelection')}</Button>
                 </Space>
               </Space>
             </Card>
@@ -608,7 +610,7 @@ const ThreatList = () => {
               total,
               showSizeChanger: true,
               showQuickJumper: true,
-              showTotal: (all) => `共 ${all} 条`,
+              showTotal: (all) => t('common.totalItems', { count: all }),
               onChange: (newPage, newPageSize) => {
                 setPage(newPage);
                 setPageSize(newPageSize);
@@ -623,7 +625,7 @@ const ThreatList = () => {
         title={
           <Space>
             <EyeOutlined />
-            <span>威胁详情</span>
+            <span>{t('threatList.threatDetail')}</span>
             {activeThreatId ? <Text type="secondary">#{activeThreatId}</Text> : null}
           </Space>
         }
@@ -635,12 +637,12 @@ const ThreatList = () => {
       >
         {drawerLoading && (
           <div style={{ textAlign: 'center', padding: 48 }}>
-            <Spin tip="加载详情中..." />
+            <Spin tip={t('threatList.loadingDetail')} />
           </div>
         )}
 
         {!drawerLoading && !activeThreatDetail && (
-          <Text type="secondary">暂无详情数据</Text>
+          <Text type="secondary">{t('threatList.noDetailData')}</Text>
         )}
 
         {!drawerLoading && activeThreatDetail && (
@@ -651,54 +653,54 @@ const ThreatList = () => {
               size="small"
               labelStyle={{ width: 150 }}
             >
-              <Descriptions.Item label="ID">{activeThreatDetail.id}</Descriptions.Item>
-              <Descriptions.Item label="客户ID">
+              <Descriptions.Item label={t('common.id')}>{activeThreatDetail.id}</Descriptions.Item>
+              <Descriptions.Item label={t('common.customerId')}>
                 {activeThreatDetail.customerId || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="攻击者MAC">
+              <Descriptions.Item label={t('threatList.attackMac')}>
                 <code>{activeThreatDetail.attackMac}</code>
               </Descriptions.Item>
-              <Descriptions.Item label="攻击者IP">
+              <Descriptions.Item label={t('threatList.attackIp')}>
                 {activeThreatDetail.attackIp || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="威胁等级">
+              <Descriptions.Item label={t('threatList.threatLevel')}>
                 {renderThreatLevelTag(activeThreatDetail.threatLevel)}
               </Descriptions.Item>
-              <Descriptions.Item label="威胁分数">
+              <Descriptions.Item label={t('threatList.threatScore')}>
                 {formatNumber(activeThreatDetail.threatScore)}
               </Descriptions.Item>
-              <Descriptions.Item label="攻击次数">
+              <Descriptions.Item label={t('threatList.attackCount')}>
                 {activeThreatDetail.attackCount}
               </Descriptions.Item>
-              <Descriptions.Item label="诱饵IP数">
+              <Descriptions.Item label={t('threatList.uniqueIps')}>
                 {activeThreatDetail.uniqueIps}
               </Descriptions.Item>
-              <Descriptions.Item label="端口种类">
+              <Descriptions.Item label={t('threatList.uniquePorts')}>
                 {activeThreatDetail.uniquePorts}
               </Descriptions.Item>
-              <Descriptions.Item label="设备数">
+              <Descriptions.Item label={t('threatList.uniqueDevices')}>
                 {activeThreatDetail.uniqueDevices}
               </Descriptions.Item>
-              <Descriptions.Item label="端口列表">
+              <Descriptions.Item label={t('threatList.portList')}>
                 {renderPortTags(activeThreatDetail.portList)}
               </Descriptions.Item>
-              <Descriptions.Item label="端口风险评分">
+              <Descriptions.Item label={t('threatList.portRiskScore')}>
                 {typeof activeThreatDetail.portRiskScore === 'number'
                   ? activeThreatDetail.portRiskScore.toFixed(2)
                   : '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="检测层级">
+              <Descriptions.Item label={t('threatList.detectionTier')}>
                 {typeof activeThreatDetail.detectionTier === 'number'
                   ? `Tier ${activeThreatDetail.detectionTier}`
                   : '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="评估时间">
+              <Descriptions.Item label={t('threatList.assessmentTime')}>
                 {formatDateTime(activeThreatDetail.assessmentTime)}
               </Descriptions.Item>
-              <Descriptions.Item label="创建时间">
+              <Descriptions.Item label={t('common.createdAt')}>
                 {formatDateTime(activeThreatDetail.createdAt)}
               </Descriptions.Item>
-              <Descriptions.Item label="缓解建议">
+              <Descriptions.Item label={t('threatList.mitigationRecommendations')}>
                 {renderMitigationList(activeThreatDetail.mitigationRecommendations)}
               </Descriptions.Item>
             </Descriptions>
@@ -706,11 +708,11 @@ const ThreatList = () => {
             <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
               <Button
                 danger
-                aria-label={`删除威胁记录 ${activeThreatDetail.id}`}
+                aria-label={t('threatList.deleteThreatRecordAria', { id: activeThreatDetail.id })}
                 icon={<DeleteOutlined />}
                 onClick={() => handleDelete(activeThreatDetail.id)}
               >
-                删除该记录
+                {t('threatList.deleteThisRecord')}
               </Button>
             </Space>
           </Space>

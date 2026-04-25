@@ -18,12 +18,14 @@ import {
   EyeOutlined,
   EyeInvisibleOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { getConfigsByCategory, batchUpdateConfigs } from '@/services/config';
 import type { SystemConfig } from '@/types';
 
 const { Text } = Typography;
 
 const IntegrationConfig = () => {
+  const { t } = useTranslation();
   const [tireForm] = Form.useForm();
   const [tireConfigs, setTireConfigs] = useState<SystemConfig[]>([]);
   const [tireGeneralConfigs, setTireGeneralConfigs] = useState<SystemConfig[]>([]);
@@ -78,11 +80,11 @@ const IntegrationConfig = () => {
       if (Object.keys(updates).length > 0) {
         await batchUpdateConfigs(updates);
       }
-      message.success('TIRE配置已保存，请运行 apply-tire-config.sh 同步到集群');
+      message.success(t('integrationConfig.saved'));
       setRevealedKeys(new Set());
       loadTireConfigs();
     } catch {
-      message.error('TIRE配置保存失败');
+      message.error(t('integrationConfig.saveFailed'));
     } finally {
       setTireSaving(false);
     }
@@ -106,10 +108,10 @@ const IntegrationConfig = () => {
           <Space>
             {config.description || config.key}
             {config.isSecret && config.hasValue && (
-              <Tag color="green">已配置</Tag>
+              <Tag color="green">{t('common.configured')}</Tag>
             )}
             {config.isSecret && !config.hasValue && (
-              <Tag color="orange">未配置</Tag>
+              <Tag color="orange">{t('common.notConfigured')}</Tag>
             )}
           </Space>
         }
@@ -118,7 +120,7 @@ const IntegrationConfig = () => {
       >
         {config.isSecret ? (
           <Input
-            placeholder={config.hasValue ? '留空则保留原值' : '请输入API Key'}
+            placeholder={config.hasValue ? t('common.keepEmptyToKeepValue') : t('integrationConfig.enterApiKey')}
             type={isRevealed ? 'text' : 'password'}
             suffix={
               <Button
@@ -130,7 +132,7 @@ const IntegrationConfig = () => {
             }
           />
         ) : (
-          <Input placeholder={`请输入 ${config.description || config.key}`} />
+          <Input placeholder={t('integrationConfig.enterConfigValue', { key: config.description || config.key })} />
         )}
       </Form.Item>
     );
@@ -140,8 +142,8 @@ const IntegrationConfig = () => {
     <Card bordered={false}>
       <Spin spinning={tireLoading}>
         <Alert
-          message="威胁情报API密钥配置"
-          description="配置各威胁情报源的API密钥。保存后需运行 apply-tire-config.sh 脚本将配置同步到K8s集群并重启TIRE服务。Secret字段留空则保留原值。"
+          message={t('integrationConfig.title')}
+          description={t('integrationConfig.description')}
           type="info"
           showIcon
           style={{ marginBottom: 24 }}
@@ -155,7 +157,7 @@ const IntegrationConfig = () => {
           {tireConfigs.length > 0 && (
             <>
               <Divider orientation="left">
-                <Text strong>API密钥</Text>
+                <Text strong>{t('integrationConfig.apiKeys')}</Text>
               </Divider>
               {tireConfigs.map(renderConfigField)}
             </>
@@ -163,15 +165,15 @@ const IntegrationConfig = () => {
           {tireGeneralConfigs.length > 0 && (
             <>
               <Divider orientation="left">
-                <Text strong>通用设置</Text>
+                <Text strong>{t('integrationConfig.generalSettings')}</Text>
               </Divider>
               {tireGeneralConfigs.map(renderConfigField)}
             </>
           )}
           {tireConfigs.length === 0 && tireGeneralConfigs.length === 0 && (
             <Alert
-              message="未找到TIRE配置项"
-              description="请先执行 30-system-config.sql 初始化配置数据"
+              message={t('integrationConfig.noConfigItems')}
+              description={t('integrationConfig.initHint')}
               type="warning"
             />
           )}
@@ -182,12 +184,12 @@ const IntegrationConfig = () => {
                 htmlType="submit"
                 icon={<SaveOutlined />}
                 loading={tireSaving}
-              >
-                保存TIRE配置
-              </Button>
-              <Button icon={<ReloadOutlined />} onClick={loadTireConfigs}>
-                刷新
-              </Button>
+                >
+                  {t('integrationConfig.save')}
+                </Button>
+                <Button icon={<ReloadOutlined />} onClick={loadTireConfigs}>
+                  {t('common.refresh')}
+                </Button>
             </Space>
           </Form.Item>
         </Form>

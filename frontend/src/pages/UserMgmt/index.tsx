@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, Table, Button, Modal, Form, Input, Select, Space, Tag, Popconfirm, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import type { ManagedUser, CreateUserRequest, UpdateUserRequest, Tenant } from '@/types';
 import { UserRole } from '@/types';
 import { listUsers, createUser, updateUser, deleteUser } from '@/services/user';
@@ -18,6 +19,7 @@ function getCurrentUserRoles(): string[] {
 }
 
 export default function UserMgmt() {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(false);
@@ -68,7 +70,7 @@ export default function UserMgmt() {
   const handleDelete = async (id: number) => {
     try {
       await deleteUser(id);
-      message.success('用户已删除');
+      message.success(t('userMgmt.messageUserDeleted'));
       fetchData();
     } catch {
       // handled
@@ -88,7 +90,7 @@ export default function UserMgmt() {
         };
         if (values.password) req.password = values.password;
         await updateUser(editingUser.id, req);
-        message.success('用户已更新');
+        message.success(t('userMgmt.messageUserUpdated'));
       } else {
         const req: CreateUserRequest = {
           username: values.username,
@@ -100,7 +102,7 @@ export default function UserMgmt() {
           role: values.role,
         };
         await createUser(req);
-        message.success('用户已创建');
+        message.success(t('userMgmt.messageUserCreated'));
       }
       setModalVisible(false);
       fetchData();
@@ -122,34 +124,34 @@ export default function UserMgmt() {
   }, [tenants]);
 
   const columns = [
-    { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
-    { title: '用户名', dataIndex: 'username', key: 'username' },
-    { title: '显示名', dataIndex: 'displayName', key: 'displayName' },
-    { title: '邮箱', dataIndex: 'email', key: 'email' },
-    { title: '客户ID', dataIndex: 'customerId', key: 'customerId' },
+    { title: t('common.id'), dataIndex: 'id', key: 'id', width: 60 },
+    { title: t('userMgmt.username'), dataIndex: 'username', key: 'username' },
+    { title: t('userMgmt.displayName'), dataIndex: 'displayName', key: 'displayName' },
+    { title: t('common.email'), dataIndex: 'email', key: 'email' },
+    { title: t('common.customerId'), dataIndex: 'customerId', key: 'customerId' },
     {
-      title: '租户', dataIndex: 'tenantId', key: 'tenantId',
+      title: t('common.tenant'), dataIndex: 'tenantId', key: 'tenantId',
       render: (tid: number | null) => tid ? (tenantMap[tid] || `#${tid}`) : '-',
     },
     {
-      title: '角色', dataIndex: 'roles', key: 'roles',
+      title: t('common.role'), dataIndex: 'roles', key: 'roles',
       render: (roles: string[]) => roles?.map(r => (
         <Tag key={r} color={roleColor[r] || 'default'}>{r}</Tag>
       )),
     },
     {
-      title: '状态', dataIndex: 'enabled', key: 'enabled', width: 80,
-      render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? '启用' : '禁用'}</Tag>,
+      title: t('common.status'), dataIndex: 'enabled', key: 'enabled', width: 80,
+      render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? t('common.enabled') : t('common.disabled')}</Tag>,
     },
     {
-      title: '操作', key: 'actions', width: 140,
+      title: t('common.actions'), key: 'actions', width: 140,
       render: (_: unknown, record: ManagedUser) => (
         <Space>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
-          <Popconfirm title="确定删除该用户?" onConfirm={() => handleDelete(record.id)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
+          <Popconfirm title={t('userMgmt.confirmDeleteUser')} onConfirm={() => handleDelete(record.id)}>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>{t('common.delete')}</Button>
           </Popconfirm>
         </Space>
       ),
@@ -162,8 +164,8 @@ export default function UserMgmt() {
 
   return (
     <Card
-      title="用户管理"
-      extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>新建用户</Button>}
+      title={t('userMgmt.title')}
+      extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>{t('userMgmt.createUser')}</Button>}
     >
       <Table
         rowKey="id"
@@ -174,7 +176,7 @@ export default function UserMgmt() {
       />
 
       <Modal
-        title={editingUser ? '编辑用户' : '新建用户'}
+        title={editingUser ? t('userMgmt.editUser') : t('userMgmt.createUser')}
         open={modalVisible}
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
@@ -184,30 +186,30 @@ export default function UserMgmt() {
         <Form form={form} layout="vertical">
           <Form.Item
             name="username"
-            label="用户名"
-            rules={[{ required: !editingUser, message: '请输入用户名' }]}
+            label={t('userMgmt.username')}
+            rules={[{ required: !editingUser, message: t('userMgmt.validationUsernameRequired') }]}
           >
-            <Input placeholder="登录用户名" disabled={!!editingUser} />
+            <Input placeholder={t('userMgmt.placeholderLoginUsername')} disabled={!!editingUser} />
           </Form.Item>
           <Form.Item
             name="password"
-            label={editingUser ? '新密码 (留空不修改)' : '密码'}
-            rules={editingUser ? [] : [{ required: true, message: '请输入密码' }]}
+            label={editingUser ? t('userMgmt.newPasswordOptional') : t('common.password')}
+            rules={editingUser ? [] : [{ required: true, message: t('userMgmt.validationPasswordRequired') }]}
           >
-            <Input.Password placeholder={editingUser ? '留空保持不变' : '输入密码'} />
+            <Input.Password placeholder={editingUser ? t('common.keepEmptyToKeepValue') : t('userMgmt.placeholderEnterPassword')} />
           </Form.Item>
-          <Form.Item name="displayName" label="显示名">
-            <Input placeholder="显示名称" />
+          <Form.Item name="displayName" label={t('userMgmt.displayName')}>
+            <Input placeholder={t('userMgmt.placeholderDisplayName')} />
           </Form.Item>
-          <Form.Item name="email" label="邮箱">
+          <Form.Item name="email" label={t('common.email')}>
             <Input placeholder="user@example.com" />
           </Form.Item>
-          <Form.Item name="customerId" label="客户ID">
-            <Input placeholder="关联的客户标识 (如: demo-customer)" />
+          <Form.Item name="customerId" label={t('common.customerId')}>
+            <Input placeholder={t('userMgmt.placeholderCustomerId')} />
           </Form.Item>
           {isSuperAdmin && !editingUser && (
-            <Form.Item name="tenantId" label="所属租户">
-              <Select allowClear placeholder="选择租户">
+            <Form.Item name="tenantId" label={t('userMgmt.tenantBelonging')}>
+              <Select allowClear placeholder={t('userMgmt.selectTenant')}>
                 {tenants.map(t => (
                   <Select.Option key={t.id} value={t.id}>{t.name} ({t.tenantId})</Select.Option>
                 ))}
@@ -216,8 +218,8 @@ export default function UserMgmt() {
           )}
           <Form.Item
             name="role"
-            label="角色"
-            rules={[{ required: !editingUser, message: '请选择角色' }]}
+            label={t('common.role')}
+            rules={[{ required: !editingUser, message: t('userMgmt.validationRoleRequired') }]}
             initialValue="CUSTOMER_USER"
           >
             <Select>
@@ -227,10 +229,10 @@ export default function UserMgmt() {
             </Select>
           </Form.Item>
           {editingUser && (
-            <Form.Item name="enabled" label="启用状态" initialValue={true}>
+            <Form.Item name="enabled" label={t('userMgmt.enableStatus')} initialValue={true}>
               <Select>
-                <Select.Option value={true}>启用</Select.Option>
-                <Select.Option value={false}>禁用</Select.Option>
+                <Select.Option value={true}>{t('common.enabled')}</Select.Option>
+                <Select.Option value={false}>{t('common.disabled')}</Select.Option>
               </Select>
             </Form.Item>
           )}

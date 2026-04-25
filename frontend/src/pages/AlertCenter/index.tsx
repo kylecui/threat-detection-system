@@ -22,6 +22,7 @@ import {
 } from '@ant-design/icons';
 import { ProTable } from '@ant-design/pro-components';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import { useTranslation } from 'react-i18next';
 import type { Alert, AlertAnalytics } from '@/types';
 import { AlertStatus, AlertSeverity } from '@/types';
 import alertService from '@/services/alert';
@@ -48,21 +49,11 @@ const statusColorMap: Record<string, string> = {
   [AlertStatus.ARCHIVED]: 'default',
 };
 
-/** 状态中文名 */
-const statusLabelMap: Record<string, string> = {
-  [AlertStatus.NEW]: '新建',
-  [AlertStatus.DEDUPLICATED]: '去重',
-  [AlertStatus.ENRICHED]: '已丰富',
-  [AlertStatus.NOTIFIED]: '已通知',
-  [AlertStatus.ESCALATED]: '已升级',
-  [AlertStatus.RESOLVED]: '已解决',
-  [AlertStatus.ARCHIVED]: '已归档',
-};
-
 /**
  * 告警中心页面
  */
 const AlertCenter = () => {
+  const { t } = useTranslation();
   const actionRef = useRef<ActionType>();
   const [analytics, setAnalytics] = useState<AlertAnalytics | null>(null);
   const [resolveModalOpen, setResolveModalOpen] = useState(false);
@@ -83,12 +74,12 @@ const AlertCenter = () => {
     if (!currentAlert) return;
     try {
       await alertService.resolve(currentAlert.id, resolveForm);
-      message.success('告警已解决');
+      message.success(t('alertCenter.messageResolved'));
       setResolveModalOpen(false);
       setResolveForm({ resolution: '', resolvedBy: '' });
       actionRef.current?.reload();
     } catch {
-      message.error('操作失败');
+      message.error(t('common.operationFailed'));
     }
   };
 
@@ -97,12 +88,12 @@ const AlertCenter = () => {
     if (!currentAlert) return;
     try {
       await alertService.assign(currentAlert.id, assignTo);
-      message.success('告警已分配');
+      message.success(t('alertCenter.messageAssigned'));
       setAssignModalOpen(false);
       setAssignTo('');
       actionRef.current?.reload();
     } catch {
-      message.error('操作失败');
+      message.error(t('common.operationFailed'));
     }
   };
 
@@ -111,12 +102,12 @@ const AlertCenter = () => {
     if (!currentAlert) return;
     try {
       await alertService.escalate(currentAlert.id, escalateReason);
-      message.success('告警已升级');
+      message.success(t('alertCenter.messageEscalated'));
       setEscalateModalOpen(false);
       setEscalateReason('');
       actionRef.current?.reload();
     } catch {
-      message.error('操作失败');
+      message.error(t('common.operationFailed'));
     }
   };
 
@@ -124,93 +115,93 @@ const AlertCenter = () => {
   const handleCancelEscalation = async (alert: Alert) => {
     try {
       await alertService.cancelEscalation(alert.id);
-      message.success('已取消升级');
+      message.success(t('alertCenter.messageEscalationCancelled'));
       actionRef.current?.reload();
     } catch {
-      message.error('操作失败');
+      message.error(t('common.operationFailed'));
     }
   };
 
   const columns: ProColumns<Alert>[] = [
     {
-      title: 'ID',
+      title: t('common.id'),
       dataIndex: 'id',
       width: 70,
       search: false,
     },
     {
-      title: '标题',
+      title: t('alertCenter.titleColumn'),
       dataIndex: 'title',
       ellipsis: true,
       width: 200,
       search: false,
     },
     {
-      title: '严重程度',
+      title: t('common.severity'),
       dataIndex: 'severity',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        CRITICAL: { text: '严重', status: 'Error' },
-        HIGH: { text: '高危', status: 'Warning' },
-        MEDIUM: { text: '中危', status: 'Processing' },
-        LOW: { text: '低危', status: 'Default' },
-        INFO: { text: '信息', status: 'Default' },
+        CRITICAL: { text: t('common.severityCritical'), status: 'Error' },
+        HIGH: { text: t('common.severityHighRisk'), status: 'Warning' },
+        MEDIUM: { text: t('common.severityMediumRisk'), status: 'Processing' },
+        LOW: { text: t('common.severityLowRisk'), status: 'Default' },
+        INFO: { text: t('common.severityInfo'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={severityColorMap[record.severity]}>{record.severity}</Tag>
       ),
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        NEW: { text: '新建' },
-        DEDUPLICATED: { text: '去重' },
-        ENRICHED: { text: '已丰富' },
-        NOTIFIED: { text: '已通知' },
-        ESCALATED: { text: '已升级' },
-        RESOLVED: { text: '已解决' },
-        ARCHIVED: { text: '已归档' },
+        NEW: { text: t('alertCenter.statusNew') },
+        DEDUPLICATED: { text: t('alertCenter.statusDeduplicated') },
+        ENRICHED: { text: t('alertCenter.statusEnriched') },
+        NOTIFIED: { text: t('alertCenter.statusNotified') },
+        ESCALATED: { text: t('alertCenter.statusEscalated') },
+        RESOLVED: { text: t('alertCenter.statusResolved') },
+        ARCHIVED: { text: t('alertCenter.statusArchived') },
       },
       render: (_, record) => (
         <Tag color={statusColorMap[record.status]}>
-          {statusLabelMap[record.status] || record.status}
+          {t(`alertCenter.status.${record.status}`, { defaultValue: record.status })}
         </Tag>
       ),
     },
     {
-      title: '攻击者MAC',
+      title: t('alertCenter.attackMac'),
       dataIndex: 'attackMac',
       width: 150,
       search: false,
       render: (mac) => mac ? <code>{mac as string}</code> : '-',
     },
     {
-      title: '威胁分数',
+      title: t('alertCenter.threatScore'),
       dataIndex: 'threatScore',
       width: 100,
       search: false,
       render: (score) => (score as number)?.toFixed(2) || '-',
     },
     {
-      title: '升级等级',
+      title: t('alertCenter.escalationLevel'),
       dataIndex: 'escalationLevel',
       width: 80,
       search: false,
       render: (level) => (level as number) > 0 ? <Tag color="volcano">L{level as number}</Tag> : '-',
     },
     {
-      title: '分配给',
+      title: t('alertCenter.assignedTo'),
       dataIndex: 'assignedTo',
       width: 120,
       search: false,
       render: (val) => val || '-',
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       width: 170,
       valueType: 'dateTime',
@@ -219,7 +210,7 @@ const AlertCenter = () => {
         record.createdAt ? dayjs(record.createdAt).format('YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 220,
       key: 'actions',
       search: false,
@@ -227,7 +218,7 @@ const AlertCenter = () => {
         <Space size="small">
           {record.status !== AlertStatus.RESOLVED && record.status !== AlertStatus.ARCHIVED && (
             <>
-              <Tooltip title="解决">
+              <Tooltip title={t('alertCenter.resolve')}>
                 <Button
                   type="link"
                   size="small"
@@ -238,7 +229,7 @@ const AlertCenter = () => {
                   }}
                 />
               </Tooltip>
-              <Tooltip title="分配">
+              <Tooltip title={t('alertCenter.assign')}>
                 <Button
                   type="link"
                   size="small"
@@ -250,7 +241,7 @@ const AlertCenter = () => {
                 />
               </Tooltip>
               {record.status !== AlertStatus.ESCALATED ? (
-                <Tooltip title="升级">
+                <Tooltip title={t('alertCenter.escalate')}>
                   <Button
                     type="link"
                     size="small"
@@ -263,7 +254,7 @@ const AlertCenter = () => {
                   />
                 </Tooltip>
               ) : (
-                <Tooltip title="取消升级">
+                <Tooltip title={t('alertCenter.cancelEscalation')}>
                   <Button
                     type="link"
                     size="small"
@@ -286,7 +277,7 @@ const AlertCenter = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="总告警数"
+              title={t('alertCenter.totalAlerts')}
               value={analytics?.totalAlerts || 0}
               prefix={<ExclamationCircleOutlined />}
             />
@@ -295,7 +286,7 @@ const AlertCenter = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="已解决"
+              title={t('alertCenter.resolved')}
               value={analytics?.resolvedAlerts || 0}
               valueStyle={{ color: '#3f8600' }}
               prefix={<CheckCircleOutlined />}
@@ -305,7 +296,7 @@ const AlertCenter = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="已升级"
+              title={t('alertCenter.escalated')}
               value={analytics?.escalatedAlerts || 0}
               valueStyle={{ color: '#cf1322' }}
               prefix={<ArrowUpOutlined />}
@@ -315,8 +306,8 @@ const AlertCenter = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="平均解决时间"
-              value={analytics?.averageResolutionTime ? `${Math.round(analytics.averageResolutionTime / 60)}min` : '-'}
+              title={t('alertCenter.avgResolutionTime')}
+              value={analytics?.averageResolutionTime ? `${Math.round(analytics.averageResolutionTime / 60)}${t('common.minuteShort')}` : '-'}
             />
           </Card>
         </Col>
@@ -324,7 +315,7 @@ const AlertCenter = () => {
 
       {/* 告警列表 */}
       <ProTable<Alert>
-        headerTitle="告警列表"
+        headerTitle={t('alertCenter.listTitle')}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -358,27 +349,27 @@ const AlertCenter = () => {
               alertService.getAnalytics().then(setAnalytics).catch(() => {});
             }}
           >
-            刷新
+              {t('common.refresh')}
           </Button>,
         ]}
       />
 
       {/* 解决告警弹窗 */}
       <Modal
-        title="解决告警"
+        title={t('alertCenter.resolveAlert')}
         open={resolveModalOpen}
         onOk={handleResolve}
         onCancel={() => setResolveModalOpen(false)}
-        okText="确认解决"
+        okText={t('alertCenter.confirmResolve')}
       >
         <Space direction="vertical" style={{ width: '100%' }}>
           <Input
-            placeholder="解决方案"
+            placeholder={t('alertCenter.resolution')}
             value={resolveForm.resolution}
             onChange={(e) => setResolveForm({ ...resolveForm, resolution: e.target.value })}
           />
           <Input
-            placeholder="处理人"
+            placeholder={t('alertCenter.resolvedBy')}
             value={resolveForm.resolvedBy}
             onChange={(e) => setResolveForm({ ...resolveForm, resolvedBy: e.target.value })}
           />
@@ -387,14 +378,14 @@ const AlertCenter = () => {
 
       {/* 分配告警弹窗 */}
       <Modal
-        title="分配告警"
+        title={t('alertCenter.assignAlert')}
         open={assignModalOpen}
         onOk={handleAssign}
         onCancel={() => setAssignModalOpen(false)}
-        okText="确认分配"
+        okText={t('alertCenter.confirmAssign')}
       >
         <Input
-          placeholder="分配给"
+          placeholder={t('alertCenter.assignedTo')}
           value={assignTo}
           onChange={(e) => setAssignTo(e.target.value)}
         />
@@ -402,14 +393,14 @@ const AlertCenter = () => {
 
       {/* 升级告警弹窗 */}
       <Modal
-        title="升级告警"
+        title={t('alertCenter.escalateAlert')}
         open={escalateModalOpen}
         onOk={handleEscalate}
         onCancel={() => setEscalateModalOpen(false)}
-        okText="确认升级"
+        okText={t('alertCenter.confirmEscalate')}
       >
         <Input.TextArea
-          placeholder="升级原因"
+          placeholder={t('alertCenter.escalationReason')}
           rows={3}
           value={escalateReason}
           onChange={(e) => setEscalateReason(e.target.value)}

@@ -1,5 +1,6 @@
 import { Card, Tabs } from 'antd';
 import { SettingOutlined, BellOutlined, ApiOutlined, RobotOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import GeneralConfig from './GeneralConfig';
 import NotificationConfig from './NotificationConfig';
 import IntegrationConfig from './IntegrationConfig';
@@ -7,6 +8,7 @@ import AIConfig from './AIConfig';
 import PluginConfig from './PluginConfig';
 
 const Configuration = () => {
+  const { t } = useTranslation();
   const userRoles: string[] = (() => {
     try {
       const user = localStorage.getItem('user');
@@ -24,7 +26,7 @@ const Configuration = () => {
       key: 'general',
       label: (
         <span>
-          <SettingOutlined /> 基础设置
+          <SettingOutlined /> {t('nav.generalConfig')}
         </span>
       ),
       children: <GeneralConfig />,
@@ -33,7 +35,7 @@ const Configuration = () => {
       key: 'notification',
       label: (
         <span>
-          <BellOutlined /> 通知配置
+          <BellOutlined /> {t('nav.notificationConfig')}
         </span>
       ),
       children: <NotificationConfig />,
@@ -44,7 +46,7 @@ const Configuration = () => {
             key: 'integration',
             label: (
               <span>
-                <ApiOutlined /> 集成配置
+                <ApiOutlined /> {t('nav.integrationConfig')}
               </span>
             ),
             children: <IntegrationConfig />,
@@ -57,7 +59,7 @@ const Configuration = () => {
             key: 'ai',
             label: (
               <span>
-                <RobotOutlined /> AI配置
+                <RobotOutlined /> {t('nav.aiConfig')}
               </span>
             ),
             children: <AIConfig />,
@@ -70,7 +72,7 @@ const Configuration = () => {
             key: 'plugin',
             label: (
               <span>
-                <AppstoreOutlined /> 插件配置
+                <AppstoreOutlined /> {t('nav.pluginConfig')}
               </span>
             ),
             children: <PluginConfig />,
@@ -80,7 +82,7 @@ const Configuration = () => {
   ];
 
   return (
-    <Card title="系统设置" bordered={false}>
+    <Card title={t('configuration.title')} bordered={false}>
       <Tabs defaultActiveKey="general" items={tabItems} />
     </Card>
   );

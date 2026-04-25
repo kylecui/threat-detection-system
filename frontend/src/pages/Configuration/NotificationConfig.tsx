@@ -15,10 +15,12 @@ import {
   Divider,
 } from 'antd';
 import { SaveOutlined, ReloadOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import apiClient, { getCustomerId } from '@/services/api';
 import type { SmtpConfig, NotificationConfig as NotificationConfigType } from '@/types';
 
 const NotificationConfig = () => {
+  const { t } = useTranslation();
   const [smtpForm] = Form.useForm();
   const [notifForm] = Form.useForm();
   const [smtpConfig, setSmtpConfig] = useState<SmtpConfig | null>(null);
@@ -79,16 +81,16 @@ const NotificationConfig = () => {
       } else {
         await apiClient.post('/api/notification-config/smtp', values);
       }
-      message.success('SMTP配置已保存');
+      message.success(t('notificationConfig.smtpSaved'));
       loadSmtpConfig();
     } catch {
-      message.error('SMTP配置保存失败');
+      message.error(t('notificationConfig.smtpSaveFailed'));
     }
   };
 
   const handleNotifSave = async (values: Record<string, unknown>) => {
     if (!customerId) {
-      message.warning('请先设置客户ID');
+      message.warning(t('notificationConfig.setCustomerIdFirst'));
       return;
     }
     try {
@@ -96,10 +98,10 @@ const NotificationConfig = () => {
         `/api/v1/customers/${customerId}/notification-config`,
         values
       );
-      message.success('通知偏好已保存');
+      message.success(t('notificationConfig.preferenceSaved'));
       loadNotifConfig();
     } catch {
-      message.error('通知偏好保存失败');
+      message.error(t('notificationConfig.preferenceSaveFailed'));
     }
   };
 
@@ -108,7 +110,7 @@ const NotificationConfig = () => {
       {canManageSmtp && (
         <Card bordered={false} loading={smtpLoading}>
           <Alert
-            message="SMTP配置用于告警邮件通知，请确保SMTP服务器可达"
+            message={t('notificationConfig.smtpAlert')}
             type="info"
             showIcon
             style={{ marginBottom: 24 }}
@@ -122,18 +124,18 @@ const NotificationConfig = () => {
             <Row gutter={16}>
               <Col span={16}>
                 <Form.Item
-                  label="SMTP主机"
+                  label={t('notificationConfig.smtpHost')}
                   name="host"
-                  rules={[{ required: true, message: '请输入SMTP主机' }]}
+                  rules={[{ required: true, message: t('notificationConfig.validationSmtpHost') }]}
                 >
                   <Input placeholder="smtp.example.com" />
                 </Form.Item>
               </Col>
               <Col span={8}>
                 <Form.Item
-                  label="端口"
+                  label={t('common.port')}
                   name="port"
-                  rules={[{ required: true, message: '请输入端口' }]}
+                  rules={[{ required: true, message: t('notificationConfig.validationPort') }]}
                 >
                   <InputNumber min={1} max={65535} placeholder="587" style={{ width: '100%' }} />
                 </Form.Item>
@@ -142,12 +144,12 @@ const NotificationConfig = () => {
 
             <Row gutter={16}>
               <Col span={12}>
-                <Form.Item label="用户名" name="username">
+                <Form.Item label={t('common.username')} name="username">
                   <Input placeholder="user@example.com" />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label="密码" name="password">
+                <Form.Item label={t('common.password')} name="password">
                   <Input.Password placeholder="••••••" />
                 </Form.Item>
               </Col>
@@ -156,44 +158,44 @@ const NotificationConfig = () => {
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
-                  label="发件人地址"
+                  label={t('notificationConfig.fromAddress')}
                   name="fromAddress"
-                  rules={[{ required: true, message: '请输入发件人地址' }]}
+                  rules={[{ required: true, message: t('notificationConfig.validationFromAddress') }]}
                 >
                   <Input placeholder="noreply@example.com" />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label="发件人名称" name="fromName">
-                  <Input placeholder="威胁检测系统" />
+                <Form.Item label={t('notificationConfig.fromName')} name="fromName">
+                  <Input placeholder={t('app.title')} />
                 </Form.Item>
               </Col>
             </Row>
 
-            <Form.Item label="加密方式" name="encryption" initialValue="TLS">
+            <Form.Item label={t('notificationConfig.encryption')} name="encryption" initialValue="TLS">
               <Select
                 options={[
                   { label: 'TLS', value: 'TLS' },
                   { label: 'SSL', value: 'SSL' },
-                  { label: '无加密', value: 'NONE' },
+                  { label: t('notificationConfig.noEncryption'), value: 'NONE' },
                 ]}
               />
             </Form.Item>
 
             <Row gutter={16}>
               <Col span={12}>
-                <Form.Item label="启用" name="enabled" valuePropName="checked" initialValue={true}>
-                  <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                <Form.Item label={t('common.enabled')} name="enabled" valuePropName="checked" initialValue={true}>
+                  <Switch checkedChildren={t('common.enabled')} unCheckedChildren={t('common.disabled')} />
                 </Form.Item>
               </Col>
               <Col span={12}>
                 <Form.Item
-                  label="设为默认"
+                  label={t('notificationConfig.setAsDefault')}
                   name="isDefault"
                   valuePropName="checked"
                   initialValue={true}
                 >
-                  <Switch checkedChildren="是" unCheckedChildren="否" />
+                  <Switch checkedChildren={t('common.yes')} unCheckedChildren={t('common.no')} />
                 </Form.Item>
               </Col>
             </Row>
@@ -201,10 +203,10 @@ const NotificationConfig = () => {
             <Form.Item>
               <Space>
                 <Button type="primary" htmlType="submit" icon={<SaveOutlined />}>
-                  保存SMTP配置
+                  {t('notificationConfig.saveSmtp')}
                 </Button>
                 <Button icon={<ReloadOutlined />} onClick={loadSmtpConfig}>
-                  刷新
+                  {t('common.refresh')}
                 </Button>
               </Space>
             </Form.Item>
@@ -217,14 +219,14 @@ const NotificationConfig = () => {
           <Alert
             type="warning"
             showIcon
-            message="未选择客户"
-            description="通知偏好为客户级别配置。请先在「基础设置」标签页中设置客户ID，或在「客户管理」页面选择客户。"
+            message={t('notificationConfig.noCustomerSelected')}
+            description={t('notificationConfig.noCustomerSelectedDesc')}
             style={{ marginBottom: 24 }}
           />
         ) : (
           <>
             <Alert
-              message={`当前客户: ${customerId} — 通知配置将应用于该客户的所有告警`}
+              message={t('notificationConfig.currentCustomerNotice', { customerId })}
               type="info"
               showIcon
               style={{ marginBottom: 24 }}
@@ -236,22 +238,22 @@ const NotificationConfig = () => {
               style={{ maxWidth: 600 }}
             >
               <Form.Item
-                label="邮件通知"
+                label={t('notificationConfig.emailNotification')}
                 name="emailEnabled"
                 valuePropName="checked"
                 initialValue={false}
               >
-                <Switch checkedChildren="开" unCheckedChildren="关" />
+                <Switch checkedChildren={t('common.on')} unCheckedChildren={t('common.off')} />
               </Form.Item>
 
               <Form.Item
-                label="邮件接收人"
+                label={t('notificationConfig.emailRecipients')}
                 name="emailRecipients"
-                tooltip="多个邮箱地址用回车分隔"
+                tooltip={t('notificationConfig.emailRecipientsTooltip')}
               >
                 <Select
                   mode="tags"
-                  placeholder="输入邮箱地址后按回车"
+                  placeholder={t('notificationConfig.emailRecipientsPlaceholder')}
                   tokenSeparators={[',', ';']}
                 />
               </Form.Item>
@@ -259,23 +261,23 @@ const NotificationConfig = () => {
               <Divider />
 
               <Form.Item
-                label="SMS通知"
+                label={t('notificationConfig.smsNotification')}
                 name="smsEnabled"
                 valuePropName="checked"
                 initialValue={false}
               >
-                <Switch checkedChildren="开" unCheckedChildren="关" />
+                <Switch checkedChildren={t('common.on')} unCheckedChildren={t('common.off')} />
               </Form.Item>
 
               <Divider />
 
               <Form.Item
-                label="Slack通知"
+                label={t('notificationConfig.slackNotification')}
                 name="slackEnabled"
                 valuePropName="checked"
                 initialValue={false}
               >
-                <Switch checkedChildren="开" unCheckedChildren="关" />
+                <Switch checkedChildren={t('common.on')} unCheckedChildren={t('common.off')} />
               </Form.Item>
 
               <Form.Item label="Slack Webhook URL" name="slackWebhookUrl">
@@ -285,12 +287,12 @@ const NotificationConfig = () => {
               <Divider />
 
               <Form.Item
-                label="Webhook通知"
+                label={t('notificationConfig.webhookNotification')}
                 name="webhookEnabled"
                 valuePropName="checked"
                 initialValue={false}
               >
-                <Switch checkedChildren="开" unCheckedChildren="关" />
+                <Switch checkedChildren={t('common.on')} unCheckedChildren={t('common.off')} />
               </Form.Item>
 
               <Form.Item label="Webhook URL" name="webhookUrl">
@@ -300,10 +302,10 @@ const NotificationConfig = () => {
               <Form.Item>
                 <Space>
                   <Button type="primary" htmlType="submit" icon={<SaveOutlined />}>
-                    保存通知偏好
+                    {t('notificationConfig.savePreference')}
                   </Button>
                   <Button icon={<ReloadOutlined />} onClick={loadNotifConfig}>
-                    刷新
+                    {t('common.refresh')}
                   </Button>
                 </Space>
               </Form.Item>
