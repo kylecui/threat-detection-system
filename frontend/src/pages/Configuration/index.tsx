@@ -1,10 +1,11 @@
 import { Card, Tabs } from 'antd';
-import { SettingOutlined, BellOutlined, ApiOutlined, RobotOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { SettingOutlined, BellOutlined, ApiOutlined, RobotOutlined, AppstoreOutlined, TeamOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import GeneralConfig from './GeneralConfig';
 import NotificationConfig from './NotificationConfig';
 import IntegrationConfig from './IntegrationConfig';
 import AIConfig from './AIConfig';
+import ConfigCascading from './ConfigCascading';
 import PluginConfig from './PluginConfig';
 
 const Configuration = () => {
@@ -63,6 +64,19 @@ const Configuration = () => {
               </span>
             ),
             children: <AIConfig />,
+          },
+        ]
+      : []),
+    ...(isAdmin
+      ? [
+          {
+            key: 'cascading',
+            label: (
+              <span>
+                <TeamOutlined /> {t('nav.configCascading')}
+              </span>
+            ),
+            children: <ConfigCascading />,
           },
         ]
       : []),
