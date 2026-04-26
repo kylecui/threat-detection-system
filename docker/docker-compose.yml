@@ -62,6 +62,8 @@ services:
       - ./34-tire-llm-multitenant.sql:/docker-entrypoint-initdb.d/34-tire-llm-multitenant.sql
       - ./35-config-assignments-v2.sql:/docker-entrypoint-initdb.d/35-config-assignments-v2.sql
       - ./36-demo-customer-seed.sql:/docker-entrypoint-initdb.d/36-demo-customer-seed.sql
+      - ./37-config-cascading.sql:/docker-entrypoint-initdb.d/37-config-cascading.sql
+      - ./38-auth-users-customer-fk.sql:/docker-entrypoint-initdb.d/38-auth-users-customer-fk.sql
     networks:
       - threat-detection-network
     healthcheck:

@@ -9,26 +9,20 @@ COPY maven-settings.xml /tmp/maven-settings.xml
 RUN if [ "$USE_CHINA_MIRROR" = "true" ]; then \
       cp /tmp/maven-settings.xml /root/.m2/settings.xml; \
     fi
+# Install parent POM only (non-recursive, no module resolution)
 COPY pom.xml ./pom.xml
+RUN --mount=type=cache,target=/root/.m2/repository \
+    mvn install -N -B -q
 
-# Copy all module POMs for dependency resolution
-COPY services/data-ingestion/pom.xml ./services/data-ingestion/pom.xml
-COPY services/stream-processing/pom.xml ./services/stream-processing/pom.xml
-COPY services/alert-management/pom.xml ./services/alert-management/pom.xml
-COPY services/threat-assessment/pom.xml ./services/threat-assessment/pom.xml
+# Copy only this module's POM for dependency resolution
 COPY services/customer-management/pom.xml ./services/customer-management/pom.xml
-COPY services/threat-intelligence/pom.xml ./services/threat-intelligence/pom.xml
-COPY services/api-gateway/pom.xml ./services/api-gateway/pom.xml
-COPY services/config-server/pom.xml ./services/config-server/pom.xml
+RUN --mount=type=cache,target=/root/.m2/repository \
+    mvn dependency:go-offline -f services/customer-management/pom.xml -B -q || true
 
-# Download dependencies (cached unless POMs change)
-RUN mvn dependency:go-offline -pl services/customer-management -am -B -q || true
-
-# Copy source for this module
+# Copy source and build this module only (direct POM, no reactor)
 COPY services/customer-management/src ./services/customer-management/src
-
-# Build only this module
-RUN mvn clean package -pl services/customer-management -am -DskipTests -B -q
+RUN --mount=type=cache,target=/root/.m2/repository \
+    mvn package -f services/customer-management/pom.xml -DskipTests -B -q
 
 ############################
 # Runtime stage
