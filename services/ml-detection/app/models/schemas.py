@@ -115,6 +115,7 @@ class TrainRequest(BaseModel):
     tiers: List[int] = Field(default=[1, 2, 3])
     aeEpochs: int = Field(default=100, ge=1, le=1000)
     bigruEpochs: int = Field(default=50, ge=1, le=500)
+    customerId: Optional[str] = None
 
 
 class TrainingStatusResponse(BaseModel):

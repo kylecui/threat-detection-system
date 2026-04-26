@@ -253,7 +253,9 @@ def _run_inference_sync(data: AggregatedAttackData) -> MlDetectionResult:
     anomaly_label = "error"
     try:
         features = state.extractor.extract(data)
-        reconstruction, threshold = state.engine.predict(features, data.tier)
+        reconstruction, threshold = state.engine.predict(
+            features, data.tier, customer_id=data.customerId
+        )
         reconstruction_one = (
             reconstruction[0] if reconstruction.ndim == 2 else reconstruction
         )
@@ -414,7 +416,12 @@ async def shadow_stats() -> dict[str, object]:
     }
 
 
-def _run_training(tiers: List[int], ae_epochs: int, bigru_epochs: int) -> None:
+def _run_training(
+    tiers: List[int],
+    ae_epochs: int,
+    bigru_epochs: int,
+    customer_id: Optional[str] = None,
+) -> None:
     from app.training.pipeline import TrainingPipeline
 
     _training_state.results = {}
@@ -426,11 +433,12 @@ def _run_training(tiers: List[int], ae_epochs: int, bigru_epochs: int) -> None:
                 ae_epochs=ae_epochs,
                 bigru_epochs=bigru_epochs,
                 database_url=settings.database_url,
+                customer_id=customer_id,
             )
             _training_state.results[tier] = pipeline.run()
 
         if state.engine:
-            state.engine.reload()
+            state.engine.reload(customer_id=customer_id)
             _sync_model_loaded_metrics()
 
         _training_state.completed_at = datetime.now(timezone.utc).isoformat()
@@ -471,11 +479,15 @@ async def trigger_training(req: TrainRequest = TrainRequest()) -> dict[str, obje
 
     threading.Thread(
         target=_run_training,
-        args=(req.tiers, req.aeEpochs, req.bigruEpochs),
+        args=(req.tiers, req.aeEpochs, req.bigruEpochs, req.customerId),
         daemon=True,
     ).start()
 
-    return {"status": "training_started", "tiers": req.tiers}
+    return {
+        "status": "training_started",
+        "tiers": req.tiers,
+        "customerId": req.customerId,
+    }
 
 
 @app.get("/api/v1/ml/train/status", response_model=TrainingStatusResponse)
@@ -484,18 +496,30 @@ async def training_status() -> TrainingStatusResponse:
 
 
 @app.get("/api/v1/ml/train/data-readiness")
-async def data_readiness() -> dict[str, object]:
+async def data_readiness(customerId: Optional[str] = None) -> dict[str, object]:
     try:
         from app.training.trainer import load_from_postgres
 
         counts: Dict[int, int] = {}
         for tier in (1, 2, 3):
-            features = load_from_postgres(settings.database_url, tier)
+            features = load_from_postgres(
+                settings.database_url, tier, customer_id=customerId
+            )
             counts[tier] = len(features)
-        return {
+        result: dict[str, object] = {
             "ready": any(c > 0 for c in counts.values()),
             "sampleCounts": counts,
-            "minimumRequired": {"autoencoder": 1, "bigru": 20},
+            "minimumRequired": {
+                "autoencoder": 1,
+                "bigru": 20,
+                "perCustomer": settings.per_customer_min_samples,
+            },
         }
+        if customerId is not None:
+            result["customerId"] = customerId
+            result["customerEligible"] = all(
+                c >= settings.per_customer_min_samples for c in counts.values()
+            )
+        return result
     except Exception as exc:
         return {"ready": False, "error": str(exc)}

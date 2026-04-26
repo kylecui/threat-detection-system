@@ -21,7 +21,9 @@ def load_from_csv(path: str) -> np.ndarray:
     return data[:, :12]
 
 
-def load_from_postgres(database_url: str, tier: int) -> np.ndarray:
+def load_from_postgres(
+    database_url: str, tier: int, customer_id: Optional[str] = None
+) -> np.ndarray:
     """Load 12-dim feature vectors from threat_assessments table.
 
     Feature mapping (aligned with actual DB schema):
@@ -39,6 +41,7 @@ def load_from_postgres(database_url: str, tier: int) -> np.ndarray:
      11: hour_cos             — COS(2π × hour / 24)
     """
     import logging
+
     _logger = logging.getLogger(__name__)
 
     try:
@@ -49,8 +52,14 @@ def load_from_postgres(database_url: str, tier: int) -> np.ndarray:
 
     try:
         with conn.cursor() as cursor:
+            where_clauses = ["detection_tier = %s"]
+            params: list = [tier]
+            if customer_id is not None:
+                where_clauses.append("customer_id = %s")
+                params.append(customer_id)
+
             cursor.execute(
-                """
+                f"""
                 SELECT
                     LN(1 + GREATEST(attack_count, 0))::float             AS attack_count_log,
                     GREATEST(unique_ips, 0)::float                       AS unique_ips,
@@ -65,11 +74,11 @@ def load_from_postgres(database_url: str, tier: int) -> np.ndarray:
                     SIN(2 * PI() * EXTRACT(HOUR FROM assessment_time) / 24.0)::float AS hour_sin,
                     COS(2 * PI() * EXTRACT(HOUR FROM assessment_time) / 24.0)::float AS hour_cos
                 FROM threat_assessments
-                WHERE detection_tier = %s
+                WHERE {" AND ".join(where_clauses)}
                 ORDER BY assessment_time DESC
                 LIMIT 10000
                 """,
-                (tier,),
+                tuple(params),
             )
             rows = cursor.fetchall()
     except Exception as e:
@@ -83,7 +92,9 @@ def load_from_postgres(database_url: str, tier: int) -> np.ndarray:
     return np.asarray(rows, dtype=np.float32)
 
 
-def train_autoencoder(features: np.ndarray, epochs: int, batch_size: int = 64) -> ThreatAutoencoder:
+def train_autoencoder(
+    features: np.ndarray, epochs: int, batch_size: int = 64
+) -> ThreatAutoencoder:
     model = ThreatAutoencoder(input_dim=12, latent_dim=6)
     model.train()
 
@@ -118,13 +129,24 @@ def export_onnx(model: ThreatAutoencoder, output_path: Path) -> None:
     )
 
 
-def run_training(tier: int, epochs: int, csv_path: Optional[str], model_dir: str) -> Path:
-    features = load_from_csv(csv_path) if csv_path else load_from_postgres(settings.database_url, tier)
+def run_training(
+    tier: int,
+    epochs: int,
+    csv_path: Optional[str],
+    model_dir: str,
+    customer_id: Optional[str] = None,
+) -> Path:
+    features = (
+        load_from_csv(csv_path)
+        if csv_path
+        else load_from_postgres(settings.database_url, tier, customer_id=customer_id)
+    )
     if len(features) == 0:
         features = np.random.rand(256, 12).astype(np.float32)
 
     model = train_autoencoder(features=features, epochs=epochs)
-    out_path = Path(model_dir) / f"autoencoder_v1_tier{tier}.onnx"
+    subdir = customer_id if customer_id else "global"
+    out_path = Path(model_dir) / subdir / f"autoencoder_v1_tier{tier}.onnx"
     export_onnx(model, out_path)
     return out_path
 
@@ -140,7 +162,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    output = run_training(tier=args.tier, epochs=args.epochs, csv_path=args.csv, model_dir=args.model_dir)
+    output = run_training(
+        tier=args.tier, epochs=args.epochs, csv_path=args.csv, model_dir=args.model_dir
+    )
     print(str(output))
 
 

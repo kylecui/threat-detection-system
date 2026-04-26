@@ -10,7 +10,9 @@ class Settings(BaseSettings):
     model_dir: str = "/app/models"
     ml_confidence_threshold: float = 0.3
     ml_default_weight: float = 1.0
-    database_url: str = "postgresql://threat_user:threat_password@postgres:5432/threat_detection"
+    database_url: str = (
+        "postgresql://threat_user:threat_password@postgres:5432/threat_detection"
+    )
     log_level: str = "INFO"
 
     # BiGRU temporal model settings
@@ -31,6 +33,9 @@ class Settings(BaseSettings):
     # Phase 4A: Alpha optimization
     alpha_search_values: str = "0.3,0.4,0.5,0.6,0.7,0.8"
 
+    # Per-customer model training
+    per_customer_min_samples: int = 200
+
     # Phase 4C: Model hot-reload
     model_watch_enabled: bool = False
     model_watch_interval_seconds: int = 30
@@ -45,7 +50,9 @@ class Settings(BaseSettings):
     shadow_scoring_enabled: bool = False
     challenger_model_dir: str = "/app/models/challenger"
 
-    model_config = SettingsConfigDict(env_file=".env", protected_namespaces=("settings_",))
+    model_config = SettingsConfigDict(
+        env_file=".env", protected_namespaces=("settings_",)
+    )
 
 
 settings = Settings()

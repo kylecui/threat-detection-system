@@ -234,7 +234,9 @@ class MlDetectionConsumer:
         if self.drift_monitor is not None:
             self.drift_monitor.observe(data.tier, features)
 
-        reconstructed, threshold = self.engine.predict(features, data.tier)
+        reconstructed, threshold = self.engine.predict(
+            features, data.tier, customer_id=data.customerId
+        )
         reconstructed_one = (
             reconstructed[0] if reconstructed.ndim == 2 else reconstructed
         )
@@ -260,7 +262,7 @@ class MlDetectionConsumer:
         tier_alpha = self.bigru_ensemble_alpha
         if self.bigru_enabled and self.sequence_buffer is not None:
             tier_alpha = self.engine.get_optimal_alpha(
-                data.tier, self.bigru_ensemble_alpha
+                data.tier, self.bigru_ensemble_alpha, customer_id=data.customerId
             )
             temporal_score, seq_len, ensemble_method, final_score, model_version = (
                 self._apply_bigru(data, features, score, model_version, tier_alpha)
@@ -344,7 +346,9 @@ class MlDetectionConsumer:
         if self.engine.is_bigru_loaded(data.tier) and seq_len >= self.bigru_min_seq_len:
             features_seq = np.expand_dims(padded, axis=0)
             mask_batch = np.expand_dims(mask, axis=0)
-            bigru_pred = self.engine.predict_bigru(features_seq, mask_batch, data.tier)
+            bigru_pred = self.engine.predict_bigru(
+                features_seq, mask_batch, data.tier, customer_id=data.customerId
+            )
 
         temporal_score = bigru_pred if bigru_pred is not None else 0.0
         combined, method = ensemble_anomaly_score(

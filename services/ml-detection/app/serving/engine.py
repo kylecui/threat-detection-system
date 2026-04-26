@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections import OrderedDict
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -9,6 +10,116 @@ import numpy as np
 import onnxruntime as ort
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_CUSTOMER_CACHE_SIZE = 50
+
+
+class _CustomerModelCache:
+    """LRU cache for per-customer ONNX sessions keyed by (customer_id, tier)."""
+
+    def __init__(
+        self, model_dir: Path, max_size: int = _DEFAULT_CUSTOMER_CACHE_SIZE
+    ) -> None:
+        self._model_dir = model_dir
+        self._max_size = max_size
+        self._ae_sessions: OrderedDict[Tuple[str, int], ort.InferenceSession] = (
+            OrderedDict()
+        )
+        self._bigru_sessions: OrderedDict[Tuple[str, int], ort.InferenceSession] = (
+            OrderedDict()
+        )
+        self._thresholds: Dict[Tuple[str, int], float] = {}
+        self._optimal_alphas: Dict[Tuple[str, int], float] = {}
+        self._lock = threading.Lock()
+
+    def _evict_if_needed(self, cache: OrderedDict) -> None:
+        while len(cache) > self._max_size:
+            cache.popitem(last=False)
+
+    def get_ae_session(
+        self, customer_id: str, tier: int, default_threshold: float
+    ) -> Optional[Tuple[ort.InferenceSession, float]]:
+        key = (customer_id, tier)
+        with self._lock:
+            if key in self._ae_sessions:
+                self._ae_sessions.move_to_end(key)
+                return self._ae_sessions[key], self._thresholds.get(
+                    key, default_threshold
+                )
+
+        ae_path = self._model_dir / customer_id / f"autoencoder_v1_tier{tier}.onnx"
+        if not ae_path.exists():
+            return None
+
+        providers = ["CPUExecutionProvider"]
+        sess_options = ort.SessionOptions()
+        session = ort.InferenceSession(
+            str(ae_path), sess_options=sess_options, providers=providers
+        )
+
+        threshold = default_threshold
+        metadata_map = session.get_modelmeta().custom_metadata_map
+        threshold_str = metadata_map.get("threshold")
+        if threshold_str:
+            try:
+                threshold = float(threshold_str)
+            except ValueError:
+                pass
+
+        with self._lock:
+            self._ae_sessions[key] = session
+            self._thresholds[key] = threshold
+            self._evict_if_needed(self._ae_sessions)
+            return session, threshold
+
+    def get_bigru_session(
+        self, customer_id: str, tier: int
+    ) -> Optional[Tuple[ort.InferenceSession, float]]:
+        key = (customer_id, tier)
+        with self._lock:
+            if key in self._bigru_sessions:
+                self._bigru_sessions.move_to_end(key)
+                return self._bigru_sessions[key], self._optimal_alphas.get(key, 0.6)
+
+        bigru_path = self._model_dir / customer_id / f"bigru_v1_tier{tier}.onnx"
+        if not bigru_path.exists():
+            return None
+
+        providers = ["CPUExecutionProvider"]
+        sess_options = ort.SessionOptions()
+        session = ort.InferenceSession(
+            str(bigru_path), sess_options=sess_options, providers=providers
+        )
+
+        alpha = 0.6
+        metadata_map = session.get_modelmeta().custom_metadata_map
+        alpha_str = metadata_map.get("optimal_alpha")
+        if alpha_str:
+            try:
+                alpha = float(alpha_str)
+            except ValueError:
+                pass
+
+        with self._lock:
+            self._bigru_sessions[key] = session
+            self._optimal_alphas[key] = alpha
+            self._evict_if_needed(self._bigru_sessions)
+            return session, alpha
+
+    def invalidate(self, customer_id: Optional[str] = None) -> None:
+        with self._lock:
+            if customer_id is None:
+                self._ae_sessions.clear()
+                self._bigru_sessions.clear()
+                self._thresholds.clear()
+                self._optimal_alphas.clear()
+            else:
+                for tier in (1, 2, 3):
+                    key = (customer_id, tier)
+                    self._ae_sessions.pop(key, None)
+                    self._bigru_sessions.pop(key, None)
+                    self._thresholds.pop(key, None)
+                    self._optimal_alphas.pop(key, None)
 
 
 class InferenceEngine:
@@ -22,12 +133,22 @@ class InferenceEngine:
             3: default_threshold,
         }
         self._model_paths: Dict[int, Path] = {
+            1: self.model_dir / "global" / "autoencoder_v1_tier1.onnx",
+            2: self.model_dir / "global" / "autoencoder_v1_tier2.onnx",
+            3: self.model_dir / "global" / "autoencoder_v1_tier3.onnx",
+        }
+        self._legacy_model_paths: Dict[int, Path] = {
             1: self.model_dir / "autoencoder_v1_tier1.onnx",
             2: self.model_dir / "autoencoder_v1_tier2.onnx",
             3: self.model_dir / "autoencoder_v1_tier3.onnx",
         }
         self._bigru_sessions: Dict[int, ort.InferenceSession] = {}
         self._bigru_model_paths: Dict[int, Path] = {
+            1: self.model_dir / "global" / "bigru_v1_tier1.onnx",
+            2: self.model_dir / "global" / "bigru_v1_tier2.onnx",
+            3: self.model_dir / "global" / "bigru_v1_tier3.onnx",
+        }
+        self._legacy_bigru_paths: Dict[int, Path] = {
             1: self.model_dir / "bigru_v1_tier1.onnx",
             2: self.model_dir / "bigru_v1_tier2.onnx",
             3: self.model_dir / "bigru_v1_tier3.onnx",
@@ -42,11 +163,15 @@ class InferenceEngine:
         self._challenger_thresholds: Dict[int, float] = {}
         self._challenger_optimal_alphas: Dict[int, float] = {}
         self._challenger_dir: Optional[Path] = None
+        self._customer_cache = _CustomerModelCache(self.model_dir)
 
     def load(self) -> None:
         providers = ["CPUExecutionProvider"]
         sess_options = ort.SessionOptions()
-        for tier, path in self._model_paths.items():
+        for tier in (1, 2, 3):
+            path = self._model_paths[tier]
+            if not path.exists():
+                path = self._legacy_model_paths[tier]
             if not path.exists():
                 logger.warning(
                     "Autoencoder model file not found, skipping tier %d: %s", tier, path
@@ -69,7 +194,10 @@ class InferenceEngine:
         self._load_bigru(sess_options, providers)
 
     def _load_bigru(self, sess_options: ort.SessionOptions, providers: list) -> None:
-        for tier, path in self._bigru_model_paths.items():
+        for tier in (1, 2, 3):
+            path = self._bigru_model_paths[tier]
+            if not path.exists():
+                path = self._legacy_bigru_paths[tier]
             if not path.exists():
                 logger.warning(
                     "BiGRU model file not found, skipping tier %d: %s", tier, path
@@ -89,9 +217,11 @@ class InferenceEngine:
                 except ValueError:
                     pass
 
-    def reload(self) -> Dict[str, object]:
+    def reload(self, customer_id: Optional[str] = None) -> Dict[str, object]:
         """Reload all models from disk. Thread-safe via lock."""
         with self._reload_lock:
+            self._customer_cache.invalidate(customer_id)
+
             old_sessions = dict(self._sessions)
             old_bigru = dict(self._bigru_sessions)
 
@@ -120,8 +250,11 @@ class InferenceEngine:
 
     def check_for_updates(self) -> bool:
         """Check if any ONNX files have been modified since last load. Returns True if reload needed."""
-        all_paths = list(self._model_paths.values()) + list(
-            self._bigru_model_paths.values()
+        all_paths = (
+            list(self._model_paths.values())
+            + list(self._legacy_model_paths.values())
+            + list(self._bigru_model_paths.values())
+            + list(self._legacy_bigru_paths.values())
         )
         for path in all_paths:
             if not path.exists():
@@ -144,7 +277,14 @@ class InferenceEngine:
             return bool(self._bigru_sessions)
         return tier in self._bigru_sessions
 
-    def get_optimal_alpha(self, tier: int, default: float = 0.6) -> float:
+    def get_optimal_alpha(
+        self, tier: int, default: float = 0.6, customer_id: Optional[str] = None
+    ) -> float:
+        if customer_id is not None:
+            cached = self._customer_cache.get_bigru_session(customer_id, tier)
+            if cached is not None:
+                _session, alpha = cached
+                return alpha
         return self._optimal_alphas.get(tier, default)
 
     @property
@@ -171,36 +311,60 @@ class InferenceEngine:
             }
         return data
 
-    def predict(self, features: np.ndarray, tier: int) -> Tuple[np.ndarray, float]:
+    def predict(
+        self, features: np.ndarray, tier: int, customer_id: Optional[str] = None
+    ) -> Tuple[np.ndarray, float]:
+        arr = np.asarray(features, dtype=np.float32)
+        if arr.ndim == 1:
+            arr = np.expand_dims(arr, axis=0)
+
+        if customer_id is not None:
+            cached = self._customer_cache.get_ae_session(
+                customer_id, tier, self.default_threshold
+            )
+            if cached is not None:
+                session, threshold = cached
+                input_name = session.get_inputs()[0].name
+                output = session.run(None, {input_name: arr})[0]
+                return np.asarray(output, dtype=np.float32), threshold
+
         if tier not in self._sessions:
-            return features.astype(np.float32), self._thresholds.get(
+            return np.asarray(features, dtype=np.float32), self._thresholds.get(
                 tier, self.default_threshold
             )
 
         session = self._sessions[tier]
         input_name = session.get_inputs()[0].name
-        arr = np.asarray(features, dtype=np.float32)
-        if arr.ndim == 1:
-            arr = np.expand_dims(arr, axis=0)
-
         output = session.run(None, {input_name: arr})[0]
         return np.asarray(output, dtype=np.float32), self._thresholds[tier]
 
     def predict_bigru(
-        self, features_seq: np.ndarray, mask: np.ndarray, tier: int
+        self,
+        features_seq: np.ndarray,
+        mask: np.ndarray,
+        tier: int,
+        customer_id: Optional[str] = None,
     ) -> Optional[float]:
+        feeds_seq = np.asarray(features_seq, dtype=np.float32)
+        feeds_mask = np.asarray(mask, dtype=np.float32)
+
+        if customer_id is not None:
+            cached = self._customer_cache.get_bigru_session(customer_id, tier)
+            if cached is not None:
+                session, _alpha = cached
+                input_names = [inp.name for inp in session.get_inputs()]
+                feeds = {input_names[0]: feeds_seq, input_names[1]: feeds_mask}
+                outputs = session.run(None, feeds)
+                return float(outputs[0].flatten()[0])
+
         if tier not in self._bigru_sessions:
             return None
 
         session = self._bigru_sessions[tier]
         input_names = [inp.name for inp in session.get_inputs()]
-        feeds = {
-            input_names[0]: np.asarray(features_seq, dtype=np.float32),
-            input_names[1]: np.asarray(mask, dtype=np.float32),
-        }
+        feeds = {input_names[0]: feeds_seq, input_names[1]: feeds_mask}
         outputs = session.run(None, feeds)
-        prediction = float(outputs[0].flatten()[0])
-        return prediction
+        return float(outputs[0].flatten()[0])
 
     def load_challenger(self, challenger_dir: str) -> Dict[str, object]:
         """Load challenger models from a separate directory for shadow scoring."""

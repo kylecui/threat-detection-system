@@ -25,7 +25,12 @@ from app.training.bigru_trainer import (
     optimize_alpha,
     train_bigru,
 )
-from app.training.trainer import export_onnx, load_from_csv, load_from_postgres, train_autoencoder
+from app.training.trainer import (
+    export_onnx,
+    load_from_csv,
+    load_from_postgres,
+    train_autoencoder,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +50,7 @@ class TrainingPipeline:
         do_optimize_alpha: bool = True,
         alpha_candidates: Optional[List[float]] = None,
         min_seq_len: int = 4,
+        customer_id: Optional[str] = None,
     ) -> None:
         self.tier = tier
         self.model_dir = Path(model_dir)
@@ -56,20 +62,30 @@ class TrainingPipeline:
         self.alpha_candidates = alpha_candidates or [0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
         self.min_seq_len = min_seq_len
         self.max_seq_len = MAX_SEQ_LENS.get(tier, 32)
+        self.customer_id = customer_id
+        self._model_subdir = self.model_dir / (customer_id if customer_id else "global")
         self._metrics: Dict[str, object] = {}
 
     def run(self) -> Dict[str, object]:
         start = time.monotonic()
-        logger.info("=== Training pipeline started for tier %d ===", self.tier)
+        scope = self.customer_id or "global"
+        logger.info(
+            "=== Training pipeline started for tier %d (scope=%s) ===", self.tier, scope
+        )
 
         features = self._step_extract()
         ae_model, ae_path = self._step_train_autoencoder(features)
-        sequences, masks, labels, groups = self._step_generate_bigru_labels(features, ae_model)
-        bigru_path, optimal_alpha = self._step_train_bigru(sequences, masks, labels, groups)
+        sequences, masks, labels, groups = self._step_generate_bigru_labels(
+            features, ae_model
+        )
+        bigru_path, optimal_alpha = self._step_train_bigru(
+            sequences, masks, labels, groups
+        )
 
         elapsed = time.monotonic() - start
         self._metrics["total_elapsed_seconds"] = round(elapsed, 2)
         self._metrics["tier"] = self.tier
+        self._metrics["customerId"] = self.customer_id
         self._metrics["autoencoder_path"] = str(ae_path)
         self._metrics["bigru_path"] = str(bigru_path)
         if optimal_alpha is not None:
@@ -84,7 +100,9 @@ class TrainingPipeline:
         if self.csv_path:
             features = load_from_csv(self.csv_path)
         else:
-            features = load_from_postgres(self.database_url, self.tier)
+            features = load_from_postgres(
+                self.database_url, self.tier, customer_id=self.customer_id
+            )
 
         if len(features) == 0:
             logger.warning("No data found — generating synthetic training data")
@@ -99,7 +117,7 @@ class TrainingPipeline:
         from app.models.autoencoder import ThreatAutoencoder
 
         model = train_autoencoder(features, self.ae_epochs)
-        out_path = self.model_dir / f"autoencoder_v1_tier{self.tier}.onnx"
+        out_path = self._model_subdir / f"autoencoder_v1_tier{self.tier}.onnx"
         export_onnx(model, out_path)
 
         self._metrics["autoencoder_epochs"] = self.ae_epochs
@@ -161,9 +179,12 @@ class TrainingPipeline:
         logger.info("Step 4: Training BiGRU (%d epochs)", self.bigru_epochs)
 
         if len(sequences) < 20:
-            logger.warning("Insufficient sequences (%d < 20), skipping BiGRU training", len(sequences))
+            logger.warning(
+                "Insufficient sequences (%d < 20), skipping BiGRU training",
+                len(sequences),
+            )
             self._metrics["bigru_skipped"] = True
-            return self.model_dir / f"bigru_v1_tier{self.tier}.onnx", None
+            return self._model_subdir / f"bigru_v1_tier{self.tier}.onnx", None
 
         optimal_alpha: Optional[float] = None
         if self.do_optimize_alpha:
@@ -187,8 +208,10 @@ class TrainingPipeline:
             epochs=self.bigru_epochs,
         )
 
-        out_path = self.model_dir / f"bigru_v1_tier{self.tier}.onnx"
-        export_bigru_onnx(model, out_path, self.max_seq_len, optimal_alpha=optimal_alpha)
+        out_path = self._model_subdir / f"bigru_v1_tier{self.tier}.onnx"
+        export_bigru_onnx(
+            model, out_path, self.max_seq_len, optimal_alpha=optimal_alpha
+        )
         self._metrics["bigru_epochs"] = self.bigru_epochs
         logger.info("BiGRU exported to %s", out_path)
         return out_path, optimal_alpha
@@ -199,7 +222,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tier", type=int, required=True, choices=[1, 2, 3])
     parser.add_argument("--ae-epochs", type=int, default=100)
     parser.add_argument("--bigru-epochs", type=int, default=50)
-    parser.add_argument("--csv", type=str, default=None, help="CSV feature file (skip postgres)")
+    parser.add_argument(
+        "--csv", type=str, default=None, help="CSV feature file (skip postgres)"
+    )
     parser.add_argument("--model-dir", type=str, default=settings.model_dir)
     parser.add_argument("--database-url", type=str, default=None)
     parser.add_argument(
@@ -211,12 +236,16 @@ def parse_args() -> argparse.Namespace:
         default=settings.alpha_search_values,
         help="Comma-separated alpha candidates",
     )
-    parser.add_argument("--all-tiers", action="store_true", help="Train all tiers sequentially")
+    parser.add_argument(
+        "--all-tiers", action="store_true", help="Train all tiers sequentially"
+    )
     return parser.parse_args()
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    )
     args = parse_args()
     alpha_candidates = [float(x) for x in args.alpha_values.split(",")]
 
