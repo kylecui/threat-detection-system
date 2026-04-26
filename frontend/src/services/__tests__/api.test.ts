@@ -113,7 +113,7 @@ describe('api service', () => {
     expect(output.headers.Authorization).toBe('Bearer jwt-token');
     expect(output.headers['X-Tenant-Id']).toBe('888');
     expect(output.headers['X-Customer-Id']).toBe('cust-scope');
-    expect(output.params).toEqual({ customer_id: 'cust-abc' });
+    expect(output.params).toEqual({ customer_id: 'cust-scope' });
   });
 
   test('does not inject customer scope params for skipped URLs', async () => {
@@ -128,7 +128,7 @@ describe('api service', () => {
     expect(output.params).toBeUndefined();
   });
 
-  test('getCustomerId falls back to user payload when customer_id is absent', () => {
+  test('getCustomerId falls back to user payload when scope and legacy keys are absent', () => {
     localStorage.setItem('user', JSON.stringify({ customerId: 'customer-from-user' }));
     expect(getCustomerId()).toBe('customer-from-user');
   });

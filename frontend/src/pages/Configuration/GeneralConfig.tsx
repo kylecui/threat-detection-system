@@ -1,12 +1,12 @@
 import { Card, Form, Input, InputNumber, Button, Switch, message, Alert, Divider, Descriptions, Tag } from 'antd';
 import { UserOutlined, SaveOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { getCustomerId } from '@/services/api';
+import { useScope } from '@/contexts/ScopeContext';
 
 const GeneralConfig = () => {
   const { t } = useTranslation();
   const [basicForm] = Form.useForm();
-  const customerId = getCustomerId();
+  const { effectiveCustomerId: customerId } = useScope();
 
   const handleBasicSave = (values: {
     customer_id: string;

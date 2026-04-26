@@ -33,7 +33,7 @@ import { useTranslation } from 'react-i18next';
 import threatService from '@/services/threat';
 import type { ThreatAssessment, ThreatQueryFilter } from '@/types';
 import { ThreatLevel } from '@/types';
-import { getCustomerId } from '@/services/api';
+import { useScope } from '@/contexts/ScopeContext';
 
 const { Search } = Input;
 const { RangePicker } = DatePicker;
@@ -104,6 +104,7 @@ function triggerBlobDownload(content: string, fileName: string, mimeType: string
 const ThreatList = () => {
   const { t } = useTranslation();
   const screens = Grid.useBreakpoint();
+  const { effectiveCustomerId, initialized } = useScope();
 
   const threatLevelOptions: Array<{ label: string; value: ThreatLevelFilterValue }> = [
     { label: t('common.all'), value: 'ALL' },
@@ -161,10 +162,8 @@ const ThreatList = () => {
   // 查询参数构建
   // ─────────────────────────────────────────────────────────────
   const queryFilter = useMemo<ThreatQueryFilter>(() => {
-    const customerId = getCustomerId();
-
     const filter: ThreatQueryFilter = {
-      customer_id: customerId,
+      customer_id: effectiveCustomerId,
       page: page - 1,
       page_size: pageSize,
       sort_by: 'assessmentTime',
@@ -190,12 +189,13 @@ const ThreatList = () => {
     }
 
     return filter;
-  }, [page, pageSize, threatLevelFilter, timeRangeFilter, debouncedAttackMac]);
+  }, [effectiveCustomerId, page, pageSize, threatLevelFilter, timeRangeFilter, debouncedAttackMac]);
 
   // ─────────────────────────────────────────────────────────────
   // 数据加载
   // ─────────────────────────────────────────────────────────────
   const loadThreats = useCallback(async () => {
+    if (!initialized) return;
     try {
       setLoading(true);
       const response = await threatService.getThreatList(queryFilter);
@@ -206,7 +206,7 @@ const ThreatList = () => {
     } finally {
       setLoading(false);
     }
-  }, [queryFilter]);
+  }, [initialized, queryFilter]);
 
   useEffect(() => {
     loadThreats();

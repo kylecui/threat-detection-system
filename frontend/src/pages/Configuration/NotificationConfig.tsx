@@ -16,7 +16,8 @@ import {
 } from 'antd';
 import { SaveOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import apiClient, { getCustomerId } from '@/services/api';
+import apiClient from '@/services/api';
+import { useScope } from '@/contexts/ScopeContext';
 import type { SmtpConfig, NotificationConfig as NotificationConfigType } from '@/types';
 
 const NotificationConfig = () => {
@@ -28,7 +29,7 @@ const NotificationConfig = () => {
   const [smtpLoading, setSmtpLoading] = useState(false);
   const [notifLoading, setNotifLoading] = useState(false);
 
-  const customerId = getCustomerId();
+  const { effectiveCustomerId: customerId } = useScope();
   const userRoles: string[] = (() => {
     try {
       const user = localStorage.getItem('user');

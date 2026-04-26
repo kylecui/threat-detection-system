@@ -30,7 +30,7 @@ import { useTranslation } from 'react-i18next';
 import type { Customer, Device, DeviceQuota } from '@/types';
 import { CustomerStatus, SubscriptionTier } from '@/types';
 import customerService from '@/services/customer';
-import { getCustomerId } from '@/services/api';
+import { useScope } from '@/contexts/ScopeContext';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -594,7 +594,7 @@ const DevicesTab = () => {
   const [bindModalOpen, setBindModalOpen] = useState(false);
   const [bindForm] = Form.useForm();
 
-  const storedCustomerId = getCustomerId();
+  const { effectiveCustomerId: storedCustomerId } = useScope();
   const [customerId, setCustomerId] = useState<string | undefined>(
     storedCustomerId || undefined,
   );

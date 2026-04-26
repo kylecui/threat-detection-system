@@ -26,7 +26,7 @@ import { useTranslation } from 'react-i18next';
 import type { Statistics, ThreatAssessment, ChartDataPoint, Customer, TopAttacker } from '@/types';
 import { ThreatLevel } from '@/types';
 import threatService from '@/services/threat';
-import { getCustomerId } from '@/services/api';
+import { useScope } from '@/contexts/ScopeContext';
 import EmptyState from '@/components/EmptyState';
 import dayjs from 'dayjs';
 
@@ -35,6 +35,7 @@ type PortDatum = { port: string; count: number };
 const Overview = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { effectiveCustomerId: customerId, initialized } = useScope();
   const [loading, setLoading] = useState(true);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [trendData, setTrendData] = useState<ChartDataPoint[]>([]);
@@ -55,7 +56,6 @@ const Overview = () => {
     : null;
   const isTenantAdmin = !!user?.roles?.includes('TENANT_ADMIN');
   const tenantId = user?.tenantId;
-  const customerId = getCustomerId();
 
   const hoursMap: Record<string, number> = {
     '24h': 24,
@@ -165,10 +165,11 @@ const Overview = () => {
   }, [loadTenantCustomers]);
 
   useEffect(() => {
+    if (!initialized) return;
     loadData();
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
-  }, [loadData]);
+  }, [initialized, loadData]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

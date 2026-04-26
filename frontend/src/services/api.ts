@@ -36,6 +36,8 @@ const apiClient: AxiosInstance = axios.create({
  * 管理员用户无绑定客户时返回 undefined（不注入 customer_id 参数）。
  */
 export function getCustomerId(): string | undefined {
+  const scoped = localStorage.getItem('scope_customer_id');
+  if (scoped && scoped !== '__all__') return scoped;
   const stored = localStorage.getItem('customer_id');
   if (stored) return stored;
   try {
