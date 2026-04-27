@@ -1,6 +1,7 @@
 package com.threatdetection.assessment.service;
 
 import com.threatdetection.assessment.dto.AggregatedAttackData;
+import com.threatdetection.assessment.dto.ScoreBreakdown;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -187,6 +188,129 @@ public class ThreatScoreCalculator {
                      attackRateWeight, mlWeight, data.getTimeWindowSeconds(), rawScore, normalizedScore);
         
         return normalizedScore;
+    }
+
+    /**
+     * 计算威胁评分并返回完整分解数据
+     *
+     * @param data 聚合攻击数据
+     * @return 评分分解信息
+     */
+    public ScoreBreakdown calculateScoreWithBreakdown(AggregatedAttackData data) {
+        if (!data.isValid()) {
+            logger.warn("Invalid aggregated data: {}", data);
+            return ScoreBreakdown.builder()
+                    .baseScore(0.0)
+                    .timeWeight(1.0)
+                    .timeWeightNote("default")
+                    .ipWeight(1.0)
+                    .portWeight(1.0)
+                    .portWeightNote("diversity")
+                    .deviceWeight(1.0)
+                    .attackSourceWeight(1.0)
+                    .honeypotSensitivityWeight(1.0)
+                    .combinedSegmentWeight(1.0)
+                    .attackRateWeight(1.0)
+                    .attackRate(0.0)
+                    .mlWeight(1.0)
+                    .mlEnabled(this.mlWeightEnabled)
+                    .rawScore(0.0)
+                    .normalizedScore(0.0)
+                    .formula("log₁₀(baseScore × timeW × ipW × portW × deviceW × segmentW × rateW × mlW + 1) × 25")
+                    .build();
+        }
+
+        double baseScore = (double) data.getAttackCount()
+                * data.getUniqueIps()
+                * data.getUniquePorts();
+
+        double defaultTimeWeight = calculateTimeWeight(data.getTimestamp());
+        double timeWeight = calculateEnhancedTimeWeight(data.getCustomerId(), data.getTimestamp());
+        String timeWeightNote = Math.abs(timeWeight - defaultTimeWeight) > 0.001 ? "customer override" : "default";
+
+        double ipWeight = calculateIpWeight(data.getUniqueIps());
+        double diversityWeight = calculatePortWeight(data.getUniquePorts());
+        double avgConfigWeight = 1.0;
+        boolean hasCustomerPortConfigPath = data.getPortList() != null
+                && !data.getPortList().isEmpty()
+                && data.getCustomerId() != null;
+        if (hasCustomerPortConfigPath) {
+            Map<Integer, Double> portWeights = customerPortWeightService
+                    .getPortWeightsBatch(data.getCustomerId(), data.getPortList());
+            avgConfigWeight = portWeights.values().stream()
+                    .mapToDouble(Double::doubleValue)
+                    .average()
+                    .orElse(1.0);
+        }
+        double portWeight = hasCustomerPortConfigPath
+                ? Math.max(avgConfigWeight, diversityWeight)
+                : diversityWeight;
+        String portWeightNote = hasCustomerPortConfigPath && avgConfigWeight >= diversityWeight
+                ? "customer config avg"
+                : "diversity";
+
+        double deviceWeight = calculateDeviceWeight(data.getUniqueDevices());
+        double attackRateWeight = calculateAttackRateWeight(data.getAttackCount(), data.getTimeWindowSeconds());
+        int windowSeconds = (data.getTimeWindowSeconds() != null && data.getTimeWindowSeconds() > 0)
+                ? data.getTimeWindowSeconds() : 300;
+        double attackRate = (double) data.getAttackCount() / windowSeconds;
+
+        double attackSourceWeight = 1.0;
+        double honeypotSensitivityWeight = 1.0;
+
+        if (data.getAttackIp() != null && !data.getAttackIp().isEmpty()) {
+            attackSourceWeight = ipSegmentWeightServiceV4.getAttackSourceWeight(data.getCustomerId(), data.getAttackIp());
+            logger.info("V4.0 attack source weight applied: customerId={}, attackIp={}, weight={}",
+                    data.getCustomerId(), data.getAttackIp(), attackSourceWeight);
+        } else {
+            logger.debug("Missing attackIp for V4.0 attack source weight, using default (1.0)");
+        }
+
+        if (data.getMostAccessedHoneypotIp() != null && !data.getMostAccessedHoneypotIp().isEmpty()) {
+            honeypotSensitivityWeight = ipSegmentWeightServiceV4
+                    .getHoneypotSensitivityWeight(data.getCustomerId(), data.getMostAccessedHoneypotIp());
+            logger.info("V4.0 honeypot sensitivity weight applied: customerId={}, honeypotIp={}, weight={}",
+                    data.getCustomerId(), data.getMostAccessedHoneypotIp(), honeypotSensitivityWeight);
+        } else {
+            logger.debug("Missing mostAccessedHoneypotIp for V4.0 honeypot weight, using default (1.0)");
+        }
+
+        double combinedSegmentWeight = attackSourceWeight * honeypotSensitivityWeight;
+        double rawScore = baseScore * timeWeight * ipWeight * portWeight * deviceWeight
+                * combinedSegmentWeight * attackRateWeight;
+
+        double mlWeight = 1.0;
+        if (mlWeightEnabled) {
+            Integer tier = data.getDetectionTier();
+            mlWeight = mlWeightService.getMlWeight(data.getCustomerId(), data.getAttackMac(), tier);
+            rawScore *= mlWeight;
+            logger.info("ML weight applied: customerId={}, attackMac={}, mlWeight={}, mlEnabled=true",
+                    data.getCustomerId(), data.getAttackMac(), mlWeight);
+        } else {
+            logger.debug("ML weight disabled, using default 1.0");
+        }
+
+        double normalizedScore = normalizeThreatScore(rawScore);
+
+        return ScoreBreakdown.builder()
+                .baseScore(baseScore)
+                .timeWeight(timeWeight)
+                .timeWeightNote(timeWeightNote)
+                .ipWeight(ipWeight)
+                .portWeight(portWeight)
+                .portWeightNote(portWeightNote)
+                .deviceWeight(deviceWeight)
+                .attackSourceWeight(attackSourceWeight)
+                .honeypotSensitivityWeight(honeypotSensitivityWeight)
+                .combinedSegmentWeight(combinedSegmentWeight)
+                .attackRateWeight(attackRateWeight)
+                .attackRate(attackRate)
+                .mlWeight(mlWeight)
+                .mlEnabled(this.mlWeightEnabled)
+                .rawScore(rawScore)
+                .normalizedScore(normalizedScore)
+                .formula("log₁₀(baseScore × timeW × ipW × portW × deviceW × segmentW × rateW × mlW + 1) × 25")
+                .build();
     }
     
     /**

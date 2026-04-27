@@ -99,4 +99,9 @@ public class ThreatAssessmentDetailResponse {
      * 缓解建议列表 (动态生成)
      */
     private List<String> mitigationRecommendations;
+
+    /**
+     * 评分计算分解 (开发者模式)
+     */
+    private ScoreBreakdown scoreBreakdown;
 }

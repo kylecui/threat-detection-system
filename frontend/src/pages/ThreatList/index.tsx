@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Card,
+  Collapse,
   DatePicker,
   Descriptions,
   Divider,
@@ -106,6 +107,10 @@ const ThreatList = () => {
   const { t } = useTranslation();
   const screens = Grid.useBreakpoint();
   const { effectiveCustomerId, initialized } = useScope();
+  const isDevMode = useMemo(() => {
+    if (new URLSearchParams(window.location.search).get('dev') === '1') return true;
+    return localStorage.getItem('tds_dev_mode') === 'true';
+  }, []);
 
   const threatLevelOptions: Array<{ label: string; value: ThreatLevelFilterValue }> = [
     { label: t('common.all'), value: 'ALL' },
@@ -709,6 +714,97 @@ const ThreatList = () => {
                 {renderMitigationList(activeThreatDetail.mitigationRecommendations)}
               </Descriptions.Item>
             </Descriptions>
+
+            {isDevMode && activeThreatDetail?.scoreBreakdown && (
+              <Collapse
+                size="small"
+                style={{ marginTop: 8 }}
+                items={[{
+                  key: 'score-breakdown',
+                  label: (
+                    <Space>
+                      <Tag color="purple">{t('threatList.devMode')}</Tag>
+                      <Text strong>{t('threatList.scoreBreakdownTitle')}</Text>
+                    </Space>
+                  ),
+                  children: (
+                    <Descriptions
+                      bordered
+                      column={1}
+                      size="small"
+                      labelStyle={{ width: 220 }}
+                    >
+                      <Descriptions.Item label={t('threatList.breakdownFormula')}>
+                        <Text code>{activeThreatDetail.scoreBreakdown.formula}</Text>
+                      </Descriptions.Item>
+                      <Descriptions.Item label={t('threatList.breakdownBaseScore')}>
+                        <Text strong>
+                          {activeThreatDetail.scoreBreakdown.baseScore.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Text>
+                        <Text type="secondary" style={{ marginLeft: 8 }}>
+                          ({activeThreatDetail.attackCount} × {activeThreatDetail.uniqueIps} × {activeThreatDetail.uniquePorts})
+                        </Text>
+                      </Descriptions.Item>
+                      <Descriptions.Item label={`× ${t('threatList.breakdownTimeWeight')}`}>
+                        {activeThreatDetail.scoreBreakdown.timeWeight.toFixed(2)}
+                        {activeThreatDetail.scoreBreakdown.timeWeightNote && (
+                          <Tag style={{ marginLeft: 8 }}>{activeThreatDetail.scoreBreakdown.timeWeightNote}</Tag>
+                        )}
+                      </Descriptions.Item>
+                      <Descriptions.Item label={`× ${t('threatList.breakdownIpWeight')}`}>
+                        {activeThreatDetail.scoreBreakdown.ipWeight.toFixed(2)}
+                        <Text type="secondary" style={{ marginLeft: 8 }}>
+                          [{activeThreatDetail.uniqueIps} IPs]
+                        </Text>
+                      </Descriptions.Item>
+                      <Descriptions.Item label={`× ${t('threatList.breakdownPortWeight')}`}>
+                        {activeThreatDetail.scoreBreakdown.portWeight.toFixed(2)}
+                        {activeThreatDetail.scoreBreakdown.portWeightNote && (
+                          <Tag style={{ marginLeft: 8 }}>{activeThreatDetail.scoreBreakdown.portWeightNote}</Tag>
+                        )}
+                      </Descriptions.Item>
+                      <Descriptions.Item label={`× ${t('threatList.breakdownDeviceWeight')}`}>
+                        {activeThreatDetail.scoreBreakdown.deviceWeight.toFixed(2)}
+                        <Text type="secondary" style={{ marginLeft: 8 }}>
+                          [{activeThreatDetail.uniqueDevices} {t('threatList.uniqueDevices').toLowerCase()}]
+                        </Text>
+                      </Descriptions.Item>
+                      <Descriptions.Item label={`× ${t('threatList.breakdownAttackSourceWeight')}`}>
+                        {activeThreatDetail.scoreBreakdown.attackSourceWeight.toFixed(2)}
+                      </Descriptions.Item>
+                      <Descriptions.Item label={`× ${t('threatList.breakdownHoneypotWeight')}`}>
+                        {activeThreatDetail.scoreBreakdown.honeypotSensitivityWeight.toFixed(2)}
+                      </Descriptions.Item>
+                      <Descriptions.Item label={`= ${t('threatList.breakdownCombinedSegmentWeight')}`}>
+                        <Text strong>{activeThreatDetail.scoreBreakdown.combinedSegmentWeight.toFixed(2)}</Text>
+                      </Descriptions.Item>
+                      <Descriptions.Item label={`× ${t('threatList.breakdownAttackRateWeight')}`}>
+                        {activeThreatDetail.scoreBreakdown.attackRateWeight.toFixed(2)}
+                        <Text type="secondary" style={{ marginLeft: 8 }}>
+                          [{activeThreatDetail.scoreBreakdown.attackRate.toFixed(2)}/s]
+                        </Text>
+                      </Descriptions.Item>
+                      <Descriptions.Item label={`× ${t('threatList.breakdownMlWeight')}`}>
+                        {activeThreatDetail.scoreBreakdown.mlWeight.toFixed(2)}
+                        <Tag color={activeThreatDetail.scoreBreakdown.mlEnabled ? 'green' : 'default'} style={{ marginLeft: 8 }}>
+                          {activeThreatDetail.scoreBreakdown.mlEnabled ? 'ML ✓' : 'ML ✗'}
+                        </Tag>
+                      </Descriptions.Item>
+                      <Descriptions.Item label={t('threatList.breakdownRawScore')}>
+                        <Text strong>
+                          {activeThreatDetail.scoreBreakdown.rawScore.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Text>
+                      </Descriptions.Item>
+                      <Descriptions.Item label={t('threatList.breakdownNormalizedScore')}>
+                        <Text strong style={{ fontSize: 16 }}>
+                          {activeThreatDetail.scoreBreakdown.normalizedScore.toFixed(2)}
+                        </Text>
+                      </Descriptions.Item>
+                    </Descriptions>
+                  ),
+                }]}
+              />
+            )}
 
             <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
               <PermissionGate requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>

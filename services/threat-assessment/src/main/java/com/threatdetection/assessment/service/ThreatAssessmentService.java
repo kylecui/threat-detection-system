@@ -1,6 +1,7 @@
 package com.threatdetection.assessment.service;
 
 import com.threatdetection.assessment.dto.AggregatedAttackData;
+import com.threatdetection.assessment.dto.ScoreBreakdown;
 import com.threatdetection.assessment.model.ThreatAssessment;
 import com.threatdetection.assessment.repository.ThreatAssessmentRepository;
 import io.micrometer.core.instrument.Counter;
@@ -108,21 +109,16 @@ public class ThreatAssessmentService {
      */
     private ThreatAssessment performAssessment(AggregatedAttackData data) {
         // 1. 计算威胁评分
-        double threatScore = calculator.calculateThreatScore(data);
+        ScoreBreakdown breakdown = calculator.calculateScoreWithBreakdown(data);
+        double threatScore = breakdown.getNormalizedScore();
         
         // 2. 判定威胁等级
         String threatLevel = calculator.determineThreatLevel(threatScore);
         
-        // 3. 计算权重因子 (用于记录和审计)
-        double timeWeight = calculator.calculateEnhancedTimeWeight(data.getCustomerId(), data.getTimestamp());
-        double ipWeight = calculator.calculateIpWeight(data.getUniqueIps());
-        double portWeight = calculator.calculatePortWeight(data.getUniquePorts());
-        double deviceWeight = calculator.calculateDeviceWeight(data.getUniqueDevices());
-        
-        // 4. 生成缓解建议 (简化实现,不调用RecommendationEngine)
+        // 3. 生成缓解建议 (简化实现,不调用RecommendationEngine)
         List<String> recommendations = generateSimpleRecommendations(threatLevel, data);
         
-        // 5. 创建评估记录
+        // 4. 创建评估记录
         ThreatAssessment assessment = new ThreatAssessment();
         assessment.setCustomerId(data.getCustomerId());
         assessment.setAttackMac(data.getAttackMac());
@@ -144,19 +140,19 @@ public class ThreatAssessmentService {
         }
         
         // 设置权重因子
-        assessment.setTimeWeight(timeWeight);
-        assessment.setIpWeight(ipWeight);
-        assessment.setPortWeight(portWeight);
-        assessment.setDeviceWeight(deviceWeight);
-
-        if (mlWeightEnabled) {
-            Integer tier = data.getDetectionTier();
-            double mlWeight = mlWeightService.getMlWeight(data.getCustomerId(), data.getAttackMac(), tier);
-            assessment.setMlWeight(mlWeight);
-        } else {
-            assessment.setMlWeight(1.0);
-        }
+        assessment.setTimeWeight(breakdown.getTimeWeight());
+        assessment.setIpWeight(breakdown.getIpWeight());
+        assessment.setPortWeight(breakdown.getPortWeight());
+        assessment.setDeviceWeight(breakdown.getDeviceWeight());
+        assessment.setMlWeight(breakdown.isMlEnabled() ? breakdown.getMlWeight() : 1.0);
         assessment.setPreMLScore(threatScore);
+        assessment.setBaseScore(breakdown.getBaseScore());
+        assessment.setAttackRateWeight(breakdown.getAttackRateWeight());
+        assessment.setAttackSourceWeight(breakdown.getAttackSourceWeight());
+        assessment.setHoneypotSensitivityWeight(breakdown.getHoneypotSensitivityWeight());
+        assessment.setCombinedSegmentWeight(breakdown.getCombinedSegmentWeight());
+        assessment.setRawScore(breakdown.getRawScore());
+        assessment.setAttackRate(breakdown.getAttackRate());
         
         // 设置缓解建议 (转换为JSON字符串)
         assessment.setMitigationRecommendations(String.join("; ", recommendations));
@@ -167,10 +163,10 @@ public class ThreatAssessmentService {
         assessment.setCreatedAt(Instant.now());
         assessment.setUpdatedAt(Instant.now());
         
-        // 6. 持久化到PostgreSQL
+        // 5. 持久化到PostgreSQL
         ThreatAssessment saved = repository.save(assessment);
         
-        // 7. 统计CRITICAL威胁
+        // 6. 统计CRITICAL威胁
         if ("CRITICAL".equals(threatLevel)) {
             criticalCounter.increment();
             logger.warn("⚠️ CRITICAL threat detected: customerId={}, attackMac={}, score={}",

@@ -42,7 +42,22 @@
     "title": "Threat List",
     "endDate": "End Date",
     "confirmBatchDeleteContent": "Delete {{count}} selected records? This cannot be undone.",
-    "messageLoadDetailFailed": "Failed to load threat detail"
+    "messageLoadDetailFailed": "Failed to load threat detail",
+    "devMode": "Dev Mode",
+    "scoreBreakdownTitle": "Score Calculation Breakdown",
+    "breakdownFormula": "Formula",
+    "breakdownBaseScore": "baseScore (count × IPs × ports)",
+    "breakdownTimeWeight": "timeWeight",
+    "breakdownIpWeight": "ipWeight",
+    "breakdownPortWeight": "portWeight",
+    "breakdownDeviceWeight": "deviceWeight",
+    "breakdownAttackSourceWeight": "attackSourceWeight",
+    "breakdownHoneypotWeight": "honeypotSensitivityWeight",
+    "breakdownCombinedSegmentWeight": "combinedSegmentWeight",
+    "breakdownAttackRateWeight": "attackRateWeight",
+    "breakdownMlWeight": "mlWeight",
+    "breakdownRawScore": "rawScore",
+    "breakdownNormalizedScore": "normalizedScore (final)"
   },
   "notificationConfig": {
     "emailNotification": "Email Notification",

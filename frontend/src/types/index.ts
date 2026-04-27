@@ -77,6 +77,27 @@ export enum IntelSeverity {
 // 威胁评估 (Threat Assessment) - 端口 8083
 // ============================================================
 
+/** Score calculation breakdown (dev mode) */
+export interface ScoreBreakdown {
+  baseScore: number;
+  timeWeight: number;
+  timeWeightNote?: string;
+  ipWeight: number;
+  portWeight: number;
+  portWeightNote?: string;
+  deviceWeight: number;
+  attackSourceWeight: number;
+  honeypotSensitivityWeight: number;
+  combinedSegmentWeight: number;
+  attackRateWeight: number;
+  attackRate: number;
+  mlWeight: number;
+  mlEnabled: boolean;
+  rawScore: number;
+  normalizedScore: number;
+  formula: string;
+}
+
 /** 威胁评估数据 */
 export interface ThreatAssessment {
   id: number;
@@ -95,6 +116,7 @@ export interface ThreatAssessment {
   portRiskScore?: number;
   detectionTier?: number;
   mitigationRecommendations?: string[];
+  scoreBreakdown?: ScoreBreakdown;
 }
 
 /** 攻击事件 */

@@ -432,6 +432,26 @@ public class ThreatQueryService {
         response.setPortRiskScore(assessment.getPortRiskScore());
         response.setDetectionTier(assessment.getDetectionTier());
         response.setMitigationRecommendations(recommendations);
+
+        // Build score breakdown from persisted fields
+        ScoreBreakdown breakdown = ScoreBreakdown.builder()
+                .baseScore(assessment.getBaseScore() != null ? assessment.getBaseScore() : 0.0)
+                .timeWeight(assessment.getTimeWeight() != null ? assessment.getTimeWeight() : 1.0)
+                .ipWeight(assessment.getIpWeight() != null ? assessment.getIpWeight() : 1.0)
+                .portWeight(assessment.getPortWeight() != null ? assessment.getPortWeight() : 1.0)
+                .deviceWeight(assessment.getDeviceWeight() != null ? assessment.getDeviceWeight() : 1.0)
+                .attackSourceWeight(assessment.getAttackSourceWeight() != null ? assessment.getAttackSourceWeight() : 1.0)
+                .honeypotSensitivityWeight(assessment.getHoneypotSensitivityWeight() != null ? assessment.getHoneypotSensitivityWeight() : 1.0)
+                .combinedSegmentWeight(assessment.getCombinedSegmentWeight() != null ? assessment.getCombinedSegmentWeight() : 1.0)
+                .attackRateWeight(assessment.getAttackRateWeight() != null ? assessment.getAttackRateWeight() : 1.0)
+                .attackRate(assessment.getAttackRate() != null ? assessment.getAttackRate() : 0.0)
+                .mlWeight(assessment.getMlWeight() != null ? assessment.getMlWeight() : 1.0)
+                .mlEnabled(assessment.getMlWeight() != null && assessment.getMlWeight() != 1.0)
+                .rawScore(assessment.getRawScore() != null ? assessment.getRawScore() : 0.0)
+                .normalizedScore(assessment.getThreatScore() != null ? assessment.getThreatScore() : 0.0)
+                .formula("log₁₀(baseScore × timeW × ipW × portW × deviceW × segmentW × rateW × mlW + 1) × 25")
+                .build();
+        response.setScoreBreakdown(breakdown);
         return response;
     }
     

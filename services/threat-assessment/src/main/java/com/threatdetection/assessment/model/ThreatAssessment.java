@@ -97,6 +97,27 @@ public class ThreatAssessment {
     @Column(name = "pre_ml_score")
     private Double preMLScore;
 
+    @Column(name = "base_score")
+    private Double baseScore;
+
+    @Column(name = "attack_rate_weight")
+    private Double attackRateWeight;
+
+    @Column(name = "attack_source_weight")
+    private Double attackSourceWeight;
+
+    @Column(name = "honeypot_sensitivity_weight")
+    private Double honeypotSensitivityWeight;
+
+    @Column(name = "combined_segment_weight")
+    private Double combinedSegmentWeight;
+
+    @Column(name = "raw_score")
+    private Double rawScore;
+
+    @Column(name = "attack_rate")
+    private Double attackRate;
+
     // 新增字段 - 攻击源IP
     @Size(max = 45)
     @Column(name = "attack_ip", length = 45)
@@ -193,6 +214,27 @@ public class ThreatAssessment {
 
     public Double getPreMLScore() { return preMLScore; }
     public void setPreMLScore(Double preMLScore) { this.preMLScore = preMLScore; }
+
+    public Double getBaseScore() { return baseScore; }
+    public void setBaseScore(Double baseScore) { this.baseScore = baseScore; }
+
+    public Double getAttackRateWeight() { return attackRateWeight; }
+    public void setAttackRateWeight(Double attackRateWeight) { this.attackRateWeight = attackRateWeight; }
+
+    public Double getAttackSourceWeight() { return attackSourceWeight; }
+    public void setAttackSourceWeight(Double attackSourceWeight) { this.attackSourceWeight = attackSourceWeight; }
+
+    public Double getHoneypotSensitivityWeight() { return honeypotSensitivityWeight; }
+    public void setHoneypotSensitivityWeight(Double honeypotSensitivityWeight) { this.honeypotSensitivityWeight = honeypotSensitivityWeight; }
+
+    public Double getCombinedSegmentWeight() { return combinedSegmentWeight; }
+    public void setCombinedSegmentWeight(Double combinedSegmentWeight) { this.combinedSegmentWeight = combinedSegmentWeight; }
+
+    public Double getRawScore() { return rawScore; }
+    public void setRawScore(Double rawScore) { this.rawScore = rawScore; }
+
+    public Double getAttackRate() { return attackRate; }
+    public void setAttackRate(Double attackRate) { this.attackRate = attackRate; }
 
     public String getAttackIp() { return attackIp; }
     public void setAttackIp(String attackIp) { this.attackIp = attackIp; }

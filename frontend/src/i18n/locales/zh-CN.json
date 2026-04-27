@@ -42,7 +42,22 @@
     "title": "威胁列表",
     "endDate": "结束日期",
     "confirmBatchDeleteContent": "确定删除选中的 {{count}} 条记录吗？此操作不可撤销。",
-    "messageLoadDetailFailed": "加载威胁详情失败"
+    "messageLoadDetailFailed": "加载威胁详情失败",
+    "devMode": "开发者模式",
+    "scoreBreakdownTitle": "评分计算分解",
+    "breakdownFormula": "计算公式",
+    "breakdownBaseScore": "基础分 (次数 × IP数 × 端口数)",
+    "breakdownTimeWeight": "时间权重",
+    "breakdownIpWeight": "IP权重",
+    "breakdownPortWeight": "端口权重",
+    "breakdownDeviceWeight": "设备权重",
+    "breakdownAttackSourceWeight": "攻击源权重",
+    "breakdownHoneypotWeight": "蜜罐敏感度权重",
+    "breakdownCombinedSegmentWeight": "综合段权重",
+    "breakdownAttackRateWeight": "攻击速率权重",
+    "breakdownMlWeight": "ML权重",
+    "breakdownRawScore": "原始分",
+    "breakdownNormalizedScore": "标准化评分 (最终)"
   },
   "notificationConfig": {
     "emailNotification": "邮件通知",
