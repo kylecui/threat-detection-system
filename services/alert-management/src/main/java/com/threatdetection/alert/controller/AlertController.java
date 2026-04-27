@@ -1,5 +1,6 @@
 package com.threatdetection.alert.controller;
 
+import com.threatdetection.alert.dto.GroupedAlertResponse;
 import com.threatdetection.alert.model.*;
 import com.threatdetection.alert.service.alert.AlertService;
 import com.threatdetection.alert.service.alert.AlertStatistics;
@@ -134,6 +135,28 @@ public class AlertController {
         Page<Alert> alerts = alertService.findAlerts(customerId, status, severity, startTime, endTime, pageable);
 
         return ResponseEntity.ok(alerts);
+    }
+
+    /**
+     * 查询分组告警列表
+     */
+    @GetMapping("/grouped")
+    @Operation(summary = "查询分组告警", description = "按攻击MAC分组查询告警")
+    public ResponseEntity<Page<GroupedAlertResponse>> getGroupedAlerts(
+            @Parameter(description = "客户ID") @RequestParam(required = false) String customerId,
+            @Parameter(description = "告警状态") @RequestParam(required = false) String status,
+            @Parameter(description = "页码") @RequestParam(defaultValue = "0") @Min(0) int page,
+            @Parameter(description = "每页大小") @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+
+        logger.info("Querying grouped alerts: customerId={}, status={}, page={}, size={}", customerId, status, page, size);
+
+        try {
+            Page<GroupedAlertResponse> result = alertService.findGroupedAlerts(customerId, status, page, size);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error querying grouped alerts", e);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     /**

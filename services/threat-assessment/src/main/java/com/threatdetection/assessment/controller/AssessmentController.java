@@ -204,6 +204,43 @@ public class AssessmentController {
         }
     }
 
+    @GetMapping("/grouped")
+    @Operation(summary = "Get grouped assessment list",
+            description = "Get threat assessments grouped by attack MAC address")
+    public ResponseEntity<Page<GroupedThreatResponse>> getGroupedAssessments(
+            @Parameter(description = "Customer ID", required = true)
+            @RequestParam(name = "customer_id") String customerId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        logger.info("Querying grouped assessments: customerId={}, page={}, size={}", customerId, page, size);
+
+        try {
+            Page<GroupedThreatResponse> result = threatQueryService.getGroupedAssessmentList(customerId, page, size);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error querying grouped assessments: customerId={}", customerId, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/grouped/tenant")
+    public ResponseEntity<Page<GroupedThreatResponse>> getTenantGroupedAssessments(
+            @RequestParam(name = "customer_ids") List<String> customerIds,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        logger.info("Querying tenant grouped assessments: customerIds={}, page={}, size={}", customerIds, page, size);
+
+        try {
+            Page<GroupedThreatResponse> result = threatQueryService.getTenantGroupedAssessmentList(customerIds, page, size);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error querying tenant grouped assessments: customerIds={}", customerIds, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
     /**
      * 获取威胁统计
      * 

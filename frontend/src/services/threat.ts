@@ -1,6 +1,7 @@
 import apiClient from './api';
 import type {
   ThreatAssessment,
+  GroupedThreatResponse,
   Statistics,
   Customer,
   PaginatedResponse,
@@ -23,6 +24,19 @@ class ThreatService {
   ): Promise<PaginatedResponse<ThreatAssessment>> {
     const response = await apiClient.get<PaginatedResponse<ThreatAssessment>>(
       '/api/v1/assessment/assessments',
+      { params: filter }
+    );
+    return response.data;
+  }
+
+  /**
+   * 获取分组威胁列表
+   */
+  async getGroupedThreats(
+    filter: ThreatQueryFilter
+  ): Promise<PaginatedResponse<GroupedThreatResponse>> {
+    const response = await apiClient.get<PaginatedResponse<GroupedThreatResponse>>(
+      '/api/v1/assessment/grouped',
       { params: filter }
     );
     return response.data;

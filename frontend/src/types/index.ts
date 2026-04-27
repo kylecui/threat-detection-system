@@ -119,6 +119,18 @@ export interface ThreatAssessment {
   scoreBreakdown?: ScoreBreakdown;
 }
 
+/** 按设备分组的威胁评估 */
+export interface GroupedThreatResponse {
+  attackMac: string;
+  customerId: string;
+  maxThreatLevel: string;
+  maxThreatScore: number;
+  assessmentCount: number;
+  latestAssessmentTime: string;
+  totalAttackCount: number;
+  tierCount: number;
+}
+
 /** 攻击事件 */
 export interface AttackEvent {
   attack_mac: string;
@@ -182,6 +194,16 @@ export interface Alert {
   escalationReason?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** 按设备分组的告警 */
+export interface GroupedAlertResponse {
+  attackMac: string;
+  maxSeverity: string;
+  maxThreatScore: number;
+  alertCount: number;
+  unresolvedCount: number;
+  latestAlertTime: string;
 }
 
 /** 告警分析统计 */

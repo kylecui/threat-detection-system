@@ -408,6 +408,24 @@ public class ThreatQueryService {
         List<Object[]> rows = repository.findTopAttackersForCustomers(customerIds, since, safeLimit);
         return rows.stream().map(this::convertToTopAttackerResponse).collect(Collectors.toList());
     }
+
+    /**
+     * 获取按设备分组的威胁评估列表
+     */
+    public Page<GroupedThreatResponse> getGroupedAssessmentList(String customerId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Object[]> rawPage = repository.findGroupedByCustomerId(customerId, pageable);
+        return rawPage.map(this::convertToGroupedResponse);
+    }
+
+    /**
+     * 获取多客户按设备分组的威胁评估列表
+     */
+    public Page<GroupedThreatResponse> getTenantGroupedAssessmentList(List<String> customerIds, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Object[]> rawPage = repository.findGroupedByCustomerIds(customerIds, pageable);
+        return rawPage.map(this::convertToGroupedResponse);
+    }
     
     /**
      * 转换实体到详情响应DTO
@@ -512,6 +530,46 @@ public class ThreatQueryService {
         point.setHighCount(highCount);
         point.setMediumCount(mediumCount);
         return point;
+    }
+
+    private GroupedThreatResponse convertToGroupedResponse(Object[] row) {
+        String attackMac = row[0] != null ? String.valueOf(row[0]) : null;
+        String customerId = row[1] != null ? String.valueOf(row[1]) : null;
+        String maxThreatLevel = row[2] != null ? String.valueOf(row[2]) : null;
+
+        double maxThreatScore;
+        if (row[3] instanceof java.math.BigDecimal bd) {
+            maxThreatScore = bd.doubleValue();
+        } else if (row[3] instanceof Number n) {
+            maxThreatScore = n.doubleValue();
+        } else {
+            maxThreatScore = 0.0;
+        }
+
+        long assessmentCount = row[4] != null ? ((Number) row[4]).longValue() : 0L;
+
+        Instant latestAssessmentTime;
+        if (row[5] instanceof java.sql.Timestamp ts) {
+            latestAssessmentTime = ts.toInstant();
+        } else if (row[5] instanceof Instant inst) {
+            latestAssessmentTime = inst;
+        } else {
+            latestAssessmentTime = null;
+        }
+
+        long totalAttackCount = row[6] != null ? ((Number) row[6]).longValue() : 0L;
+        int tierCount = row[7] != null ? ((Number) row[7]).intValue() : 0;
+
+        return GroupedThreatResponse.builder()
+                .attackMac(attackMac)
+                .customerId(customerId)
+                .maxThreatLevel(maxThreatLevel)
+                .maxThreatScore(maxThreatScore)
+                .assessmentCount(assessmentCount)
+                .latestAssessmentTime(latestAssessmentTime)
+                .totalAttackCount(totalAttackCount)
+                .tierCount(tierCount)
+                .build();
     }
 
     private TopAttackerResponse convertToTopAttackerResponse(Object[] row) {

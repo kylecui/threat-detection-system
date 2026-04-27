@@ -186,4 +186,34 @@ public interface ThreatAssessmentRepository extends JpaRepository<ThreatAssessme
     List<Object[]> findTopAttackersForCustomers(@Param("customerIds") List<String> customerIds,
                                                 @Param("since") Instant since,
                                                 @Param("limit") int limit);
+
+    @Query(value = "SELECT attack_mac, customer_id, " +
+            "MAX(threat_level) as max_threat_level, " +
+            "MAX(threat_score) as max_threat_score, " +
+            "COUNT(*) as assessment_count, " +
+            "MAX(assessment_time) as latest_assessment_time, " +
+            "SUM(attack_count) as total_attack_count, " +
+            "COUNT(DISTINCT detection_tier) as tier_count " +
+            "FROM threat_assessments " +
+            "WHERE customer_id = :customerId " +
+            "GROUP BY attack_mac, customer_id " +
+            "ORDER BY MAX(threat_score) DESC",
+            countQuery = "SELECT COUNT(DISTINCT attack_mac) FROM threat_assessments WHERE customer_id = :customerId",
+            nativeQuery = true)
+    Page<Object[]> findGroupedByCustomerId(@Param("customerId") String customerId, Pageable pageable);
+
+    @Query(value = "SELECT attack_mac, customer_id, " +
+            "MAX(threat_level) as max_threat_level, " +
+            "MAX(threat_score) as max_threat_score, " +
+            "COUNT(*) as assessment_count, " +
+            "MAX(assessment_time) as latest_assessment_time, " +
+            "SUM(attack_count) as total_attack_count, " +
+            "COUNT(DISTINCT detection_tier) as tier_count " +
+            "FROM threat_assessments " +
+            "WHERE customer_id IN (:customerIds) " +
+            "GROUP BY attack_mac, customer_id " +
+            "ORDER BY MAX(threat_score) DESC",
+            countQuery = "SELECT COUNT(DISTINCT attack_mac) FROM threat_assessments WHERE customer_id IN (:customerIds)",
+            nativeQuery = true)
+    Page<Object[]> findGroupedByCustomerIds(@Param("customerIds") List<String> customerIds, Pageable pageable);
 }

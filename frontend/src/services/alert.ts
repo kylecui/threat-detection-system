@@ -1,6 +1,7 @@
 import apiClient from './api';
 import type {
   Alert,
+  GroupedAlertResponse,
   AlertQueryFilter,
   AlertAnalytics,
   NotificationAnalytics,
@@ -18,6 +19,15 @@ class AlertService {
   async getAlerts(filter: AlertQueryFilter): Promise<PaginatedResponse<Alert>> {
     const response = await apiClient.get<PaginatedResponse<Alert>>(
       '/api/v1/alerts',
+      { params: filter }
+    );
+    return response.data;
+  }
+
+  /** 获取分组告警列表 */
+  async getGroupedAlerts(filter: AlertQueryFilter): Promise<PaginatedResponse<GroupedAlertResponse>> {
+    const response = await apiClient.get<PaginatedResponse<GroupedAlertResponse>>(
+      '/api/v1/alerts/grouped',
       { params: filter }
     );
     return response.data;

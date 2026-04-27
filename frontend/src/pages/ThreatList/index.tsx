@@ -13,6 +13,7 @@ import {
   Col,
   Modal,
   Select,
+  Segmented,
   Space,
   Spin,
   Table,
@@ -21,18 +22,20 @@ import {
   message,
 } from 'antd';
 import {
+  AppstoreOutlined,
   DeleteOutlined,
   DownloadOutlined,
   ExclamationCircleOutlined,
   EyeOutlined,
   ReloadOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons';
 import type { TableColumnsType, TableProps } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import threatService from '@/services/threat';
-import type { ThreatAssessment, ThreatQueryFilter } from '@/types';
+import type { GroupedThreatResponse, ThreatAssessment, ThreatQueryFilter } from '@/types';
 import { ThreatLevel } from '@/types';
 import { useScope } from '@/contexts/ScopeContext';
 import PermissionGate from '@/components/PermissionGate';
@@ -132,6 +135,12 @@ const ThreatList = () => {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(DEFAULT_PAGE);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [viewMode, setViewMode] = useState<'detail' | 'grouped'>('detail');
+  const [groupedData, setGroupedData] = useState<GroupedThreatResponse[]>([]);
+  const [groupedTotal, setGroupedTotal] = useState(0);
+  const [groupedLoading, setGroupedLoading] = useState(false);
+  const [expandedMacs, setExpandedMacs] = useState<string[]>([]);
+  const [subRows, setSubRows] = useState<Record<string, ThreatAssessment[]>>({});
 
   // ─────────────────────────────────────────────────────────────
   // 筛选状态
@@ -217,9 +226,33 @@ const ThreatList = () => {
     }
   }, [initialized, queryFilter]);
 
+  const fetchGroupedData = useCallback(async (p = 1, ps = DEFAULT_PAGE_SIZE) => {
+    if (!effectiveCustomerId || !initialized) return;
+    setGroupedLoading(true);
+    try {
+      const result = await threatService.getGroupedThreats({
+        customer_id: effectiveCustomerId,
+        page: p - 1,
+        page_size: ps,
+      });
+      setGroupedData(result.content);
+      setGroupedTotal(result.totalElements);
+    } catch {
+      message.error(t('threatList.messageLoadFailed'));
+    } finally {
+      setGroupedLoading(false);
+    }
+  }, [effectiveCustomerId, initialized, t]);
+
   useEffect(() => {
     loadThreats();
   }, [loadThreats]);
+
+  useEffect(() => {
+    if (viewMode === 'grouped') {
+      void fetchGroupedData();
+    }
+  }, [viewMode, fetchGroupedData]);
 
   // 筛选变更时回到第一页
   useEffect(() => {
@@ -395,6 +428,26 @@ const ThreatList = () => {
     );
   }, [t]);
 
+  const handleExpand = useCallback(async (expanded: boolean, record: GroupedThreatResponse) => {
+    if (!expanded) {
+      setExpandedMacs((prev) => prev.filter((m) => m !== record.attackMac));
+      return;
+    }
+    setExpandedMacs((prev) => (prev.includes(record.attackMac) ? prev : [...prev, record.attackMac]));
+    if (subRows[record.attackMac]) return;
+    try {
+      const result = await threatService.getThreatList({
+        customer_id: record.customerId,
+        attack_mac: record.attackMac,
+        page: 0,
+        page_size: 100,
+      });
+      setSubRows((prev) => ({ ...prev, [record.attackMac]: result.content }));
+    } catch {
+      message.error(t('threatList.messageLoadFailed'));
+    }
+  }, [subRows, t]);
+
   // ─────────────────────────────────────────────────────────────
   // 表格列定义
   // ─────────────────────────────────────────────────────────────
@@ -491,6 +544,58 @@ const ThreatList = () => {
     [handleDelete, renderThreatLevelTag, t],
   );
 
+  const groupedColumns: TableColumnsType<GroupedThreatResponse> = useMemo(() => [
+    {
+      title: t('threatList.attackMac'),
+      dataIndex: 'attackMac',
+      render: (mac: string) => <code>{mac}</code>,
+    },
+    {
+      title: t('threatList.threatLevel'),
+      dataIndex: 'maxThreatLevel',
+      width: 120,
+      render: (level: string) => {
+        const colorMap: Record<string, string> = {
+          CRITICAL: 'red',
+          HIGH: 'orange',
+          MEDIUM: 'gold',
+          LOW: 'blue',
+          INFO: 'default',
+        };
+        return <Tag color={colorMap[level] || 'default'}>{level}</Tag>;
+      },
+    },
+    {
+      title: t('threatList.threatScore'),
+      dataIndex: 'maxThreatScore',
+      width: 120,
+      render: (score: number) => score?.toFixed(2),
+      sorter: (a: GroupedThreatResponse, b: GroupedThreatResponse) => a.maxThreatScore - b.maxThreatScore,
+    },
+    {
+      title: t('threatList.groupedAssessmentCount'),
+      dataIndex: 'assessmentCount',
+      width: 120,
+    },
+    {
+      title: t('threatList.groupedTotalAttacks'),
+      dataIndex: 'totalAttackCount',
+      width: 140,
+      render: (count: number) => count?.toLocaleString(),
+    },
+    {
+      title: t('threatList.groupedTierCount'),
+      dataIndex: 'tierCount',
+      width: 100,
+    },
+    {
+      title: t('threatList.assessmentTime'),
+      dataIndex: 'latestAssessmentTime',
+      width: 180,
+      render: (time: string) => time ? dayjs(time).format('YYYY-MM-DD HH:mm:ss') : '-',
+    },
+  ], [t]);
+
   const rowSelection = useMemo<TableProps<ThreatAssessment>['rowSelection']>(
     () => ({
       selectedRowKeys,
@@ -501,6 +606,15 @@ const ThreatList = () => {
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Segmented
+        value={viewMode}
+        onChange={(val) => setViewMode(val as 'detail' | 'grouped')}
+        options={[
+          { label: t('threatList.detailView'), value: 'detail', icon: <UnorderedListOutlined /> },
+          { label: t('threatList.groupedView'), value: 'grouped', icon: <AppstoreOutlined /> },
+        ]}
+      />
+
       {/* ────────────────────────── 顶部过滤与导出栏 ────────────────────────── */}
       <Card variant="borderless" title={t('threatList.title')}>
         <Space
@@ -552,7 +666,13 @@ const ThreatList = () => {
                 style={{ width: '100%' }}
                 aria-label={t('threatList.refreshAria')}
                 icon={<ReloadOutlined />}
-                onClick={loadThreats}
+                onClick={() => {
+                  if (viewMode === 'grouped') {
+                    void fetchGroupedData();
+                    return;
+                  }
+                  void loadThreats();
+                }}
               >
                 {t('common.refresh')}
               </Button>
@@ -577,7 +697,7 @@ const ThreatList = () => {
                 </Button>
               </Space>
 
-            <Text type="secondary">{t('common.totalItems', { count: total })}</Text>
+            <Text type="secondary">{t('common.totalItems', { count: viewMode === 'grouped' ? groupedTotal : total })}</Text>
           </Space>
 
           {selectedRowKeys.length > 0 && (
@@ -606,30 +726,70 @@ const ThreatList = () => {
             </Card>
           )}
 
-          <Table<ThreatAssessment>
-            columns={columns}
-            dataSource={threats}
-            rowKey="id"
-            loading={loading}
-            rowSelection={rowSelection}
-            scroll={{ x: 1350 }}
-            onRow={(record) => ({
-              onClick: () => openDetailDrawer(record.id),
-              style: { cursor: 'pointer' },
-            })}
-            pagination={{
-              current: page,
-              pageSize,
-              total,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (all) => t('common.totalItems', { count: all }),
-              onChange: (newPage, newPageSize) => {
-                setPage(newPage);
-                setPageSize(newPageSize);
-              },
-            }}
-          />
+          {viewMode === 'detail' && (
+            <Table<ThreatAssessment>
+              columns={columns}
+              dataSource={threats}
+              rowKey="id"
+              loading={loading}
+              rowSelection={rowSelection}
+              scroll={{ x: 1350 }}
+              onRow={(record) => ({
+                onClick: () => openDetailDrawer(record.id),
+                style: { cursor: 'pointer' },
+              })}
+              pagination={{
+                current: page,
+                pageSize,
+                total,
+                showSizeChanger: true,
+                showQuickJumper: true,
+                showTotal: (all) => t('common.totalItems', { count: all }),
+                onChange: (newPage, newPageSize) => {
+                  setPage(newPage);
+                  setPageSize(newPageSize);
+                },
+              }}
+            />
+          )}
+
+          {viewMode === 'grouped' && (
+            <Table<GroupedThreatResponse>
+              rowKey="attackMac"
+              columns={groupedColumns}
+              dataSource={groupedData}
+              loading={groupedLoading}
+              pagination={{
+                total: groupedTotal,
+                defaultPageSize: DEFAULT_PAGE_SIZE,
+                showSizeChanger: true,
+                showTotal: (all) => `${all} ${t('threatList.items')}`,
+                onChange: (p, ps) => {
+                  void fetchGroupedData(p, ps);
+                },
+              }}
+              expandable={{
+                expandedRowKeys: expandedMacs,
+                onExpand: (expanded, record) => {
+                  void handleExpand(expanded, record);
+                },
+                expandedRowRender: (record) => {
+                  const rows = subRows[record.attackMac];
+                  if (!rows) return <Spin size="small" />;
+                  return (
+                    <Table<ThreatAssessment>
+                      rowKey="id"
+                      columns={columns}
+                      dataSource={rows}
+                      pagination={false}
+                      size="small"
+                      scroll={{ x: 1350 }}
+                    />
+                  );
+                },
+              }}
+            />
+          )}
         </Space>
       </Card>
 

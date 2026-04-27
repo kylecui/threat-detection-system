@@ -57,7 +57,12 @@
     "breakdownAttackRateWeight": "attackRateWeight",
     "breakdownMlWeight": "mlWeight",
     "breakdownRawScore": "rawScore",
-    "breakdownNormalizedScore": "normalizedScore (final)"
+    "breakdownNormalizedScore": "normalizedScore (final)",
+    "detailView": "Detail View",
+    "groupedView": "Grouped View",
+    "groupedAssessmentCount": "Assessments",
+    "groupedTotalAttacks": "Total Attacks",
+    "groupedTierCount": "Tiers"
   },
   "notificationConfig": {
     "emailNotification": "Email Notification",
@@ -340,7 +345,11 @@
     "totalAlerts": "Total Alerts",
     "escalationLevel": "Escalation Level",
     "threatScore": "Threat Score",
-    "statusEscalated": "Escalated"
+    "statusEscalated": "Escalated",
+    "detailView": "Detail View",
+    "groupedView": "Grouped View",
+    "groupedAlertCount": "Alerts",
+    "groupedUnresolved": "Unresolved"
   },
   "aiConfig": {
     "globalSaveFailed": "Failed to save global configuration",

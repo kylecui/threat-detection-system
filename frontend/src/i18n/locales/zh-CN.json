@@ -57,7 +57,12 @@
     "breakdownAttackRateWeight": "攻击速率权重",
     "breakdownMlWeight": "ML权重",
     "breakdownRawScore": "原始分",
-    "breakdownNormalizedScore": "标准化评分 (最终)"
+    "breakdownNormalizedScore": "标准化评分 (最终)",
+    "detailView": "详情视图",
+    "groupedView": "分组视图",
+    "groupedAssessmentCount": "评估次数",
+    "groupedTotalAttacks": "总攻击数",
+    "groupedTierCount": "检测层级数"
   },
   "notificationConfig": {
     "emailNotification": "邮件通知",
@@ -340,7 +345,11 @@
     "totalAlerts": "告警总数",
     "escalationLevel": "升级级别",
     "threatScore": "威胁评分",
-    "statusEscalated": "已升级"
+    "statusEscalated": "已升级",
+    "detailView": "详情视图",
+    "groupedView": "分组视图",
+    "groupedAlertCount": "告警数",
+    "groupedUnresolved": "未解决"
   },
   "aiConfig": {
     "globalSaveFailed": "保存全局配置失败",

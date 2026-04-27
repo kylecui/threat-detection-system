@@ -1,11 +1,13 @@
 package com.threatdetection.alert.service.alert;
 
+import com.threatdetection.alert.dto.GroupedAlertResponse;
 import com.threatdetection.alert.model.*;
 import com.threatdetection.alert.repository.AlertRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -234,6 +236,57 @@ public class AlertService {
 
         logger.info("Archived {} old alerts", archivedCount);
         return archivedCount;
+    }
+
+    /**
+     * 获取按设备分组的告警列表
+     */
+    public Page<GroupedAlertResponse> findGroupedAlerts(String customerId, String status, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Object[]> rawPage;
+
+        if (customerId != null && !customerId.isBlank()) {
+            rawPage = alertRepository.findGroupedAlertsByCustomerId(customerId, pageable);
+        } else if (status != null && !status.isBlank()) {
+            rawPage = alertRepository.findGroupedAlertsByStatus(status, pageable);
+        } else {
+            rawPage = alertRepository.findGroupedAlerts(pageable);
+        }
+
+        return rawPage.map(this::convertToGroupedResponse);
+    }
+
+    private GroupedAlertResponse convertToGroupedResponse(Object[] row) {
+        String attackMac = row[0] != null ? String.valueOf(row[0]) : null;
+        String maxSeverity = row[1] != null ? String.valueOf(row[1]) : null;
+
+        double maxThreatScore;
+        if (row[2] instanceof java.math.BigDecimal bd) {
+            maxThreatScore = bd.doubleValue();
+        } else if (row[2] instanceof Number n) {
+            maxThreatScore = n.doubleValue();
+        } else {
+            maxThreatScore = 0.0;
+        }
+
+        long alertCount = row[3] != null ? ((Number) row[3]).longValue() : 0L;
+        long unresolvedCount = row[4] != null ? ((Number) row[4]).longValue() : 0L;
+
+        LocalDateTime latestAlertTime = null;
+        if (row[5] instanceof java.sql.Timestamp ts) {
+            latestAlertTime = ts.toLocalDateTime();
+        } else if (row[5] instanceof LocalDateTime ldt) {
+            latestAlertTime = ldt;
+        }
+
+        return GroupedAlertResponse.builder()
+                .attackMac(attackMac)
+                .maxSeverity(maxSeverity)
+                .maxThreatScore(maxThreatScore)
+                .alertCount(alertCount)
+                .unresolvedCount(unresolvedCount)
+                .latestAlertTime(latestAlertTime)
+                .build();
     }
 
     /**

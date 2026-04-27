@@ -153,8 +153,64 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     @Query(value = "SELECT * FROM alerts WHERE (CAST(metadata AS jsonb) ->> 'customer_id') = :customerId AND status = :status AND severity = :severity",
            nativeQuery = true)
     Page<Alert> findByCustomerIdAndStatusAndSeverity(@Param("customerId") String customerId,
-                                                    @Param("status") String status,
-                                                    @Param("severity") String severity, Pageable pageable);    /**
+                                                     @Param("status") String status,
+                                                     @Param("severity") String severity, Pageable pageable);
+
+    /**
+     * 按攻击MAC分组查询告警 (全局)
+     */
+    @Query(value = "SELECT attack_mac, " +
+            "(CASE MAX(CASE severity WHEN 'CRITICAL' THEN 5 WHEN 'HIGH' THEN 4 WHEN 'MEDIUM' THEN 3 WHEN 'LOW' THEN 2 WHEN 'INFO' THEN 1 ELSE 0 END) " +
+            "WHEN 5 THEN 'CRITICAL' WHEN 4 THEN 'HIGH' WHEN 3 THEN 'MEDIUM' WHEN 2 THEN 'LOW' WHEN 1 THEN 'INFO' ELSE 'INFO' END) as max_severity, " +
+            "MAX(threat_score) as max_threat_score, " +
+            "COUNT(*) as alert_count, " +
+            "COUNT(*) FILTER (WHERE status NOT IN ('RESOLVED', 'ARCHIVED')) as unresolved_count, " +
+            "MAX(created_at) as latest_alert_time " +
+            "FROM alerts " +
+            "WHERE attack_mac IS NOT NULL " +
+            "GROUP BY attack_mac " +
+            "ORDER BY MAX(threat_score) DESC",
+            countQuery = "SELECT COUNT(DISTINCT attack_mac) FROM alerts WHERE attack_mac IS NOT NULL",
+            nativeQuery = true)
+    Page<Object[]> findGroupedAlerts(Pageable pageable);
+
+    /**
+     * 按攻击MAC分组查询告警 (带状态过滤)
+     */
+    @Query(value = "SELECT attack_mac, " +
+            "(CASE MAX(CASE severity WHEN 'CRITICAL' THEN 5 WHEN 'HIGH' THEN 4 WHEN 'MEDIUM' THEN 3 WHEN 'LOW' THEN 2 WHEN 'INFO' THEN 1 ELSE 0 END) " +
+            "WHEN 5 THEN 'CRITICAL' WHEN 4 THEN 'HIGH' WHEN 3 THEN 'MEDIUM' WHEN 2 THEN 'LOW' WHEN 1 THEN 'INFO' ELSE 'INFO' END) as max_severity, " +
+            "MAX(threat_score) as max_threat_score, " +
+            "COUNT(*) as alert_count, " +
+            "COUNT(*) FILTER (WHERE status NOT IN ('RESOLVED', 'ARCHIVED')) as unresolved_count, " +
+            "MAX(created_at) as latest_alert_time " +
+            "FROM alerts " +
+            "WHERE attack_mac IS NOT NULL AND status = :status " +
+            "GROUP BY attack_mac " +
+            "ORDER BY MAX(threat_score) DESC",
+            countQuery = "SELECT COUNT(DISTINCT attack_mac) FROM alerts WHERE attack_mac IS NOT NULL AND status = :status",
+            nativeQuery = true)
+    Page<Object[]> findGroupedAlertsByStatus(@Param("status") String status, Pageable pageable);
+
+    /**
+     * 按攻击MAC分组查询告警 (按客户ID)
+     */
+    @Query(value = "SELECT attack_mac, " +
+            "(CASE MAX(CASE severity WHEN 'CRITICAL' THEN 5 WHEN 'HIGH' THEN 4 WHEN 'MEDIUM' THEN 3 WHEN 'LOW' THEN 2 WHEN 'INFO' THEN 1 ELSE 0 END) " +
+            "WHEN 5 THEN 'CRITICAL' WHEN 4 THEN 'HIGH' WHEN 3 THEN 'MEDIUM' WHEN 2 THEN 'LOW' WHEN 1 THEN 'INFO' ELSE 'INFO' END) as max_severity, " +
+            "MAX(threat_score) as max_threat_score, " +
+            "COUNT(*) as alert_count, " +
+            "COUNT(*) FILTER (WHERE status NOT IN ('RESOLVED', 'ARCHIVED')) as unresolved_count, " +
+            "MAX(created_at) as latest_alert_time " +
+            "FROM alerts " +
+            "WHERE attack_mac IS NOT NULL AND (CAST(metadata AS jsonb) ->> 'customer_id') = :customerId " +
+            "GROUP BY attack_mac " +
+            "ORDER BY MAX(threat_score) DESC",
+            countQuery = "SELECT COUNT(DISTINCT attack_mac) FROM alerts WHERE attack_mac IS NOT NULL AND (CAST(metadata AS jsonb) ->> 'customer_id') = :customerId",
+            nativeQuery = true)
+    Page<Object[]> findGroupedAlertsByCustomerId(@Param("customerId") String customerId, Pageable pageable);
+
+    /**
      * 查找相似告警（用于智能去重）
      */
     @Query("SELECT a FROM Alert a WHERE a.title LIKE %:titleKeyword% AND a.createdAt > :since")
