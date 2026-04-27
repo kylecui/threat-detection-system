@@ -36,6 +36,7 @@ import type { ThreatAssessment, ThreatQueryFilter } from '@/types';
 import { ThreatLevel } from '@/types';
 import { useScope } from '@/contexts/ScopeContext';
 import PermissionGate from '@/components/PermissionGate';
+import { usePermission } from '@/hooks/usePermission';
 
 const { Search } = Input;
 const { RangePicker } = DatePicker;
@@ -107,10 +108,12 @@ const ThreatList = () => {
   const { t } = useTranslation();
   const screens = Grid.useBreakpoint();
   const { effectiveCustomerId, initialized } = useScope();
+  const { isSuperAdmin } = usePermission();
   const isDevMode = useMemo(() => {
+    if (!isSuperAdmin) return false;
     if (new URLSearchParams(window.location.search).get('dev') === '1') return true;
     return localStorage.getItem('tds_dev_mode') === 'true';
-  }, []);
+  }, [isSuperAdmin]);
 
   const threatLevelOptions: Array<{ label: string; value: ThreatLevelFilterValue }> = [
     { label: t('common.all'), value: 'ALL' },
