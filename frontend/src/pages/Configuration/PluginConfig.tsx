@@ -26,6 +26,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { getConfigsByCategory, batchUpdateConfigs } from '@/services/config';
+import { usePermission } from '@/hooks/usePermission';
 import {
   listTirePlugins,
   createTirePlugin,
@@ -51,15 +52,7 @@ const PluginConfig = () => {
   const [customPluginModalOpen, setCustomPluginModalOpen] = useState(false);
   const [editingPlugin, setEditingPlugin] = useState<TireCustomPlugin | null>(null);
 
-  const userRoles: string[] = (() => {
-    try {
-      const user = localStorage.getItem('user');
-      return user ? JSON.parse(user).roles || [] : [];
-    } catch { return []; }
-  })();
-  const isSuperAdmin = userRoles.includes('SUPER_ADMIN');
-  const isTenantAdmin = userRoles.includes('TENANT_ADMIN');
-  const isAdmin = isSuperAdmin || isTenantAdmin;
+  const { isSuperAdmin, isAdminRole: isAdmin } = usePermission();
 
   const loadPluginConfigs = useCallback(async () => {
     if (!isSuperAdmin) return;

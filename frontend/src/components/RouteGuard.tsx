@@ -18,7 +18,7 @@ export default function RouteGuard({ children, requiredRoles }: RouteGuardProps)
     const userRoles = user?.roles ?? [];
     const isSuperAdmin = userRoles.includes('SUPER_ADMIN');
     if (!isSuperAdmin && !requiredRoles.some((r) => userRoles.includes(r))) {
-      return <Navigate to="/dashboard" replace />;
+      return <Navigate to="/overview" replace />;
     }
   }
 

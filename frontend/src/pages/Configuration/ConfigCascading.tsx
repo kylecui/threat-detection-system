@@ -23,6 +23,7 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
+import { usePermission } from '@/hooks/usePermission';
 import {
   addGroupMember,
   batchAssignLockMode,
@@ -73,17 +74,7 @@ const ConfigCascading = () => {
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [batchSubmitting, setBatchSubmitting] = useState(false);
 
-  const userRoles: string[] = (() => {
-    try {
-      const user = localStorage.getItem('user');
-      return user ? JSON.parse(user).roles || [] : [];
-    } catch {
-      return [];
-    }
-  })();
-  const isSuperAdmin = userRoles.includes('SUPER_ADMIN');
-  const isTenantAdmin = userRoles.includes('TENANT_ADMIN');
-  const isAdmin = isSuperAdmin || isTenantAdmin;
+  const { isAdminRole: isAdmin } = usePermission();
 
   const lockModeLabel = (mode: LockMode) => {
     if (mode === 'inherit_only') return t('configCascading.lockModeInheritOnly');

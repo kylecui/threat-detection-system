@@ -34,6 +34,7 @@ import threatService from '@/services/threat';
 import type { ThreatAssessment, ThreatQueryFilter } from '@/types';
 import { ThreatLevel } from '@/types';
 import { useScope } from '@/contexts/ScopeContext';
+import PermissionGate from '@/components/PermissionGate';
 
 const { Search } = Input;
 const { RangePicker } = DatePicker;
@@ -462,18 +463,20 @@ const ThreatList = () => {
         fixed: 'right',
         width: 120,
         render: (_, record) => (
-          <Button
-            type="link"
-            danger
-            aria-label={t('threatList.deleteThreatRecordAria', { id: record.id })}
-            icon={<DeleteOutlined />}
-            onClick={(event) => {
-              event.stopPropagation();
-              handleDelete(record.id);
-            }}
-          >
-            {t('common.delete')}
-          </Button>
+          <PermissionGate requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+            <Button
+              type="link"
+              danger
+              aria-label={t('threatList.deleteThreatRecordAria', { id: record.id })}
+              icon={<DeleteOutlined />}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleDelete(record.id);
+              }}
+            >
+              {t('common.delete')}
+            </Button>
+          </PermissionGate>
         ),
       },
     ],
@@ -579,14 +582,16 @@ const ThreatList = () => {
                   {t('threatList.selected')} <Text strong>{selectedRowKeys.length}</Text> {t('threatList.items')}
                 </Text>
                 <Space>
-                  <Button
-                    danger
-                    aria-label={t('threatList.batchDeleteAria')}
-                    icon={<DeleteOutlined />}
-                    onClick={handleBatchDelete}
-                  >
-                    {t('threatList.batchDelete')}
-                  </Button>
+                  <PermissionGate requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+                    <Button
+                      danger
+                      aria-label={t('threatList.batchDeleteAria')}
+                      icon={<DeleteOutlined />}
+                      onClick={handleBatchDelete}
+                    >
+                      {t('threatList.batchDelete')}
+                    </Button>
+                  </PermissionGate>
                   <Button onClick={() => setSelectedRowKeys([])}>{t('threatList.clearSelection')}</Button>
                 </Space>
               </Space>
@@ -706,14 +711,16 @@ const ThreatList = () => {
             </Descriptions>
 
             <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
-              <Button
-                danger
-                aria-label={t('threatList.deleteThreatRecordAria', { id: activeThreatDetail.id })}
-                icon={<DeleteOutlined />}
-                onClick={() => handleDelete(activeThreatDetail.id)}
-              >
-                {t('threatList.deleteThisRecord')}
-              </Button>
+              <PermissionGate requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+                <Button
+                  danger
+                  aria-label={t('threatList.deleteThreatRecordAria', { id: activeThreatDetail.id })}
+                  icon={<DeleteOutlined />}
+                  onClick={() => handleDelete(activeThreatDetail.id)}
+                >
+                  {t('threatList.deleteThisRecord')}
+                </Button>
+              </PermissionGate>
             </Space>
           </Space>
         )}

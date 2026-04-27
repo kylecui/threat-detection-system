@@ -20,6 +20,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { getConfigsByCategory, batchUpdateConfigs } from '@/services/config';
+import { usePermission } from '@/hooks/usePermission';
 import type { SystemConfig } from '@/types';
 
 const { Text } = Typography;
@@ -33,13 +34,7 @@ const IntegrationConfig = () => {
   const [tireSaving, setTireSaving] = useState(false);
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
 
-  const userRoles: string[] = (() => {
-    try {
-      const user = localStorage.getItem('user');
-      return user ? JSON.parse(user).roles || [] : [];
-    } catch { return []; }
-  })();
-  const isSuperAdmin = userRoles.includes('SUPER_ADMIN');
+  const { isSuperAdmin } = usePermission();
 
   const loadTireConfigs = useCallback(async () => {
     if (!isSuperAdmin) return;

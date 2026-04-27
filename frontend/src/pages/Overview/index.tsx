@@ -27,6 +27,8 @@ import type { Statistics, ThreatAssessment, ChartDataPoint, Customer, TopAttacke
 import { ThreatLevel } from '@/types';
 import threatService from '@/services/threat';
 import { useScope } from '@/contexts/ScopeContext';
+import { usePermission } from '@/hooks/usePermission';
+import { useAuth } from '@/contexts/AuthContext';
 import EmptyState from '@/components/EmptyState';
 import dayjs from 'dayjs';
 
@@ -46,15 +48,8 @@ const Overview = () => {
   const [tenantCustomers, setTenantCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<string>('__all__');
 
-  const userRaw = localStorage.getItem('user');
-  const user = userRaw
-    ? (JSON.parse(userRaw) as {
-        roles?: string[];
-        customerId?: string;
-        tenantId?: number;
-      })
-    : null;
-  const isTenantAdmin = !!user?.roles?.includes('TENANT_ADMIN');
+  const { user } = useAuth();
+  const { isTenantAdmin } = usePermission();
   const tenantId = user?.tenantId;
 
   const hoursMap: Record<string, number> = {

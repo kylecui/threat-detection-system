@@ -31,6 +31,7 @@ import type { Customer, Device, DeviceQuota } from '@/types';
 import { CustomerStatus, SubscriptionTier } from '@/types';
 import customerService from '@/services/customer';
 import { useScope } from '@/contexts/ScopeContext';
+import PermissionGate from '@/components/PermissionGate';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -252,18 +253,20 @@ const CustomersTab = () => {
       search: false,
       render: (_, record) => (
         <Space size="small">
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => {
-              setCurrentCustomer(record);
-              editForm.setFieldsValue(record);
-              setEditModalOpen(true);
-            }}
-          >
-            {t('common.edit')}
-          </Button>
+          <PermissionGate requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => {
+                setCurrentCustomer(record);
+                editForm.setFieldsValue(record);
+                setEditModalOpen(true);
+              }}
+            >
+              {t('common.edit')}
+            </Button>
+          </PermissionGate>
           <Button
             type="link"
             size="small"
@@ -276,18 +279,20 @@ const CustomersTab = () => {
           >
             {t('customersDevices.devices')}
           </Button>
-          <Popconfirm
-            title={t('customersDevices.confirmDeleteCustomer')}
-            onConfirm={() => handleDelete(record.customerId)}
-          >
-            <Button
-              type="link"
-              size="small"
-              danger
-              aria-label={t('customersDevices.deleteCustomerAria', { customerId: record.customerId })}
-              icon={<DeleteOutlined />}
-            />
-          </Popconfirm>
+          <PermissionGate requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+            <Popconfirm
+              title={t('customersDevices.confirmDeleteCustomer')}
+              onConfirm={() => handleDelete(record.customerId)}
+            >
+              <Button
+                type="link"
+                size="small"
+                danger
+                aria-label={t('customersDevices.deleteCustomerAria', { customerId: record.customerId })}
+                icon={<DeleteOutlined />}
+              />
+            </Popconfirm>
+          </PermissionGate>
         </Space>
       ),
     },
@@ -326,31 +331,35 @@ const CustomersTab = () => {
       key: 'actions',
       render: (_: unknown, record: Device) => (
         <Space size="small">
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => {
-              setCurrentDevice(record);
-              editDeviceForm.setFieldsValue({
-                description: record.description,
-                isActive: record.isActive !== false,
-              });
-              setEditDeviceModalOpen(true);
-            }}
-          />
-          <Popconfirm
-            title={t('customersDevices.confirmUnbind')}
-            onConfirm={() => handleDeleteDevice(record.devSerial)}
-          >
+          <PermissionGate requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
             <Button
               type="link"
               size="small"
-              danger
-              aria-label={t('customersDevices.deleteDeviceAria', { devSerial: record.devSerial })}
-              icon={<DeleteOutlined />}
+              icon={<EditOutlined />}
+              onClick={() => {
+                setCurrentDevice(record);
+                editDeviceForm.setFieldsValue({
+                  description: record.description,
+                  isActive: record.isActive !== false,
+                });
+                setEditDeviceModalOpen(true);
+              }}
             />
-          </Popconfirm>
+          </PermissionGate>
+          <PermissionGate requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+            <Popconfirm
+              title={t('customersDevices.confirmUnbind')}
+              onConfirm={() => handleDeleteDevice(record.devSerial)}
+            >
+              <Button
+                type="link"
+                size="small"
+                danger
+                aria-label={t('customersDevices.deleteDeviceAria', { devSerial: record.devSerial })}
+                icon={<DeleteOutlined />}
+              />
+            </Popconfirm>
+          </PermissionGate>
         </Space>
       ),
     },
@@ -434,17 +443,18 @@ const CustomersTab = () => {
         pagination={{ defaultPageSize: 20 }}
         search={{ labelWidth: 'auto' }}
         toolBarRender={() => [
-          <Button
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              createForm.resetFields();
-              setCreateModalOpen(true);
-            }}
-          >
-            {t('customersDevices.createCustomer')}
-          </Button>,
+          <PermissionGate key="create" requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                createForm.resetFields();
+                setCreateModalOpen(true);
+              }}
+            >
+              {t('customersDevices.createCustomer')}
+            </Button>
+          </PermissionGate>,
           <Button
             key="refresh"
             icon={<ReloadOutlined />}
@@ -486,24 +496,28 @@ const CustomersTab = () => {
         width={800}
         extra={
           <Space>
-            <Button
-              size="small"
-              icon={<SyncOutlined />}
-              onClick={handleSyncDevices}
-            >
-              {t('customersDevices.sync')}
-            </Button>
-            <Button
-              type="primary"
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                bindDeviceForm.resetFields();
-                setBindDeviceModalOpen(true);
-              }}
-            >
-              {t('customersDevices.bindDevice')}
-            </Button>
+            <PermissionGate requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+              <Button
+                size="small"
+                icon={<SyncOutlined />}
+                onClick={handleSyncDevices}
+              >
+                {t('customersDevices.sync')}
+              </Button>
+            </PermissionGate>
+            <PermissionGate requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+              <Button
+                type="primary"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  bindDeviceForm.resetFields();
+                  setBindDeviceModalOpen(true);
+                }}
+              >
+                {t('customersDevices.bindDevice')}
+              </Button>
+            </PermissionGate>
           </Space>
         }
       >
@@ -706,14 +720,16 @@ const DevicesTab = () => {
       valueType: 'option',
       render: (_, record) => (
         <Space>
-          <Popconfirm
-            title={t('customersDevices.confirmUnbindDevice')}
-            onConfirm={() => handleUnbind(record.devSerial)}
-          >
-            <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-              {t('customersDevices.unbind')}
-            </Button>
-          </Popconfirm>
+          <PermissionGate requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+            <Popconfirm
+              title={t('customersDevices.confirmUnbindDevice')}
+              onConfirm={() => handleUnbind(record.devSerial)}
+            >
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                {t('customersDevices.unbind')}
+              </Button>
+            </Popconfirm>
+          </PermissionGate>
         </Space>
       ),
     },
@@ -773,14 +789,15 @@ const DevicesTab = () => {
               >
                 {t('common.refresh')}
               </Button>,
-              <Button
-                key="bind"
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => setBindModalOpen(true)}
-              >
-                {t('customersDevices.bindDevice')}
-              </Button>,
+              <PermissionGate key="bind" requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => setBindModalOpen(true)}
+                >
+                  {t('customersDevices.bindDevice')}
+                </Button>
+              </PermissionGate>,
             ]}
             pagination={{ defaultPageSize: 20 }}
           />

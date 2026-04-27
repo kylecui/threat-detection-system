@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { Tenant, CreateTenantRequest, UpdateTenantRequest } from '@/types';
 import { TenantStatus } from '@/types';
 import { listTenants, createTenant, updateTenant, deleteTenant } from '@/services/tenant';
+import PermissionGate from '@/components/PermissionGate';
 
 export default function TenantMgmt() {
   const { t } = useTranslation();
@@ -109,12 +110,16 @@ export default function TenantMgmt() {
       title: t('common.actions'), key: 'actions', width: 140,
       render: (_: unknown, record: Tenant) => (
         <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            {t('common.edit')}
-          </Button>
-          <Popconfirm title={t('tenantMgmt.confirmDeleteTenant')} onConfirm={() => handleDelete(record.id)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>{t('common.delete')}</Button>
-          </Popconfirm>
+          <PermissionGate requiredRoles={['SUPER_ADMIN']}>
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('common.edit')}
+            </Button>
+          </PermissionGate>
+          <PermissionGate requiredRoles={['SUPER_ADMIN']}>
+            <Popconfirm title={t('tenantMgmt.confirmDeleteTenant')} onConfirm={() => handleDelete(record.id)}>
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>{t('common.delete')}</Button>
+            </Popconfirm>
+          </PermissionGate>
         </Space>
       ),
     },
@@ -123,7 +128,11 @@ export default function TenantMgmt() {
   return (
     <Card
       title={t('tenantMgmt.title')}
-      extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>{t('tenantMgmt.createTenant')}</Button>}
+      extra={(
+        <PermissionGate requiredRoles={['SUPER_ADMIN']}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>{t('tenantMgmt.createTenant')}</Button>
+        </PermissionGate>
+      )}
     >
       <Table
         rowKey="id"

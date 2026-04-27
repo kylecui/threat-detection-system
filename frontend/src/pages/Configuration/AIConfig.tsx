@@ -43,6 +43,7 @@ import {
   saveUserConfig,
   getResolvedConfig,
 } from '@/services/tire';
+import { usePermission } from '@/hooks/usePermission';
 import type { ColumnsType } from 'antd/es/table';
 import type {
   LlmProvider,
@@ -90,16 +91,7 @@ const AIConfig = () => {
   const [userConfigLoading, setUserConfigLoading] = useState(false);
   const [userConfigSaving, setUserConfigSaving] = useState(false);
 
-  const userRoles: string[] = (() => {
-    try {
-      const user = localStorage.getItem('user');
-      return user ? JSON.parse(user).roles || [] : [];
-    } catch { return []; }
-  })();
-  const isSuperAdmin = userRoles.includes('SUPER_ADMIN');
-  const isTenantAdmin = userRoles.includes('TENANT_ADMIN');
-  const isAdmin = isSuperAdmin || isTenantAdmin;
-  const isCustomerUser = userRoles.includes('CUSTOMER_USER');
+  const { isSuperAdmin, isTenantAdmin, isCustomerUser, isAdminRole: isAdmin } = usePermission();
   const canAccessLlmTab = isSuperAdmin || isTenantAdmin || isCustomerUser;
 
   const loadLlmConfigs = useCallback(async () => {

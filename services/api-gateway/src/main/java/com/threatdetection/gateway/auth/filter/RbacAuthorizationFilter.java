@@ -1,6 +1,7 @@
 package com.threatdetection.gateway.auth.filter;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -11,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
@@ -35,9 +37,10 @@ import java.util.Set;
  * <p>Customer scoping works by overwriting the {@code customer_id} query
  * parameter with the JWT's customerId, preventing privilege escalation.
  */
-@Slf4j
 @Component
 public class RbacAuthorizationFilter implements GlobalFilter, Ordered {
+
+    private static final Logger log = LoggerFactory.getLogger(RbacAuthorizationFilter.class);
 
     private static final Set<String> PUBLIC_PATHS = Set.of(
             "/api/v1/auth/login",
@@ -51,6 +54,26 @@ public class RbacAuthorizationFilter implements GlobalFilter, Ordered {
 
     private static final Set<HttpMethod> WRITE_METHODS = Set.of(
             HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE, HttpMethod.PATCH
+    );
+
+    private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
+
+    private static final List<PathMethodRule> SUPER_ADMIN_ONLY_RULES = List.of(
+            new PathMethodRule("/api/v1/tenants/**", HttpMethod.POST),
+            new PathMethodRule("/api/v1/tenants/**", HttpMethod.PUT),
+            new PathMethodRule("/api/v1/tenants/**", HttpMethod.DELETE),
+            new PathMethodRule("/api/v1/system-config/**", HttpMethod.PUT),
+            new PathMethodRule("/api/v1/system-config/**", HttpMethod.DELETE),
+            new PathMethodRule("/api/v1/llm-providers/**", HttpMethod.POST),
+            new PathMethodRule("/api/v1/llm-providers/**", HttpMethod.PUT),
+            new PathMethodRule("/api/v1/llm-providers/**", HttpMethod.DELETE),
+            new PathMethodRule("/api/v1/customers/*/hard", HttpMethod.DELETE),
+            new PathMethodRule("/api/v1/customers/*/devices/**", HttpMethod.POST),
+            new PathMethodRule("/api/v1/customers/*/devices/**", HttpMethod.DELETE)
+    );
+
+    private static final Set<String> INTERNAL_ONLY_PATHS = Set.of(
+            "/api/v1/logs/ingest"
     );
 
     @Override
@@ -77,6 +100,24 @@ public class RbacAuthorizationFilter implements GlobalFilter, Ordered {
         // SUPER_ADMIN — full access, no scoping
         if (roles.contains("SUPER_ADMIN")) {
             return chain.filter(exchange);
+        }
+
+        // Path-level restrictions (SUPER_ADMIN-only endpoints)
+        if (isSuperAdminOnlyPath(path, exchange.getRequest().getMethod())) {
+            log.warn("Non-SUPER_ADMIN attempted restricted path: user={}, path={}, method={}",
+                    exchange.getRequest().getHeaders().getFirst("X-Auth-Username"),
+                    path, exchange.getRequest().getMethod());
+            return forbidden(exchange.getResponse(),
+                    "This endpoint requires SUPER_ADMIN role");
+        }
+
+        // Internal-only path check
+        if (isInternalOnlyPath(path)) {
+            String internalHeader = exchange.getRequest().getHeaders().getFirst("X-Internal-Service");
+            if (!"true".equals(internalHeader)) {
+                log.warn("External access to internal-only path blocked: path={}", path);
+                return forbidden(exchange.getResponse(), "Internal-only endpoint");
+            }
         }
 
         // CUSTOMER_USER — read-only enforcement
@@ -152,6 +193,27 @@ public class RbacAuthorizationFilter implements GlobalFilter, Ordered {
             }
         }
         return false;
+    }
+
+    private boolean isSuperAdminOnlyPath(String path, HttpMethod method) {
+        if (method == null) {
+            return false;
+        }
+
+        for (PathMethodRule rule : SUPER_ADMIN_ONLY_RULES) {
+            if (rule.method().equals(method) && PATH_MATCHER.match(rule.pathPattern(), path)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean isInternalOnlyPath(String path) {
+        return INTERNAL_ONLY_PATHS.contains(path);
+    }
+
+    private record PathMethodRule(String pathPattern, HttpMethod method) {
     }
 
     private Mono<Void> forbidden(ServerHttpResponse response, String message) {

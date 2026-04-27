@@ -18,6 +18,7 @@ import { SaveOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import apiClient from '@/services/api';
 import { useScope } from '@/contexts/ScopeContext';
+import { usePermission } from '@/hooks/usePermission';
 import type { SmtpConfig, NotificationConfig as NotificationConfigType } from '@/types';
 
 const NotificationConfig = () => {
@@ -30,14 +31,7 @@ const NotificationConfig = () => {
   const [notifLoading, setNotifLoading] = useState(false);
 
   const { effectiveCustomerId: customerId } = useScope();
-  const userRoles: string[] = (() => {
-    try {
-      const user = localStorage.getItem('user');
-      return user ? JSON.parse(user).roles || [] : [];
-    } catch { return []; }
-  })();
-  const isSuperAdmin = userRoles.includes('SUPER_ADMIN');
-  const isTenantAdmin = userRoles.includes('TENANT_ADMIN');
+  const { isSuperAdmin, isTenantAdmin } = usePermission();
   const canManageSmtp = isSuperAdmin || isTenantAdmin;
 
   const loadSmtpConfig = async () => {

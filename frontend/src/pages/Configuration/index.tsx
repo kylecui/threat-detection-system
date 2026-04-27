@@ -1,6 +1,7 @@
 import { Card, Tabs } from 'antd';
 import { SettingOutlined, BellOutlined, ApiOutlined, RobotOutlined, AppstoreOutlined, TeamOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { usePermission } from '@/hooks/usePermission';
 import GeneralConfig from './GeneralConfig';
 import NotificationConfig from './NotificationConfig';
 import IntegrationConfig from './IntegrationConfig';
@@ -10,16 +11,7 @@ import PluginConfig from './PluginConfig';
 
 const Configuration = () => {
   const { t } = useTranslation();
-  const userRoles: string[] = (() => {
-    try {
-      const user = localStorage.getItem('user');
-      return user ? JSON.parse(user).roles || [] : [];
-    } catch { return []; }
-  })();
-  const isSuperAdmin = userRoles.includes('SUPER_ADMIN');
-  const isTenantAdmin = userRoles.includes('TENANT_ADMIN');
-  const isAdmin = isSuperAdmin || isTenantAdmin;
-  const isCustomerUser = userRoles.includes('CUSTOMER_USER');
+  const { isSuperAdmin, isTenantAdmin, isCustomerUser, isAdminRole: isAdmin } = usePermission();
   const canAccessLlmTab = isSuperAdmin || isTenantAdmin || isCustomerUser;
 
   const tabItems = [

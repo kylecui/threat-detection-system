@@ -6,17 +6,8 @@ import type { ManagedUser, CreateUserRequest, UpdateUserRequest, Tenant } from '
 import { UserRole } from '@/types';
 import { listUsers, createUser, updateUser, deleteUser } from '@/services/user';
 import { listTenants } from '@/services/tenant';
-
-function getCurrentUserRoles(): string[] {
-  try {
-    const raw = localStorage.getItem('user');
-    if (!raw) return [];
-    const u = JSON.parse(raw);
-    return u.roles || [];
-  } catch {
-    return [];
-  }
-}
+import { usePermission } from '@/hooks/usePermission';
+import PermissionGate from '@/components/PermissionGate';
 
 export default function UserMgmt() {
   const { t } = useTranslation();
@@ -27,7 +18,7 @@ export default function UserMgmt() {
   const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
   const [form] = Form.useForm();
 
-  const isSuperAdmin = useMemo(() => getCurrentUserRoles().includes('SUPER_ADMIN'), []);
+  const { isSuperAdmin } = usePermission();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -147,12 +138,16 @@ export default function UserMgmt() {
       title: t('common.actions'), key: 'actions', width: 140,
       render: (_: unknown, record: ManagedUser) => (
         <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            {t('common.edit')}
-          </Button>
-          <Popconfirm title={t('userMgmt.confirmDeleteUser')} onConfirm={() => handleDelete(record.id)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>{t('common.delete')}</Button>
-          </Popconfirm>
+          <PermissionGate requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('common.edit')}
+            </Button>
+          </PermissionGate>
+          <PermissionGate requiredRoles={['SUPER_ADMIN']}>
+            <Popconfirm title={t('userMgmt.confirmDeleteUser')} onConfirm={() => handleDelete(record.id)}>
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>{t('common.delete')}</Button>
+            </Popconfirm>
+          </PermissionGate>
         </Space>
       ),
     },
@@ -165,7 +160,11 @@ export default function UserMgmt() {
   return (
     <Card
       title={t('userMgmt.title')}
-      extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>{t('userMgmt.createUser')}</Button>}
+      extra={(
+        <PermissionGate requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>{t('userMgmt.createUser')}</Button>
+        </PermissionGate>
+      )}
     >
       <Table
         rowKey="id"

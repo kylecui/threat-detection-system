@@ -249,20 +249,76 @@ function AppLayout() {
           <Route path="/investigate/intel" element={<ThreatIntel />} />
 
           <Route path="/operate" element={<Navigate to="/operate/pipeline" replace />} />
-          <Route path="/operate/pipeline" element={<PipelineHealth />} />
-          <Route path="/operate/ml" element={<MlDetection />} />
+          <Route
+            path="/operate/pipeline"
+            element={(
+              <RouteGuard requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+                <PipelineHealth />
+              </RouteGuard>
+            )}
+          />
+          <Route
+            path="/operate/ml"
+            element={(
+              <RouteGuard requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+                <MlDetection />
+              </RouteGuard>
+            )}
+          />
 
           <Route path="/admin" element={<Navigate to="/admin/customers" replace />} />
-          <Route path="/admin/customers" element={<CustomersAndDevices />} />
-          <Route path="/admin/users" element={<UserMgmt />} />
-          <Route path="/admin/tenants" element={<TenantMgmt />} />
+          <Route
+            path="/admin/customers"
+            element={(
+              <RouteGuard requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+                <CustomersAndDevices />
+              </RouteGuard>
+            )}
+          />
+          <Route
+            path="/admin/users"
+            element={(
+              <RouteGuard requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+                <UserMgmt />
+              </RouteGuard>
+            )}
+          />
+          <Route
+            path="/admin/tenants"
+            element={(
+              <RouteGuard requiredRoles={['SUPER_ADMIN']}>
+                <TenantMgmt />
+              </RouteGuard>
+            )}
+          />
 
           <Route path="/config" element={<Navigate to="/config/general" replace />} />
-          <Route path="/config/general" element={<GeneralConfig />} />
+          <Route
+            path="/config/general"
+            element={(
+              <RouteGuard requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+                <GeneralConfig />
+              </RouteGuard>
+            )}
+          />
           <Route path="/config/notifications" element={<NotificationConfig />} />
-          <Route path="/config/integrations" element={<IntegrationConfig />} />
+          <Route
+            path="/config/integrations"
+            element={(
+              <RouteGuard requiredRoles={['SUPER_ADMIN']}>
+                <IntegrationConfig />
+              </RouteGuard>
+            )}
+          />
           <Route path="/config/ai" element={<AIConfig />} />
-          <Route path="/config/plugins" element={<PluginConfig />} />
+          <Route
+            path="/config/plugins"
+            element={(
+              <RouteGuard requiredRoles={['SUPER_ADMIN', 'TENANT_ADMIN']}>
+                <PluginConfig />
+              </RouteGuard>
+            )}
+          />
 
           <Route path="/threats" element={<Navigate to="/investigate/threats" replace />} />
           <Route path="/alerts" element={<Navigate to="/investigate/alerts" replace />} />
