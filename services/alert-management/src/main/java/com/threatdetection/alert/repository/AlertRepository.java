@@ -127,14 +127,14 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     /**
      * 根据客户ID查找告警（通过metadata中的customer_id）
      */
-    @Query(value = "SELECT * FROM alerts WHERE (CAST(metadata AS jsonb) ->> 'customer_id') = :customerId",
+    @Query(value = "SELECT * FROM alerts WHERE (CAST(metadata AS jsonb) ->> 'customerId') = :customerId",
            nativeQuery = true)
     Page<Alert> findByCustomerId(@Param("customerId") String customerId, Pageable pageable);
 
     /**
      * 根据客户ID和状态查找告警
      */
-    @Query(value = "SELECT * FROM alerts WHERE (CAST(metadata AS jsonb) ->> 'customer_id') = :customerId AND status = :status",
+    @Query(value = "SELECT * FROM alerts WHERE (CAST(metadata AS jsonb) ->> 'customerId') = :customerId AND status = :status",
            nativeQuery = true)
     Page<Alert> findByCustomerIdAndStatus(@Param("customerId") String customerId,
                                          @Param("status") String status, Pageable pageable);
@@ -142,7 +142,7 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     /**
      * 根据客户ID和严重程度查找告警
      */
-    @Query(value = "SELECT * FROM alerts WHERE (CAST(metadata AS jsonb) ->> 'customer_id') = :customerId AND severity = :severity",
+    @Query(value = "SELECT * FROM alerts WHERE (CAST(metadata AS jsonb) ->> 'customerId') = :customerId AND severity = :severity",
            nativeQuery = true)
     Page<Alert> findByCustomerIdAndSeverity(@Param("customerId") String customerId,
                                            @Param("severity") String severity, Pageable pageable);
@@ -150,7 +150,7 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     /**
      * 根据客户ID、状态和严重程度查找告警
      */
-    @Query(value = "SELECT * FROM alerts WHERE (CAST(metadata AS jsonb) ->> 'customer_id') = :customerId AND status = :status AND severity = :severity",
+    @Query(value = "SELECT * FROM alerts WHERE (CAST(metadata AS jsonb) ->> 'customerId') = :customerId AND status = :status AND severity = :severity",
            nativeQuery = true)
     Page<Alert> findByCustomerIdAndStatusAndSeverity(@Param("customerId") String customerId,
                                                      @Param("status") String status,
@@ -203,10 +203,10 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
             "COUNT(*) FILTER (WHERE status NOT IN ('RESOLVED', 'ARCHIVED')) as unresolved_count, " +
             "MAX(created_at) as latest_alert_time " +
             "FROM alerts " +
-            "WHERE attack_mac IS NOT NULL AND (CAST(metadata AS jsonb) ->> 'customer_id') = :customerId " +
+            "WHERE attack_mac IS NOT NULL AND (CAST(metadata AS jsonb) ->> 'customerId') = :customerId " +
             "GROUP BY attack_mac " +
             "ORDER BY MAX(threat_score) DESC",
-            countQuery = "SELECT COUNT(DISTINCT attack_mac) FROM alerts WHERE attack_mac IS NOT NULL AND (CAST(metadata AS jsonb) ->> 'customer_id') = :customerId",
+            countQuery = "SELECT COUNT(DISTINCT attack_mac) FROM alerts WHERE attack_mac IS NOT NULL AND (CAST(metadata AS jsonb) ->> 'customerId') = :customerId",
             nativeQuery = true)
     Page<Object[]> findGroupedAlertsByCustomerId(@Param("customerId") String customerId, Pageable pageable);
 

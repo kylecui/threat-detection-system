@@ -135,7 +135,7 @@ const ThreatList = () => {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(DEFAULT_PAGE);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [viewMode, setViewMode] = useState<'detail' | 'grouped'>('detail');
+  const [viewMode, setViewMode] = useState<'detail' | 'grouped'>('grouped');
   const [groupedData, setGroupedData] = useState<GroupedThreatResponse[]>([]);
   const [groupedTotal, setGroupedTotal] = useState(0);
   const [groupedLoading, setGroupedLoading] = useState(false);

@@ -70,7 +70,7 @@ const AlertCenter = () => {
   const [resolveForm, setResolveForm] = useState({ resolution: '', resolvedBy: '' });
   const [assignTo, setAssignTo] = useState('');
   const [escalateReason, setEscalateReason] = useState('');
-  const [viewMode, setViewMode] = useState<'detail' | 'grouped'>('detail');
+  const [viewMode, setViewMode] = useState<'detail' | 'grouped'>('grouped');
   const [groupedData, setGroupedData] = useState<GroupedAlertResponse[]>([]);
   const [groupedTotal, setGroupedTotal] = useState(0);
   const [groupedLoading, setGroupedLoading] = useState(false);
