@@ -43,11 +43,21 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     Page<Customer> findByStatus(Customer.CustomerStatus status, Pageable pageable);
 
     /**
+     * 分页查询状态不等于指定值的客户
+     */
+    Page<Customer> findByStatusNot(Customer.CustomerStatus status, Pageable pageable);
+
+    /**
      * 根据订阅套餐查找客户
      */
     List<Customer> findBySubscriptionTier(Customer.SubscriptionTier tier);
 
     List<Customer> findByTenantId(Long tenantId);
+
+    /**
+     * 分页查询指定租户下状态不等于指定值的客户
+     */
+    Page<Customer> findByTenantIdAndStatusNot(Long tenantId, Customer.CustomerStatus status, Pageable pageable);
 
     /**
      * 根据名称模糊查询 (支持分页)

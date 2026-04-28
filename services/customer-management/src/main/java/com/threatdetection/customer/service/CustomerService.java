@@ -89,10 +89,15 @@ public class CustomerService {
     /**
      * 获取所有客户 (分页)
      */
-    public Page<CustomerResponse> getAllCustomers(Pageable pageable) {
-        log.debug("Fetching all customers, page: {}", pageable.getPageNumber());
-        
-        return customerRepository.findAll(pageable)
+    public Page<CustomerResponse> getAllCustomers(Long tenantId, Pageable pageable) {
+        log.debug("Fetching customers, tenantId: {}, page: {}", tenantId, pageable.getPageNumber());
+
+        if (tenantId != null) {
+            return customerRepository.findByTenantIdAndStatusNot(tenantId, Customer.CustomerStatus.INACTIVE, pageable)
+                    .map(CustomerResponse::fromEntity);
+        }
+
+        return customerRepository.findByStatusNot(Customer.CustomerStatus.INACTIVE, pageable)
                 .map(CustomerResponse::fromEntity);
     }
 

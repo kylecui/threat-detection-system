@@ -1,11 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Card, Table, Button, Modal, Form, Input, Select, Space, Tag, Popconfirm, message } from 'antd';
+import { Card, Table, Button, Modal, Form, Input, Select, Space, Tag, Popconfirm, message, Checkbox } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { Tenant, CreateTenantRequest, UpdateTenantRequest } from '@/types';
 import { TenantStatus } from '@/types';
 import { listTenants, createTenant, updateTenant, deleteTenant } from '@/services/tenant';
+import { createUser } from '@/services/user';
 import PermissionGate from '@/components/PermissionGate';
+
+function toSlug(value: string): string {
+  const slug = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return slug || 'tenant';
+}
 
 export default function TenantMgmt() {
   const { t } = useTranslation();
@@ -79,8 +89,24 @@ export default function TenantMgmt() {
           contactEmail: values.contactEmail,
           maxCustomers: values.maxCustomers,
         };
-        await createTenant(req);
+        const newTenant = await createTenant(req);
         message.success(t('tenantMgmt.messageTenantCreated'));
+
+        if (values.autoCreateAdmin) {
+          const username = `${toSlug(values.tenantId || values.name)}_admin`;
+          try {
+            await createUser({
+              username,
+              password: 'changeme123',
+              displayName: `${values.name} Admin`,
+              tenantId: newTenant.id,
+              role: 'TENANT_ADMIN',
+            });
+            message.success(t('tenantMgmt.adminCreatedSuccess', { username }));
+          } catch {
+            // handled by interceptor
+          }
+        }
       }
       setModalVisible(false);
       fetchTenants();
@@ -147,7 +173,6 @@ export default function TenantMgmt() {
         open={modalVisible}
         onOk={handleSubmit}
         onCancel={() => setModalVisible(false)}
-        destroyOnClose
       >
         <Form form={form} layout="vertical">
           <Form.Item
@@ -169,6 +194,16 @@ export default function TenantMgmt() {
           <Form.Item name="maxCustomers" label={t('tenantMgmt.maxCustomers')} initialValue={10}>
             <Input type="number" />
           </Form.Item>
+          {!editingTenant && (
+            <Form.Item
+              name="autoCreateAdmin"
+              valuePropName="checked"
+              initialValue={true}
+              extra={t('tenantMgmt.autoCreateAdminTooltip')}
+            >
+              <Checkbox>{t('tenantMgmt.autoCreateAdmin')}</Checkbox>
+            </Form.Item>
+          )}
           {editingTenant && (
             <Form.Item name="status" label={t('common.status')}>
               <Select>

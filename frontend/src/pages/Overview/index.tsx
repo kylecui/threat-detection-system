@@ -37,7 +37,7 @@ type PortDatum = { port: string; count: number };
 const Overview = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { effectiveCustomerId: customerId, initialized } = useScope();
+  const { effectiveCustomerId: customerId, tenantId: scopeTenantId, initialized } = useScope();
   const [loading, setLoading] = useState(true);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [trendData, setTrendData] = useState<ChartDataPoint[]>([]);
@@ -49,7 +49,7 @@ const Overview = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<string>('__all__');
 
   const { user } = useAuth();
-  const { isTenantAdmin } = usePermission();
+  const { isTenantAdmin, isSuperAdmin } = usePermission();
   const tenantId = user?.tenantId;
 
   const hoursMap: Record<string, number> = {
@@ -62,7 +62,7 @@ const Overview = () => {
     try {
       setLoading(true);
 
-      const useTenantAll = isTenantAdmin && selectedCustomer === '__all__';
+      const useTenantAll = (isTenantAdmin || isSuperAdmin) && selectedCustomer === '__all__';
       const allCustomerIds = tenantCustomers.map((c) => c.customerId).filter(Boolean);
 
       let stats: Statistics;
@@ -86,7 +86,7 @@ const Overview = () => {
         ]);
         [stats, trend, ports, attackers, recent] = results;
       } else {
-        const targetCustomerId = isTenantAdmin ? selectedCustomer : customerId;
+        const targetCustomerId = (isTenantAdmin || isSuperAdmin) ? selectedCustomer : customerId;
         if (!targetCustomerId || targetCustomerId === '__all__') {
           setStatistics(null);
           setTrendData([]);
@@ -141,19 +141,21 @@ const Overview = () => {
     } finally {
       setLoading(false);
     }
-  }, [customerId, isTenantAdmin, selectedCustomer, tenantCustomers, trendRange]);
+  }, [customerId, isTenantAdmin, isSuperAdmin, selectedCustomer, tenantCustomers, trendRange]);
 
   const loadTenantCustomers = useCallback(async () => {
-    if (!isTenantAdmin || !tenantId) return;
+    if (!isTenantAdmin && !isSuperAdmin) return;
+    const tid = isSuperAdmin ? scopeTenantId : tenantId;
+    if (!tid) return;
     try {
-      const customers = await threatService.getCustomersByTenant(tenantId);
+      const customers = await threatService.getCustomersByTenant(tid);
       setTenantCustomers(customers || []);
       setSelectedCustomer('__all__');
     } catch (error) {
       console.error('Failed to load tenant customers:', error);
       message.error(t('overview.messageLoadTenantCustomersFailed'));
     }
-  }, [isTenantAdmin, tenantId]);
+  }, [isTenantAdmin, isSuperAdmin, tenantId, scopeTenantId, t]);
 
   useEffect(() => {
     loadTenantCustomers();
@@ -396,7 +398,7 @@ const Overview = () => {
           <Col xs={24} md={18}>
             <Space wrap>
               <span style={{ fontWeight: 600 }}>{t('overview.title')}</span>
-              {isTenantAdmin && (
+              {(isTenantAdmin || isSuperAdmin) && (
                 <>
                   <span>{t('overview.customerFilter')}:</span>
                   <Select

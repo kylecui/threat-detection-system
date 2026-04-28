@@ -98,18 +98,19 @@ public class CustomerController {
      */
     @GetMapping
     public ResponseEntity<Page<CustomerResponse>> getAllCustomers(
+            @RequestParam(required = false) Long tenantId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "createdAt,desc") String sort) {
         
-        log.info("API: Fetching all customers, page={}, size={}", page, size);
+        log.info("API: Fetching all customers, tenantId={}, page={}, size={}", tenantId, page, size);
         
         String[] sortParams = sort.split(",");
         Sort.Direction direction = sortParams.length > 1 && sortParams[1].equalsIgnoreCase("desc") 
                 ? Sort.Direction.DESC : Sort.Direction.ASC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortParams[0]));
         
-        Page<CustomerResponse> customers = customerService.getAllCustomers(pageable);
+        Page<CustomerResponse> customers = customerService.getAllCustomers(tenantId, pageable);
         return ResponseEntity.ok(customers);
     }
 

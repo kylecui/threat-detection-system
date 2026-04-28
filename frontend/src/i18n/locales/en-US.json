@@ -136,6 +136,9 @@
     "warningKafkaLag": "Kafka lag is too high ({{count}} messages)"
   },
   "tenantMgmt": {
+    "adminCreatedSuccess": "Admin user created: {{username}} (default password: changeme123)",
+    "autoCreateAdmin": "Auto-create admin user",
+    "autoCreateAdminTooltip": "Create a tenant admin account automatically after tenant creation",
     "messageTenantUpdated": "Tenant updated",
     "messageTenantCreated": "Tenant created",
     "placeholderOptionalDescription": "Optional description",
@@ -534,6 +537,9 @@
     "reload": "Reload"
   },
   "customersDevices": {
+    "adminCreatedSuccess": "Admin user created: {{username}} (default password: changeme123)",
+    "autoCreateAdmin": "Auto-create admin user",
+    "autoCreateAdminTooltip": "Create a customer admin account automatically after customer creation",
     "deviceList": "Device List",
     "loadDevicesFailed": "Failed to load devices",
     "deviceUpdated": "Device updated",

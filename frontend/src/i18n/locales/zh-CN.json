@@ -136,6 +136,9 @@
     "warningKafkaLag": "Kafka 积压过多 ({{count}} 条)"
   },
   "tenantMgmt": {
+    "adminCreatedSuccess": "管理员用户已创建：{{username}}（默认密码：changeme123）",
+    "autoCreateAdmin": "自动创建管理员用户",
+    "autoCreateAdminTooltip": "创建租户后自动创建租户管理员账号",
     "messageTenantUpdated": "租户已更新",
     "messageTenantCreated": "租户已创建",
     "placeholderOptionalDescription": "可选描述信息",
@@ -534,6 +537,9 @@
     "reload": "重新加载"
   },
   "customersDevices": {
+    "adminCreatedSuccess": "管理员用户已创建：{{username}}（默认密码：changeme123）",
+    "autoCreateAdmin": "自动创建管理员用户",
+    "autoCreateAdminTooltip": "创建客户后自动创建客户管理员账号",
     "deviceList": "设备列表",
     "loadDevicesFailed": "加载设备列表失败",
     "deviceUpdated": "设备已更新",

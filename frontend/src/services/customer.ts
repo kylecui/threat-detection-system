@@ -21,6 +21,7 @@ class CustomerService {
     page?: number;
     size?: number;
     sort?: string;
+    tenantId?: number;
   }): Promise<PaginatedResponse<Customer>> {
     const response = await apiClient.get<PaginatedResponse<Customer>>(
       '/api/v1/customers',

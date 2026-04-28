@@ -7,6 +7,7 @@ import {
   Form,
   Input,
   Select,
+  Checkbox,
   Drawer,
   Table,
   Descriptions,
@@ -30,6 +31,7 @@ import { useTranslation } from 'react-i18next';
 import type { Customer, Device, DeviceQuota } from '@/types';
 import { CustomerStatus, SubscriptionTier } from '@/types';
 import customerService from '@/services/customer';
+import { createUser } from '@/services/user';
 import { useScope } from '@/contexts/ScopeContext';
 import PermissionGate from '@/components/PermissionGate';
 import dayjs from 'dayjs';
@@ -51,6 +53,7 @@ const tierColorMap: Record<string, string> = {
 
 const CustomersTab = () => {
   const { t } = useTranslation();
+  const { tenantId } = useScope();
   const customerActionRef = useRef<ActionType>();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -83,10 +86,29 @@ const CustomersTab = () => {
     }
   };
 
-  const handleCreate = async (values: Partial<Customer>) => {
+  const handleCreate = async (values: Partial<Customer> & { autoCreateAdmin?: boolean }) => {
     try {
-      await customerService.createCustomer(values);
+      const { autoCreateAdmin, ...customerPayload } = values;
+      const createdCustomer = await customerService.createCustomer(customerPayload);
       message.success(t('customersDevices.customerCreated'));
+
+      if (autoCreateAdmin) {
+        const username = `${createdCustomer.customerId}_admin`;
+        try {
+          await createUser({
+            username,
+            password: 'changeme123',
+            displayName: `${createdCustomer.name} Admin`,
+            customerId: createdCustomer.customerId,
+            tenantId,
+            role: 'CUSTOMER_USER',
+          });
+          message.success(t('customersDevices.adminCreatedSuccess', { username }));
+        } catch {
+          // handled by interceptor
+        }
+      }
+
       setCreateModalOpen(false);
       createForm.resetFields();
       customerActionRef.current?.reload();
@@ -365,7 +387,7 @@ const CustomersTab = () => {
     },
   ];
 
-  const customerFormFields = (
+  const renderCustomerFormFields = (includeAutoCreateAdmin: boolean) => (
     <>
       <Form.Item name="customerId" label={t('common.customerId')} rules={[{ required: true }]}>
         <Input />
@@ -415,6 +437,16 @@ const CustomersTab = () => {
       <Form.Item name="description" label={t('common.description')}>
         <Input.TextArea rows={2} />
       </Form.Item>
+      {includeAutoCreateAdmin && (
+        <Form.Item
+          name="autoCreateAdmin"
+          valuePropName="checked"
+          initialValue={true}
+          extra={t('customersDevices.autoCreateAdminTooltip')}
+        >
+          <Checkbox>{t('customersDevices.autoCreateAdmin')}</Checkbox>
+        </Form.Item>
+      )}
     </>
   );
 
@@ -425,11 +457,13 @@ const CustomersTab = () => {
         actionRef={customerActionRef}
         rowKey="id"
         columns={columns}
+        params={{ tenantId }}
         request={async (params) => {
           try {
             const result = await customerService.getCustomers({
               page: (params.current || 1) - 1,
               size: params.pageSize || 20,
+              tenantId,
             });
             return {
               data: result.content,
@@ -473,7 +507,7 @@ const CustomersTab = () => {
         width={600}
       >
         <Form form={createForm} layout="vertical" onFinish={handleCreate}>
-          {customerFormFields}
+          {renderCustomerFormFields(true)}
         </Form>
       </Modal>
 
@@ -485,7 +519,7 @@ const CustomersTab = () => {
         width={600}
       >
         <Form form={editForm} layout="vertical" onFinish={handleUpdate}>
-          {customerFormFields}
+          {renderCustomerFormFields(false)}
         </Form>
       </Modal>
 
