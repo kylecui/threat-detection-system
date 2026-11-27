@@ -44,7 +44,7 @@ spec:
             jobmanager.rpc.address: stream-processing-jobmanager
             jobmanager.rpc.port: 6123
             jobmanager.bind-host: 0.0.0.0
-            parallelism.default: 1
+            parallelism.default: 2
             taskmanager.numberOfTaskSlots: 4
             rest.port: 8081
             rest.bind-address: 0.0.0.0
@@ -58,6 +58,10 @@ spec:
           value: "threat-alerts"
         - name: AGGREGATION_TOPIC
           value: "minute-aggregations"
+        - name: JDBC_SINK_PARALLELISM
+          value: "2"
+        - name: APT_SINK_PARALLELISM
+          value: "1"
         command: ["/docker-entrypoint.sh"]
         args: ["standalone-job", "--job-classname", "com.threatdetection.stream.StreamProcessingJob"]
         resources:

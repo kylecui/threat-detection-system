@@ -2,19 +2,30 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-
 ARG USE_CHINA_MIRROR=false
+RUN if [ "$USE_CHINA_MIRROR" = "true" ]; then \
+      sed -i \
+        -e 's|http://deb.debian.org/debian-security|https://mirrors.aliyun.com/debian-security|g' \
+        -e 's|http://deb.debian.org/debian|https://mirrors.aliyun.com/debian|g' \
+        /etc/apt/sources.list.d/debian.sources; \
+    fi && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements-runtime.txt .
+
 RUN if [ "$USE_CHINA_MIRROR" = "true" ]; then \
       pip install --no-cache-dir \
         -i https://mirrors.aliyun.com/pypi/simple/ \
         --trusted-host mirrors.aliyun.com \
-        -r requirements.txt; \
+        -r requirements-runtime.txt; \
     else \
-      pip install --no-cache-dir -r requirements.txt; \
-    fi
+      pip install --no-cache-dir -r requirements-runtime.txt; \
+    fi && \
+    pip install --no-cache-dir --no-deps \
+      --index-url https://download.pytorch.org/whl/cpu \
+      'torch==2.2.2+cpu'
 
 COPY app/ ./app/
 COPY models/ ./models/

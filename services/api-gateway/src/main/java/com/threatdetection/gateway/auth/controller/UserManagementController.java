@@ -5,6 +5,7 @@ import com.threatdetection.gateway.auth.dto.UpdateUserRequest;
 import com.threatdetection.gateway.auth.entity.AuthUser;
 import com.threatdetection.gateway.auth.repository.AuthRoleRepository;
 import com.threatdetection.gateway.auth.repository.AuthUserRepository;
+import com.threatdetection.gateway.auth.validation.PasswordPolicy;
 import com.threatdetection.gateway.auth.service.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,7 @@ import java.util.*;
  * <ul>
  *   <li>SUPER_ADMIN - manage all users across all tenants</li>
  *   <li>TENANT_ADMIN - manage users within own tenant only</li>
+ *   <li>CUSTOMER_ADMIN - manage ordinary users within own customer only</li>
  * </ul>
  */
 @Slf4j
@@ -34,6 +36,9 @@ import java.util.*;
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
 public class UserManagementController {
+
+    private static final Set<String> ALLOWED_ROLES = Set.of(
+            "SUPER_ADMIN", "TENANT_ADMIN", "CUSTOMER_ADMIN", "CUSTOMER_USER");
 
     private final AuthUserRepository userRepository;
     private final AuthRoleRepository roleRepository;
@@ -61,6 +66,13 @@ public class UserManagementController {
                             return reactor.core.publisher.Flux.<Map<String, Object>>empty().collectList();
                         }
                         return userRepository.findByTenantId(ctx.tenantId)
+                                .flatMap(this::enrichUserWithRoles)
+                                .collectList();
+                    } else if (ctx.isCustomerAdmin()) {
+                        if (ctx.customerId == null || ctx.customerId.isBlank()) {
+                            return reactor.core.publisher.Flux.<Map<String, Object>>empty().collectList();
+                        }
+                        return userRepository.findByTenantIdAndCustomerId(ctx.tenantId, ctx.customerId)
                                 .flatMap(this::enrichUserWithRoles)
                                 .collectList();
                     }
@@ -103,9 +115,18 @@ public class UserManagementController {
                         return Mono.just(ResponseEntity.badRequest()
                                 .body(Map.<String, Object>of("error", "password is required")));
                     }
+                    if (!isStrongPassword(request.getPassword())) {
+                        return Mono.just(ResponseEntity.badRequest()
+                                .body(Map.<String, Object>of("error",
+                                    "password must be " + PasswordPolicy.DESCRIPTION)));
+                    }
                     if (request.getRole() == null || request.getRole().isBlank()) {
                         return Mono.just(ResponseEntity.badRequest()
                                 .body(Map.<String, Object>of("error", "role is required")));
+                    }
+                    if (!ALLOWED_ROLES.contains(request.getRole())) {
+                        return Mono.just(ResponseEntity.badRequest()
+                                .body(Map.<String, Object>of("error", "unsupported role")));
                     }
 
                     Long effectiveTenantId;
@@ -118,9 +139,31 @@ public class UserManagementController {
                                     .body(Map.<String, Object>of("error",
                                             "TENANT_ADMIN cannot create SUPER_ADMIN users")));
                         }
+                    } else if (ctx.isCustomerAdmin()) {
+                        effectiveTenantId = ctx.tenantId;
+                        if (!"CUSTOMER_USER".equals(request.getRole())) {
+                            return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                    .body(Map.<String, Object>of("error",
+                                            "CUSTOMER_ADMIN can only create CUSTOMER_USER accounts")));
+                        }
+                        request.setCustomerId(ctx.customerId);
                     } else {
                         return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN)
                                 .body(Map.<String, Object>of("error", "Insufficient permissions")));
+                    }
+
+                    boolean customerRole = "CUSTOMER_ADMIN".equals(request.getRole())
+                            || "CUSTOMER_USER".equals(request.getRole());
+                    if (!"SUPER_ADMIN".equals(request.getRole()) && effectiveTenantId == null) {
+                        return Mono.just(ResponseEntity.badRequest()
+                                .body(Map.<String, Object>of("error", "tenant is required for this role")));
+                    }
+                    if (customerRole && (request.getCustomerId() == null || request.getCustomerId().isBlank())) {
+                        return Mono.just(ResponseEntity.badRequest()
+                                .body(Map.<String, Object>of("error", "customer is required for this role")));
+                    }
+                    if (!customerRole) {
+                        request.setCustomerId(null);
                     }
 
                     return userRepository.existsByUsername(request.getUsername())
@@ -132,9 +175,10 @@ public class UserManagementController {
                                 }
 
                                 Mono<Boolean> customerValidation = Mono.just(true);
-                                if (request.getCustomerId() != null && effectiveTenantId != null) {
-                                    customerValidation = validateCustomerBelongsToTenant(
-                                            request.getCustomerId(), effectiveTenantId);
+                                if (customerRole) {
+                                    customerValidation = effectiveTenantId != null
+                                            ? validateCustomerBelongsToTenant(request.getCustomerId(), effectiveTenantId)
+                                            : validateCustomerIsActive(request.getCustomerId());
                                 }
 
                                 return customerValidation.flatMap(isValidCustomer -> {
@@ -159,7 +203,9 @@ public class UserManagementController {
 
                                     return userRepository.save(user)
                                             .flatMap(saved -> assignRole(saved.getId(), request.getRole())
-                                                    .then(enrichUserWithRoles(saved)))
+                                                    .then(enrichUserWithRoles(saved))
+                                                    .onErrorResume(error -> userRepository.deleteById(saved.getId())
+                                                            .then(Mono.error(error))))
                                             .map(userMap -> {
                                                 log.info("Created user: username={}, tenantId={}, role={}",
                                                         request.getUsername(), effectiveTenantId, request.getRole());
@@ -179,10 +225,40 @@ public class UserManagementController {
             ServerWebExchange exchange) {
         return resolveCallerContext(exchange)
                 .flatMap(ctx -> userRepository.findById(id)
-                        .flatMap(user -> {
-                            if (!ctx.canAccessUser(user)) {
+                        .flatMap(user -> canManageUser(ctx, user).flatMap(canManage -> {
+                            if (!canManage) {
                                 return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN)
                                         .<Map<String, Object>>build());
+                            }
+                            if (request.getPassword() != null && !request.getPassword().isBlank()
+                                    && !isStrongPassword(request.getPassword())) {
+                                return Mono.just(ResponseEntity.badRequest()
+                                        .body(Map.<String, Object>of("error",
+                                            "password must be " + PasswordPolicy.DESCRIPTION)));
+                            }
+                            if (request.getRole() != null && !request.getRole().isBlank()
+                                    && !ALLOWED_ROLES.contains(request.getRole())) {
+                                return Mono.just(ResponseEntity.badRequest()
+                                        .body(Map.<String, Object>of("error", "unsupported role")));
+                            }
+                            if (ctx.isCustomerAdmin()) {
+                                if (id.equals(ctx.userId)) {
+                                    return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                            .body(Map.<String, Object>of("error", "A customer administrator cannot modify its own administrative account")));
+                                }
+                                if (request.getRole() != null && !"CUSTOMER_USER".equals(request.getRole())) {
+                                    return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                            .body(Map.<String, Object>of("error", "CUSTOMER_ADMIN can only assign CUSTOMER_USER role")));
+                                }
+                                request.setCustomerId(ctx.customerId);
+                            }
+                            boolean requestedCustomerRole = "CUSTOMER_ADMIN".equals(request.getRole())
+                                    || "CUSTOMER_USER".equals(request.getRole());
+                            if (requestedCustomerRole
+                                    && (request.getCustomerId() == null || request.getCustomerId().isBlank())) {
+                                return Mono.just(ResponseEntity.badRequest()
+                                        .body(Map.<String, Object>of("error",
+                                                "customer is required for this role")));
                             }
 
                             Mono<Boolean> customerValidation = Mono.just(true);
@@ -200,7 +276,13 @@ public class UserManagementController {
 
                                 if (request.getDisplayName() != null) user.setDisplayName(request.getDisplayName());
                                 if (request.getEmail() != null) user.setEmail(request.getEmail());
-                                if (request.getCustomerId() != null) user.setCustomerId(request.getCustomerId());
+                                if (request.getRole() != null
+                                        && !"CUSTOMER_ADMIN".equals(request.getRole())
+                                        && !"CUSTOMER_USER".equals(request.getRole())) {
+                                    user.setCustomerId(null);
+                                } else if (request.getCustomerId() != null) {
+                                    user.setCustomerId(request.getCustomerId());
+                                }
                                 if (request.getEnabled() != null) user.setEnabled(request.getEnabled());
                                 if (request.getPassword() != null && !request.getPassword().isBlank()) {
                                     user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
@@ -226,7 +308,7 @@ public class UserManagementController {
                                             return ResponseEntity.ok(userMap);
                                         });
                             });
-                        })
+                        }))
                         .defaultIfEmpty(ResponseEntity.notFound().build()))
                 .onErrorResume(SecurityException.class, e ->
                         Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build()));
@@ -238,10 +320,15 @@ public class UserManagementController {
             ServerWebExchange exchange) {
         return resolveCallerContext(exchange)
                 .flatMap(ctx -> userRepository.findById(id)
-                        .flatMap(user -> {
-                            if (!ctx.canAccessUser(user)) {
+                        .flatMap(user -> canManageUser(ctx, user).flatMap(canManage -> {
+                            if (!canManage) {
                                 return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN)
                                         .<Map<String, Object>>build());
+                            }
+                            if (ctx.isCustomerAdmin() && id.equals(ctx.userId)) {
+                                return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                        .body(Map.<String, Object>of("error",
+                                                "A customer administrator cannot delete its own administrative account")));
                             }
                             return clearRoles(id)
                                     .then(userRepository.deleteById(id))
@@ -252,7 +339,7 @@ public class UserManagementController {
                                         result.put("id", id);
                                         return ResponseEntity.ok(result);
                                     }));
-                        })
+                        }))
                         .defaultIfEmpty(ResponseEntity.notFound().build()))
                 .onErrorResume(SecurityException.class, e ->
                         Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build()));
@@ -287,7 +374,11 @@ public class UserManagementController {
                 "ON CONFLICT DO NOTHING")
                 .bind("userId", userId)
                 .bind("roleName", roleName)
-                .then();
+                .fetch()
+                .rowsUpdated()
+                .flatMap(rows -> rows > 0
+                        ? Mono.empty()
+                        : Mono.error(new IllegalArgumentException("Unknown role: " + roleName)));
     }
 
     private Mono<Void> clearRoles(Long userId) {
@@ -301,13 +392,42 @@ public class UserManagementController {
             return Mono.just(false);
         }
 
-        return databaseClient.sql("SELECT COUNT(*) FROM customers WHERE customer_id = :customerId AND tenant_id = :tenantId")
+        return databaseClient.sql("SELECT COUNT(*) FROM customers WHERE customer_id = :customerId " +
+                        "AND tenant_id = :tenantId AND status = 'ACTIVE'")
                 .bind("customerId", customerId)
                 .bind("tenantId", tenantId)
                 .map(row -> row.get(0, Long.class))
                 .one()
                 .map(count -> count != null && count > 0)
                 .defaultIfEmpty(false);
+    }
+
+    private Mono<Boolean> canManageUser(CallerContext caller, AuthUser target) {
+        if (!caller.canAccessUser(target)) {
+            return Mono.just(false);
+        }
+        if (!caller.isCustomerAdmin()) {
+            return Mono.just(true);
+        }
+        return roleRepository.findRolesByUserId(target.getId())
+                .all(role -> "CUSTOMER_USER".equals(role.getName()));
+    }
+
+    private Mono<Boolean> validateCustomerIsActive(String customerId) {
+        if (customerId == null || customerId.isBlank()) {
+            return Mono.just(false);
+        }
+        return databaseClient.sql("SELECT COUNT(*) FROM customers " +
+                        "WHERE customer_id = :customerId AND status = 'ACTIVE'")
+                .bind("customerId", customerId)
+                .map(row -> row.get(0, Long.class))
+                .one()
+                .map(count -> count != null && count > 0)
+                .defaultIfEmpty(false);
+    }
+
+    private boolean isStrongPassword(String password) {
+        return PasswordPolicy.isValid(password);
     }
 
     private Mono<CallerContext> resolveCallerContext(ServerWebExchange exchange) {
@@ -322,26 +442,32 @@ public class UserManagementController {
         List<String> roles = jwtTokenProvider.getRolesFromToken(token);
         Long userId = jwtTokenProvider.getUserIdFromToken(token);
         Long tenantId = jwtTokenProvider.getTenantIdFromToken(token);
-        return Mono.just(new CallerContext(userId, roles, tenantId));
+        String customerId = jwtTokenProvider.getCustomerIdFromToken(token);
+        return Mono.just(new CallerContext(userId, roles, tenantId, customerId));
     }
 
     private static class CallerContext {
         final Long userId;
         final List<String> roles;
         final Long tenantId;
+        final String customerId;
 
-        CallerContext(Long userId, List<String> roles, Long tenantId) {
+        CallerContext(Long userId, List<String> roles, Long tenantId, String customerId) {
             this.userId = userId;
             this.roles = roles != null ? roles : Collections.emptyList();
             this.tenantId = tenantId;
+            this.customerId = customerId;
         }
 
         boolean isSuperAdmin() { return roles.contains("SUPER_ADMIN"); }
         boolean isTenantAdmin() { return roles.contains("TENANT_ADMIN"); }
+        boolean isCustomerAdmin() { return roles.contains("CUSTOMER_ADMIN"); }
 
         boolean canAccessUser(AuthUser user) {
             if (isSuperAdmin()) return true;
             if (isTenantAdmin() && tenantId != null && tenantId.equals(user.getTenantId())) return true;
+            if (isCustomerAdmin() && tenantId != null && tenantId.equals(user.getTenantId())
+                    && customerId != null && customerId.equals(user.getCustomerId())) return true;
             return false;
         }
     }

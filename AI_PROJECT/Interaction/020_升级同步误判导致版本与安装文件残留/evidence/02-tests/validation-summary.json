@@ -1,0 +1,64 @@
+{
+  "issue": "INTERACTION-020",
+  "date": "2026-10-30",
+  "timezone": "Asia/Shanghai",
+  "result": "code fix and isolated regressions passed; full service installation and production deployment not performed",
+  "suite_version_unchanged": "3.1.39",
+  "formal_release_created": false,
+  "delivered_artifacts_unchanged": true,
+  "installer_and_release_contracts": {
+    "passed": 72,
+    "failed": 0,
+    "skipped": 0,
+    "duration_seconds": 77.872,
+    "groups": {
+      "release_state": 23,
+      "diagnostic_versions": 9,
+      "installer_transaction": 10,
+      "historical_archives": 4,
+      "image_fallback": 1,
+      "release_contract": 25
+    }
+  },
+  "frontend": {
+    "lint": "PASS",
+    "typecheck": "PASS",
+    "e2e_typecheck": "PASS",
+    "build": "PASS",
+    "unit_passed": 61,
+    "unit_initial_attempt": "16 worker initialization errors before execution; retained log",
+    "unit_retry": "--maxWorkers=2; exit 0"
+  },
+  "full_e2e": {
+    "passed": 236,
+    "workers": 4,
+    "retry": 0,
+    "startTime": "2026-10-30T04:37:27.989Z",
+    "duration": 408730.555,
+    "expected": 236,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "tested_source_matches_local": true,
+  "modified_code_files": [
+    "install.sh",
+    "scripts/verify_release_state.py",
+    "scripts/tdsdiag.sh",
+    "scripts/pack_release.py",
+    "tests/test_release_contract.py",
+    "tests/test_verify_release_state.py",
+    "tests/test_tdsdiag_versions.py",
+    "tests/test_installer_transaction.py",
+    "tests/test_installer_real_archives.py"
+  ],
+  "not_performed": [
+    "full install.sh main",
+    "real systemd/Docker install and rollback",
+    "full service image builds",
+    "database migration and rollback",
+    "production deployment and external-device connectivity"
+  ],
+  "remote_isolated_workspace": "/home/jzzn/tds-interaction020-6ALbew",
+  "document_sha256": "d682c8ca6a498da9f013c078949a17a6e2b9f5bd18a3abd303e7ea62e357de54"
+}

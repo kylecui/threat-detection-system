@@ -167,9 +167,7 @@ public class MultiTierWindowProcessor {
         DataStream<AggregatedAttackData> aggregatedData = processMultiTierWindowsInternal(attackStream, bootstrapServers);
 
         // 转换为JSON字符串输出
-        DataStream<String> allAlerts = aggregatedData
-            .map(new AggregationToJsonMapper())
-            .name("aggregation-to-json");
+        DataStream<String> allAlerts = serializeAggregations(aggregatedData);
 
         logger.info("✅ 3层时间窗口处理器已启动: Tier1={}s, Tier2={}s({}min), Tier3={}s({}min)",
                    TIER1_WINDOW_SECONDS,
@@ -177,6 +175,18 @@ public class MultiTierWindowProcessor {
                    TIER3_WINDOW_SECONDS, TIER3_WINDOW_SECONDS / 60);
 
         return allAlerts;
+    }
+
+    /**
+     * Serialize an already-built multi-tier stream. This lets callers branch the
+     * same Flink operator graph to Kafka and APT persistence without constructing
+     * every 30s/5m/15m window a second time.
+     */
+    public static DataStream<String> serializeAggregations(
+            DataStream<AggregatedAttackData> aggregatedData) {
+        return aggregatedData
+            .map(new AggregationToJsonMapper())
+            .name("aggregation-to-json");
     }
 
     /**

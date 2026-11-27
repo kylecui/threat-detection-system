@@ -382,6 +382,12 @@ public class LogParserService {
             String customerId = mappingService.resolveCustomerId(devSerial);
             logger.info("Resolved customerId '{}' for devSerial '{}'", customerId, devSerial);
 
+            if (customerId == null || customerId.isBlank() || "unknown".equals(customerId)) {
+                logger.warn("Dropping attack log for unmapped or inactive customer device: {}", devSerial);
+                incrementStat("unmapped_or_inactive_customer");
+                return Optional.empty();
+            }
+
             AttackEvent event = new AttackEvent(devSerial, logType, subType, attackMac,
                                               attackIp, responseIp, responsePort, lineId,
                                               ifaceType, vlanId, logTime, ethType, ipType,

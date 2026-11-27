@@ -18,6 +18,21 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(FeedNotPollableException.class)
+    public ResponseEntity<Map<String, Object>> handleFeedNotPollable(FeedNotPollableException ex) {
+        log.info("Feed cannot be polled: feed={}, reason={}", ex.getFeedName(), ex.getMessage());
+
+        Map<String, Object> error = new HashMap<>();
+        error.put("timestamp", Instant.now());
+        error.put("status", HttpStatus.UNPROCESSABLE_ENTITY.value());
+        error.put("error", "Unprocessable Entity");
+        error.put("code", "FEED_NOT_POLLABLE");
+        error.put("feedName", ex.getFeedName());
+        error.put("message", ex.getMessage());
+
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(error);
+    }
+
     @ExceptionHandler(IndicatorNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleIndicatorNotFound(IndicatorNotFoundException ex) {
         log.warn("Indicator not found: {}", ex.getMessage());

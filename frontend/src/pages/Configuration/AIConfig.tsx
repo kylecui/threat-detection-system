@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { formatDateTime } from '@/utils/formatDateTime';
 import {
   Card,
   Form,
@@ -53,6 +54,11 @@ import type {
   ResolvedConfig,
 } from '@/services/tire';
 import type { SystemConfig } from '@/types';
+import useSubmitGuard from '@/hooks/useSubmitGuard';
+import TableActionButton from '@/components/TableActionButton';
+import TableActions from '@/components/TableActions';
+import TableCellText from '@/components/TableCellText';
+import './configuration.css';
 
 const TI_API_KEY_NAMES = [
   'ABUSEIPDB_API_KEY',
@@ -70,6 +76,7 @@ const AIConfig = () => {
   const [llmProviderForm] = Form.useForm();
   const [assignmentForm] = Form.useForm();
   const [userConfigForm] = Form.useForm();
+  const modalMutation = useSubmitGuard();
 
   const [llmConfigs, setLlmConfigs] = useState<SystemConfig[]>([]);
   const [llmLoading, setLlmLoading] = useState(false);
@@ -91,8 +98,9 @@ const AIConfig = () => {
   const [userConfigLoading, setUserConfigLoading] = useState(false);
   const [userConfigSaving, setUserConfigSaving] = useState(false);
 
-  const { isSuperAdmin, isTenantAdmin, isCustomerUser, isAdminRole: isAdmin } = usePermission();
-  const canAccessLlmTab = isSuperAdmin || isTenantAdmin || isCustomerUser;
+  const { isSuperAdmin, isTenantAdmin, isCustomerAdmin, isCustomerUser, isAdminRole: isAdmin } = usePermission();
+  const isCustomerScopedUser = isCustomerAdmin || isCustomerUser;
+  const canAccessLlmTab = isSuperAdmin || isTenantAdmin || isCustomerScopedUser;
 
   const loadLlmConfigs = useCallback(async () => {
     if (!isSuperAdmin) return;
@@ -123,7 +131,7 @@ const AIConfig = () => {
     } finally {
       setLlmProviderLoading(false);
     }
-  }, [canAccessLlmTab, isAdmin]);
+  }, [canAccessLlmTab, isAdmin, t]);
 
   const loadAssignments = useCallback(async () => {
     if (!isAdmin) return;
@@ -136,10 +144,10 @@ const AIConfig = () => {
     } finally {
       setAssignmentLoading(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, t]);
 
   const loadUserConfigs = useCallback(async () => {
-    if (!isCustomerUser) return;
+    if (!isCustomerScopedUser) return;
     try {
       setUserConfigLoading(true);
       const [ownConfig, resolved] = await Promise.all([
@@ -163,14 +171,14 @@ const AIConfig = () => {
     } finally {
       setUserConfigLoading(false);
     }
-  }, [isCustomerUser, userConfigForm]);
+  }, [isCustomerScopedUser, t, userConfigForm]);
 
   useEffect(() => {
     loadLlmConfigs();
     loadLlmProviders();
     loadAssignments();
     loadUserConfigs();
-  }, []);
+  }, [loadAssignments, loadLlmConfigs, loadLlmProviders, loadUserConfigs]);
 
   const handleLlmSave = async (values: Record<string, string>) => {
     try {
@@ -195,16 +203,13 @@ const AIConfig = () => {
   };
 
   const handleLlmValidate = async () => {
-    const values = llmForm.getFieldsValue(['LLM_API_KEY', 'LLM_BASE_URL']) as {
+    const values = llmForm.getFieldsValue(['LLM_API_KEY', 'LLM_BASE_URL', 'LLM_MODEL']) as {
       LLM_API_KEY?: string;
       LLM_BASE_URL?: string;
+      LLM_MODEL?: string;
     };
     const apiKeyConfig = llmConfigs.find((c) => c.key === 'LLM_API_KEY');
-    if (!values.LLM_API_KEY && apiKeyConfig?.hasValue) {
-      message.info(t('aiConfig.reenterApiKeyForValidation'));
-      return;
-    }
-    if (!values.LLM_API_KEY) {
+    if (!values.LLM_API_KEY && !apiKeyConfig?.hasValue) {
       message.warning(t('aiConfig.enterLlmApiKeyFirst'));
       return;
     }
@@ -212,9 +217,17 @@ const AIConfig = () => {
       message.warning(t('aiConfig.enterLlmBaseUrlFirst'));
       return;
     }
+    if (!values.LLM_MODEL) {
+      message.warning(t('aiConfig.enterLlmModelFirst'));
+      return;
+    }
     try {
       setLlmValidating(true);
-      const result: ConfigLlmValidateResult = await validateLlmConnection(values.LLM_API_KEY, values.LLM_BASE_URL);
+      const result: ConfigLlmValidateResult = await validateLlmConnection(
+        values.LLM_API_KEY || '',
+        values.LLM_BASE_URL,
+        values.LLM_MODEL,
+      );
       if (result.ok) {
         setLlmModels(result.models || []);
         message.success(t('aiConfig.connectionTestSuccess', { count: result.models.length }));
@@ -264,6 +277,7 @@ const AIConfig = () => {
               <Button
                 type="text"
                 size="small"
+                aria-label={t(isRevealed ? 'common.hideSecret' : 'common.showSecret')}
                 icon={isRevealed ? <EyeInvisibleOutlined /> : <EyeOutlined />}
                 onClick={() => toggleReveal(config.key)}
               />
@@ -297,6 +311,7 @@ const AIConfig = () => {
   };
 
   const handleLlmProviderSubmit = async () => {
+    if (!modalMutation.begin()) return;
     try {
       const values = await llmProviderForm.validateFields();
       if (editingProvider) {
@@ -314,6 +329,9 @@ const AIConfig = () => {
         loadAssignments();
       }
     } catch {
+      // Validation errors remain visible on their corresponding form fields.
+    } finally {
+      modalMutation.end();
     }
   };
 
@@ -384,6 +402,7 @@ const AIConfig = () => {
   };
 
   const handleAssignmentSubmit = async () => {
+    if (!modalMutation.begin()) return;
     try {
       const values = await assignmentForm.validateFields();
       const tireApiKeys: Record<string, string> = {};
@@ -405,6 +424,9 @@ const AIConfig = () => {
       setEditingAssignment(null);
       loadAssignments();
     } catch {
+      // Validation errors remain visible on their corresponding form fields.
+    } finally {
+      modalMutation.end();
     }
   };
 
@@ -460,22 +482,28 @@ const AIConfig = () => {
       title: t('common.name'),
       dataIndex: 'name',
       key: 'name',
+      width: 180,
+      render: (name: string) => <TableCellText value={name} />,
     },
     {
       title: t('common.model'),
       dataIndex: 'model',
       key: 'model',
+      width: 180,
+      render: (model: string) => <TableCellText value={model} />,
     },
     {
       title: 'Base URL',
       dataIndex: 'baseUrl',
       key: 'baseUrl',
-      ellipsis: true,
+      width: 280,
+      render: (baseUrl: string) => <TableCellText value={baseUrl} />,
     },
     {
       title: 'API Key',
       dataIndex: 'hasApiKey',
       key: 'hasApiKey',
+      width: 128,
       render: (hasApiKey: boolean) => (
         hasApiKey ? <Tag color="green">{t('common.configured')}</Tag> : <Tag color="orange">{t('common.notConfigured')}</Tag>
       ),
@@ -484,18 +512,21 @@ const AIConfig = () => {
       title: t('common.default'),
       dataIndex: 'isDefault',
       key: 'isDefault',
+      width: 100,
       render: (isDefault: boolean) => (isDefault ? <Tag color="blue">{t('common.default')}</Tag> : null),
     },
     {
       title: t('common.enabled'),
       dataIndex: 'enabled',
       key: 'enabled',
+      width: 96,
       render: (enabled: boolean) => (enabled ? <Tag color="green">{t('common.on')}</Tag> : <Tag color="red">{t('common.off')}</Tag>),
     },
     {
       title: t('common.owner'),
       dataIndex: 'ownerType',
       key: 'ownerType',
+      width: 144,
       render: (ownerType: LlmProvider['ownerType']) => {
         if (ownerType === 'SYSTEM') return <Tag color="blue">SYSTEM</Tag>;
         if (ownerType === 'TENANT') return <Tag color="green">TENANT</Tag>;
@@ -505,22 +536,28 @@ const AIConfig = () => {
     {
       title: t('common.actions'),
       key: 'actions',
+      width: 152,
+      fixed: 'right',
       render: (_: unknown, record: LlmProvider) => (
-        <Space>
-          <Button
+        <TableActions label={t('common.actions')}>
+          <TableActionButton
+            label={t('aiConfig.connectionTest')}
             icon={<ApiOutlined />}
             loading={validatingProviderId === record.id}
             onClick={() => handleValidateProvider(record.id)}
-          >
-            {t('aiConfig.connectionTest')}
-          </Button>
-          <Button icon={<EditOutlined />} onClick={() => openLlmProviderModal(record)}>
-            {t('common.edit')}
-          </Button>
-          <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteLlmProvider(record)}>
-            {t('common.delete')}
-          </Button>
-        </Space>
+          />
+          <TableActionButton
+            label={t('common.edit')}
+            icon={<EditOutlined />}
+            onClick={() => openLlmProviderModal(record)}
+          />
+          <TableActionButton
+            label={t('common.delete')}
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDeleteLlmProvider(record)}
+          />
+        </TableActions>
       ),
     },
   ];
@@ -530,23 +567,31 @@ const AIConfig = () => {
       title: t('common.customerId'),
       dataIndex: 'customerId',
       key: 'customerId',
+      width: 160,
+      render: (customerId: string) => <TableCellText value={customerId} />,
     },
     {
       title: t('aiConfig.llmProvider'),
       dataIndex: 'llmProviderId',
       key: 'llmProviderId',
+      width: 220,
       render: (llmProviderId?: number | null) => {
         if (llmProviderId === undefined || llmProviderId === null) {
           return <Tag>{t('common.notConfigured')}</Tag>;
         }
         const provider = llmProviders.find((item) => item.id === llmProviderId);
-        return provider ? `${provider.name} (${provider.model})` : String(llmProviderId);
+        return (
+          <TableCellText
+            value={provider ? `${provider.name} (${provider.model})` : String(llmProviderId)}
+          />
+        );
       },
     },
     {
       title: t('aiConfig.llmLocked'),
       dataIndex: 'lockLlm',
       key: 'lockLlm',
+      width: 120,
       render: (lockLlm?: boolean) => (
         lockLlm ? <Tag color="green">{t('aiConfig.locked')}</Tag> : <Tag>{t('aiConfig.unlocked')}</Tag>
       ),
@@ -555,6 +600,7 @@ const AIConfig = () => {
       title: t('aiConfig.tiLocked'),
       dataIndex: 'lockTire',
       key: 'lockTire',
+      width: 120,
       render: (lockTire?: boolean) => (
         lockTire ? <Tag color="green">{t('aiConfig.locked')}</Tag> : <Tag>{t('aiConfig.unlocked')}</Tag>
       ),
@@ -563,6 +609,7 @@ const AIConfig = () => {
       title: 'TI Keys',
       dataIndex: 'hasTireApiKeys',
       key: 'hasTireApiKeys',
+      width: 128,
       render: (hasTireApiKeys?: boolean) => (
         hasTireApiKeys ? <Tag color="green">{t('common.configured')}</Tag> : <Tag color="orange">{t('common.notConfigured')}</Tag>
       ),
@@ -571,47 +618,56 @@ const AIConfig = () => {
       title: t('aiConfig.assignedBy'),
       dataIndex: 'assignedBy',
       key: 'assignedBy',
+      width: 120,
     },
     {
       title: t('aiConfig.assignedAt'),
       dataIndex: 'createdAt',
       key: 'createdAt',
-      render: (createdAt?: string) => createdAt || '-',
+      width: 180,
+      render: (createdAt?: string) => formatDateTime(createdAt),
     },
     {
       title: t('common.actions'),
       key: 'actions',
+      width: 108,
+      fixed: 'right',
       render: (_: unknown, record: ConfigAssignment) => (
-        <Space>
-          <Button icon={<EditOutlined />} onClick={() => openAssignmentModal(record)}>
-            {t('common.edit')}
-          </Button>
-          <Button danger icon={<DeleteOutlined />} onClick={() => handleRemoveAssignment(record)}>
-            {t('common.remove')}
-          </Button>
-        </Space>
+        <TableActions label={t('common.actions')}>
+          <TableActionButton
+            label={t('common.edit')}
+            icon={<EditOutlined />}
+            onClick={() => openAssignmentModal(record)}
+          />
+          <TableActionButton
+            label={t('common.remove')}
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleRemoveAssignment(record)}
+          />
+        </TableActions>
       ),
     },
   ];
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <Space className="tds-config-page tds-config-ai" direction="vertical" size={16} style={{ width: '100%' }}>
       {isSuperAdmin && (
-        <Card bordered={false}>
+        <Card className="tds-config-panel" variant="borderless">
           <Spin spinning={llmLoading}>
             <Alert
+              className="tds-config-note"
               message={t('aiConfig.globalTitle')}
               description={t('aiConfig.globalDescription')}
               type="info"
               showIcon
-              style={{ marginBottom: 24 }}
             />
             <Divider orientation="left">{t('aiConfig.globalLlmConfig')}</Divider>
             <Form
+              className="tds-config-form tds-config-form--wide"
               form={llmForm}
               layout="vertical"
               onFinish={handleLlmSave}
-              style={{ maxWidth: 600 }}
             >
               {llmConfigs.map((config) => {
                 if (config.key !== 'LLM_MODEL') {
@@ -656,7 +712,7 @@ const AIConfig = () => {
                 />
               )}
               <Form.Item>
-                <Space>
+                <Space className="tds-config-actions" wrap>
                   <Button
                     type="primary"
                     htmlType="submit"
@@ -682,9 +738,9 @@ const AIConfig = () => {
         </Card>
       )}
 
-      <Card bordered={false}>
+      <Card className="tds-config-panel" variant="borderless">
         <Divider orientation="left">{t('aiConfig.providerManagement')}</Divider>
-        <Space style={{ marginBottom: 16 }}>
+        <Space className="tds-config-actions" wrap>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => openLlmProviderModal()}>
             {t('aiConfig.addLlmProvider')}
           </Button>
@@ -698,13 +754,15 @@ const AIConfig = () => {
           columns={llmProviderColumns}
           dataSource={llmProviders}
           pagination={{ pageSize: 10 }}
+          tableLayout="fixed"
+          scroll={{ x: 1260 }}
         />
       </Card>
 
       {isAdmin && (
-        <Card bordered={false}>
+        <Card className="tds-config-panel" variant="borderless">
           <Divider orientation="left">{t('aiConfig.configAssignment')}</Divider>
-          <Space style={{ marginBottom: 16 }}>
+          <Space className="tds-config-actions" wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => openAssignmentModal()}>
               {t('aiConfig.newConfigAssignment')}
             </Button>
@@ -721,15 +779,17 @@ const AIConfig = () => {
             columns={assignmentColumns}
             dataSource={assignments}
             pagination={{ pageSize: 10 }}
+            tableLayout="fixed"
+            scroll={{ x: 1156 }}
           />
         </Card>
       )}
 
-      {isCustomerUser && (
-        <Card bordered={false}>
+      {isCustomerScopedUser && (
+        <Card className="tds-config-panel" variant="borderless">
           <Spin spinning={userConfigLoading}>
             <Divider orientation="left">{t('aiConfig.currentEffectiveConfig')}</Divider>
-            <Card size="small" style={{ marginBottom: 16 }}>
+            <Card className="tds-config-subpanel" size="small">
               <Descriptions column={1} size="small">
                 <Descriptions.Item label={t('aiConfig.llmSource')}>
                   <Tag color={resolveSourceColor(resolvedConfig?.llmSource)}>
@@ -767,7 +827,7 @@ const AIConfig = () => {
             </Card>
 
             <Divider orientation="left">{t('aiConfig.customConfig')}</Divider>
-            <Form form={userConfigForm} layout="vertical">
+            <Form className="tds-config-form tds-config-form--wide" form={userConfigForm} layout="vertical">
               {userConfig?.lockLlm ? (
                 <Alert
                   type="warning"
@@ -815,7 +875,7 @@ const AIConfig = () => {
               )}
 
               <Form.Item>
-                <Space>
+                <Space className="tds-config-actions" wrap>
                   <Button
                     type="primary"
                     icon={<SaveOutlined />}
@@ -839,11 +899,14 @@ const AIConfig = () => {
         title={editingProvider ? t('aiConfig.editLlmProvider') : t('aiConfig.addLlmProvider')}
         open={llmProviderModalOpen}
         onCancel={() => {
+          if (modalMutation.submitting) return;
           setLlmProviderModalOpen(false);
           llmProviderForm.resetFields();
           setEditingProvider(null);
         }}
         onOk={handleLlmProviderSubmit}
+        confirmLoading={modalMutation.submitting}
+        cancelButtonProps={{ disabled: modalMutation.submitting }}
         okText={t('common.save')}
         cancelText={t('common.cancel')}
       >
@@ -873,11 +936,14 @@ const AIConfig = () => {
         title={editingAssignment ? t('aiConfig.editAssignment') : t('aiConfig.assignment')}
         open={assignmentModalOpen}
         onCancel={() => {
+          if (modalMutation.submitting) return;
           setAssignmentModalOpen(false);
           assignmentForm.resetFields();
           setEditingAssignment(null);
         }}
         onOk={handleAssignmentSubmit}
+        confirmLoading={modalMutation.submitting}
+        cancelButtonProps={{ disabled: modalMutation.submitting }}
         okText={t('common.save')}
         cancelText={t('common.cancel')}
       >

@@ -17,17 +17,21 @@ public interface DeviceMappingRepository extends JpaRepository<DeviceMapping, Lo
     /**
      * 根据设备序列号查找
      */
-    Optional<DeviceMapping> findByDevSerial(String devSerial);
+    Optional<DeviceMapping> findFirstByDevSerialIgnoreCaseAndIsActiveTrueAndUnbindTimeIsNullOrderByBindTimeDescIdDesc(
+            String devSerial);
 
     /**
      * 检查设备序列号是否存在
      */
-    boolean existsByDevSerial(String devSerial);
+    boolean existsByDevSerialIgnoreCaseAndIsActiveTrueAndUnbindTimeIsNull(String devSerial);
 
     /**
      * 查找客户的所有设备
      */
     Page<DeviceMapping> findByCustomerId(String customerId, Pageable pageable);
+
+    Page<DeviceMapping> findByCustomerIdAndIsActiveTrueAndUnbindTimeIsNull(
+            String customerId, Pageable pageable);
 
     /**
      * 查找客户的所有激活设备
@@ -42,7 +46,8 @@ public interface DeviceMappingRepository extends JpaRepository<DeviceMapping, Lo
     /**
      * 统计客户的激活设备数量
      */
-    @Query("SELECT COUNT(d) FROM DeviceMapping d WHERE d.customerId = :customerId AND d.isActive = true")
+    @Query("SELECT COUNT(d) FROM DeviceMapping d WHERE d.customerId = :customerId " +
+           "AND d.isActive = true AND d.unbindTime IS NULL")
     long countActiveDevicesByCustomerId(@Param("customerId") String customerId);
 
     /**
@@ -53,7 +58,8 @@ public interface DeviceMappingRepository extends JpaRepository<DeviceMapping, Lo
     /**
      * 检查设备是否属于指定客户
      */
-    boolean existsByDevSerialAndCustomerId(String devSerial, String customerId);
+    boolean existsByDevSerialIgnoreCaseAndCustomerIdAndIsActiveTrueAndUnbindTimeIsNull(
+            String devSerial, String customerId);
 
     /**
      * 批量查找设备

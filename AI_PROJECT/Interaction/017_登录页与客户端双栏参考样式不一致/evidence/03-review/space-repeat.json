@@ -1,0 +1,58 @@
+{
+  "results": [
+    {
+      "field": "#login_password",
+      "states": [
+        "password",
+        "text",
+        "password",
+        "password"
+      ],
+      "focused": true,
+      "inputLength": 9
+    },
+    {
+      "field": "#login_confirmPassword",
+      "states": [
+        "password",
+        "text",
+        "password",
+        "password"
+      ],
+      "focused": true,
+      "inputLength": 9
+    }
+  ],
+  "events": [
+    {
+      "type": "keydown",
+      "repeat": false,
+      "target": "BUTTON"
+    },
+    {
+      "type": "keydown",
+      "repeat": true,
+      "target": "BUTTON"
+    },
+    {
+      "type": "keyup",
+      "repeat": false,
+      "target": "BUTTON"
+    },
+    {
+      "type": "keydown",
+      "repeat": false,
+      "target": "BUTTON"
+    },
+    {
+      "type": "keydown",
+      "repeat": true,
+      "target": "BUTTON"
+    },
+    {
+      "type": "keyup",
+      "repeat": false,
+      "target": "BUTTON"
+    }
+  ]
+}

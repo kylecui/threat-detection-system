@@ -1,0 +1,14 @@
+# Periodic Docker/containerd state reconciliation
+
+[Unit]
+Description=Run Threat Detection System runtime watchdog periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+Persistent=true
+Unit=threat-detection-runtime-watchdog.service
+
+[Install]
+WantedBy=timers.target

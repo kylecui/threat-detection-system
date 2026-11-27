@@ -13,9 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 
 /**
  * 通知配置管理服务
@@ -91,30 +88,6 @@ public class NotificationConfigService {
 
         notificationConfigRepository.deleteByCustomerId(customerId);
         log.info("Successfully deleted notification config for customer: {}", customerId);
-    }
-
-    /**
-     * 测试通知配置
-     */
-    @Transactional(readOnly = true)
-    public Map<String, Object> testConfig(String customerId) {
-        log.info("Testing notification config for customer: {}", customerId);
-
-        NotificationConfig config = notificationConfigRepository.findByCustomerId(customerId)
-                .orElseThrow(() -> new RuntimeException("Notification config not found for customer: " + customerId));
-
-        // 模拟测试结果
-        return Map.of(
-                "customerId", customerId,
-                "emailEnabled", config.getEmailEnabled(),
-                "emailRecipientsCount", parseJsonArray(config.getEmailRecipients()).size(),
-                "smsEnabled", config.getSmsEnabled(),
-                "slackEnabled", config.getSlackEnabled(),
-                "webhookEnabled", config.getWebhookEnabled(),
-                "isActive", config.getIsActive(),
-                "testStatus", "SUCCESS",
-                "message", "Notification configuration is valid"
-        );
     }
 
     /**
@@ -228,21 +201,6 @@ public class NotificationConfigService {
         } catch (JsonProcessingException e) {
             log.error("Failed to convert object to JSON: {}", obj, e);
             return "[]";
-        }
-    }
-
-    /**
-     * 解析JSON数组
-     */
-    private List<String> parseJsonArray(String json) {
-        if (json == null || json.trim().isEmpty()) {
-            return Collections.emptyList();
-        }
-        try {
-            return objectMapper.readValue(json, List.class);
-        } catch (JsonProcessingException e) {
-            log.warn("Failed to parse JSON array: {}", json, e);
-            return Collections.emptyList();
         }
     }
 

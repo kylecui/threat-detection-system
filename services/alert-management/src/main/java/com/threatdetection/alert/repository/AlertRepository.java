@@ -87,6 +87,8 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
            "AND a.lastNotifiedAt IS NOT NULL AND a.lastNotifiedAt < :thresholdTime")
     List<Alert> findAlertsNeedingEscalation(@Param("thresholdTime") LocalDateTime thresholdTime);
 
+    long countByEscalationLevelGreaterThan(Integer level);
+
     /**
      * 查找未解决的告警
      */

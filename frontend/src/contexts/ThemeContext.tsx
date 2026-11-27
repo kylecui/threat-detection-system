@@ -34,6 +34,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const mode: ThemeMode = isDarkMode ? 'dark' : 'light';
     localStorage.setItem(THEME_STORAGE_KEY, mode);
     document.documentElement.setAttribute('data-theme', mode);
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+      ?.setAttribute('content', isDarkMode ? '#0c1420' : '#f3f6f8');
   }, [isDarkMode]);
 
   const value = useMemo(
@@ -47,6 +49,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);
   if (!ctx) throw new Error('useTheme must be used within ThemeProvider');

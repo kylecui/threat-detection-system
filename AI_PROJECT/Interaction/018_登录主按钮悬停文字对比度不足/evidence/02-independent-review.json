@@ -1,0 +1,27 @@
+{
+  "scope": [
+    "INTERACTION-018",
+    "INTERACTION-019"
+  ],
+  "verdict": "ship",
+  "reviewMode": "Independent read-only review of source, raw state/keyboard JSON, screenshots and current file hashes; browser tests executed by primary agent",
+  "contrast": {
+    "hoverRatio": 6.0975428627647466,
+    "scenes": 12,
+    "minimumEnabledRatio": 4.639721692849931,
+    "samples": 60
+  },
+  "keyRepeat": {
+    "bootstrapPosts": 0,
+    "scenarios": 4,
+    "loginPosts": 0,
+    "repeatedKeydowns": 36,
+    "stateSnapshots": 84
+  },
+  "productionAdditions": [
+    "colorPrimaryHover: #066b84",
+    "event.repeat guard after preventDefault/stopPropagation"
+  ],
+  "unchangedFilesVerified": 10,
+  "parent017FinalAcceptance": "Pending independent third-stage review; historical rejection is preserved"
+}

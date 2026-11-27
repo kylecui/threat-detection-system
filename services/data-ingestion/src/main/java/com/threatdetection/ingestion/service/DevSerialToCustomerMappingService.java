@@ -10,6 +10,7 @@ import jakarta.annotation.PostConstruct;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -26,6 +27,9 @@ public class DevSerialToCustomerMappingService {
 
     // Cache for performance (optional - can be removed if real-time consistency is required)
     private volatile Map<String, String> devSerialToCustomerCache;
+    private final Map<String, CustomerOperationalState> customerOperationalCache =
+            new ConcurrentHashMap<>();
+    private static final long CUSTOMER_STATUS_CACHE_MILLIS = 5_000L;
 
     public DevSerialToCustomerMappingService(DeviceCustomerMappingRepository repository) {
         this.repository = repository;
@@ -50,9 +54,12 @@ public class DevSerialToCustomerMappingService {
 
         // Try cache first for performance
         String customerId = devSerialToCustomerCache.get(devSerial.toUpperCase());
-        if (customerId != null) {
+        if (customerId != null && isCustomerOperational(customerId)) {
             logger.debug("Resolved devSerial {} to customerId {} (from cache)", devSerial, customerId);
             return customerId;
+        }
+        if (customerId != null) {
+            devSerialToCustomerCache.remove(devSerial.toUpperCase());
         }
 
         // Fallback to database query
@@ -91,6 +98,11 @@ public class DevSerialToCustomerMappingService {
             logger.warn("Cannot add mapping with null devSerial or customerId");
             return false;
         }
+        if (!repository.isCustomerOperational(customerId)) {
+            logger.warn("Cannot add mapping for inactive or unknown customer: {}", customerId);
+            return false;
+        }
+        customerOperationalCache.remove(customerId);
 
         try {
             Optional<DeviceCustomerMapping> existing = repository.findByDevSerialAndIsActiveTrue(devSerial.toUpperCase());
@@ -153,7 +165,7 @@ public class DevSerialToCustomerMappingService {
      * @return map of devSerial to customerId
      */
     public Map<String, String> getAllMappings() {
-        return repository.findByIsActiveTrue().stream()
+        return repository.findAllOperationalMappings().stream()
                 .collect(Collectors.toMap(
                         mapping -> mapping.getDevSerial().toUpperCase(),
                         DeviceCustomerMapping::getCustomerId,
@@ -179,7 +191,8 @@ public class DevSerialToCustomerMappingService {
      * Refreshes the in-memory cache from database
      */
     public void refreshCache() {
-        devSerialToCustomerCache = getAllMappings();
+        devSerialToCustomerCache = new ConcurrentHashMap<>(getAllMappings());
+        customerOperationalCache.clear();
         logger.debug("Refreshed cache with {} mappings", devSerialToCustomerCache.size());
     }
 
@@ -198,5 +211,23 @@ public class DevSerialToCustomerMappingService {
      */
     public boolean hasMapping(String devSerial) {
         return devSerial != null && repository.existsByDevSerialAndIsActiveTrue(devSerial.toUpperCase());
+    }
+
+    public boolean isCustomerOperational(String customerId) {
+        if (customerId == null || customerId.isBlank()) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        CustomerOperationalState cached = customerOperationalCache.get(customerId);
+        if (cached != null && cached.expiresAtMillis() > now) {
+            return cached.operational();
+        }
+        boolean operational = repository.isCustomerOperational(customerId);
+        customerOperationalCache.put(customerId,
+                new CustomerOperationalState(operational, now + CUSTOMER_STATUS_CACHE_MILLIS));
+        return operational;
+    }
+
+    private record CustomerOperationalState(boolean operational, long expiresAtMillis) {
     }
 }

@@ -1,0 +1,21 @@
+# Threat Detection System Docker Compose stack
+
+[Unit]
+Description=Threat Detection System (Docker Compose)
+Documentation=file:/opt/threat-detection-system/README.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/threat-detection-system
+ExecStart=/opt/threat-detection-system/scripts/compose-runtime.sh /opt/threat-detection-system .env up -d --remove-orphans
+ExecStartPost=/opt/threat-detection-system/scripts/runtime-watchdog.sh --recover
+ExecStop=/opt/threat-detection-system/scripts/compose-runtime.sh /opt/threat-detection-system .env stop
+TimeoutStartSec=600
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target

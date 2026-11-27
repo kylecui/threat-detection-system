@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { formatDateTime } from '@/utils/formatDateTime';
 import {
   Alert,
   Button,
@@ -24,6 +25,11 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { usePermission } from '@/hooks/usePermission';
+import TableActionButton from '@/components/TableActionButton';
+import TableActions from '@/components/TableActions';
+import { TABLE_ACTION_COLUMN_WIDTH } from '@/components/tableActionWidth';
+import TableCellText from '@/components/TableCellText';
+import './configuration.css';
 import {
   addGroupMember,
   batchAssignLockMode,
@@ -39,6 +45,7 @@ import {
   updateEntityGroup,
 } from '@/services/configCascading';
 import type { ConfigInheritanceItem, EntityGroup, EntityGroupMember } from '@/services/configCascading';
+import useSubmitGuard from '@/hooks/useSubmitGuard';
 
 type EntityType = 'tenant' | 'customer';
 type GroupType = 'tenant_group' | 'customer_group';
@@ -73,6 +80,7 @@ const ConfigCascading = () => {
 
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [batchSubmitting, setBatchSubmitting] = useState(false);
+  const mutation = useSubmitGuard();
 
   const { isAdminRole: isAdmin } = usePermission();
 
@@ -166,6 +174,7 @@ const ConfigCascading = () => {
       return;
     }
 
+    if (!mutation.begin()) return;
     try {
       const values = await lockForm.validateFields();
       await setLockMode(
@@ -181,6 +190,8 @@ const ConfigCascading = () => {
       await loadLocks(currentEntityType, currentEntityId);
     } catch {
       message.error(t('configCascading.saveLockFailed'));
+    } finally {
+      mutation.end();
     }
   };
 
@@ -240,6 +251,7 @@ const ConfigCascading = () => {
   };
 
   const handleSaveGroup = async () => {
+    if (!mutation.begin()) return;
     try {
       const values = await groupForm.validateFields();
       const payload = {
@@ -262,6 +274,8 @@ const ConfigCascading = () => {
       await loadGroups();
     } catch {
       message.error(t('common.operationFailed'));
+    } finally {
+      mutation.end();
     }
   };
 
@@ -281,6 +295,7 @@ const ConfigCascading = () => {
 
   const handleAddMember = async () => {
     if (!selectedGroup) return;
+    if (!mutation.begin()) return;
     try {
       const values = await memberForm.validateFields();
       await addGroupMember(selectedGroup.id, Number(values.entityId), values.entityType as EntityType);
@@ -289,6 +304,8 @@ const ConfigCascading = () => {
       await loadMembers(selectedGroup);
     } catch {
       message.error(t('common.operationFailed'));
+    } finally {
+      mutation.end();
     }
   };
 
@@ -318,6 +335,7 @@ const ConfigCascading = () => {
 
   const handleBatchAssign = async () => {
     if (!selectedGroup) return;
+    if (!mutation.begin()) return;
     try {
       const values = await batchForm.validateFields();
       setBatchSubmitting(true);
@@ -333,6 +351,7 @@ const ConfigCascading = () => {
       message.error(t('configCascading.batchAssignFailed'));
     } finally {
       setBatchSubmitting(false);
+      mutation.end();
     }
   };
 
@@ -341,37 +360,51 @@ const ConfigCascading = () => {
       title: t('configCascading.configType'),
       dataIndex: 'configType',
       key: 'configType',
+      // INTERACTION-002: no fixed width — this business column absorbs any
+      // extra table width (min = scroll.x − other columns = 200px), so the
+      // action column stays at its 108px budget instead of stretching.
+      render: (value: string) => <TableCellText value={value} />,
     },
     {
       title: t('configCascading.lockMode'),
       dataIndex: 'lockMode',
       key: 'lockMode',
+      width: 120,
       render: (value: LockMode) => <Tag color={lockModeColor(value)}>{lockModeLabel(value)}</Tag>,
     },
     {
       title: t('configCascading.lockedBy'),
       dataIndex: 'lockedBy',
       key: 'lockedBy',
+      width: 120,
       render: (value: number | null) => (value === null ? '-' : value),
     },
     {
       title: t('configCascading.lockedAt'),
       dataIndex: 'lockedAt',
       key: 'lockedAt',
+      width: 180,
       render: (value: string | null) => value || '-',
     },
     {
       title: t('common.actions'),
       key: 'actions',
+      width: TABLE_ACTION_COLUMN_WIDTH[2],
+      fixed: 'right',
       render: (_: unknown, record: ConfigInheritanceItem) => (
-        <Space>
-          <Button icon={<EditOutlined />} onClick={() => openEditLockModal(record)}>
-            {t('common.edit')}
-          </Button>
-          <Button danger icon={<DeleteOutlined />} onClick={() => handleRemoveLock(record)}>
-            {t('common.delete')}
-          </Button>
-        </Space>
+        <TableActions label={t('common.actions')}>
+          <TableActionButton
+            label={t('common.edit')}
+            icon={<EditOutlined />}
+            onClick={() => openEditLockModal(record)}
+          />
+          <TableActionButton
+            label={t('common.delete')}
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleRemoveLock(record)}
+          />
+        </TableActions>
       ),
     },
   ];
@@ -381,11 +414,14 @@ const ConfigCascading = () => {
       title: t('configCascading.groupName'),
       dataIndex: 'groupName',
       key: 'groupName',
+      width: 200,
+      render: (value: string) => <TableCellText value={value} />,
     },
     {
       title: t('configCascading.groupType'),
       dataIndex: 'groupType',
       key: 'groupType',
+      width: 120,
       render: (value: GroupType) => (
         <Tag color={value === 'tenant_group' ? 'blue' : 'purple'}>
           {value === 'tenant_group' ? t('configCascading.tenantGroup') : t('configCascading.customerGroup')}
@@ -396,42 +432,59 @@ const ConfigCascading = () => {
       title: t('configCascading.description'),
       dataIndex: 'description',
       key: 'description',
-      render: (value: string | null) => value || '-',
+      // INTERACTION-002: flexible business column (min 240px via scroll.x);
+      // extra width goes here instead of the 200px action column.
+      render: (value: string | null) => <TableCellText value={value} />,
     },
     {
       title: t('common.tenant'),
       dataIndex: 'tenantId',
       key: 'tenantId',
+      width: 96,
       render: (value: number | null) => (value === null ? '-' : value),
     },
     {
       title: t('configCascading.lockedBy'),
       dataIndex: 'createdBy',
       key: 'createdBy',
+      width: 120,
     },
     {
       title: t('common.createdAt'),
       dataIndex: 'createdAt',
       key: 'createdAt',
+      width: 180,
+      render: (value?: string) => formatDateTime(value),
     },
     {
       title: t('common.actions'),
       key: 'actions',
+      width: TABLE_ACTION_COLUMN_WIDTH[4],
+      fixed: 'right',
       render: (_: unknown, record: EntityGroup) => (
-        <Space wrap>
-          <Button icon={<EditOutlined />} onClick={() => openEditGroupModal(record)}>
-            {t('common.edit')}
-          </Button>
-          <Button icon={<TeamOutlined />} onClick={() => loadMembers(record)}>
-            {t('configCascading.manageMembers')}
-          </Button>
-          <Button icon={<LockOutlined />} onClick={() => openBatchAssignModal(record)}>
-            {t('configCascading.batchAssign')}
-          </Button>
-          <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteGroup(record)}>
-            {t('common.delete')}
-          </Button>
-        </Space>
+        <TableActions label={t('common.actions')}>
+          <TableActionButton
+            label={t('common.edit')}
+            icon={<EditOutlined />}
+            onClick={() => openEditGroupModal(record)}
+          />
+          <TableActionButton
+            label={t('configCascading.manageMembers')}
+            icon={<TeamOutlined />}
+            onClick={() => loadMembers(record)}
+          />
+          <TableActionButton
+            label={t('configCascading.batchAssign')}
+            icon={<LockOutlined />}
+            onClick={() => openBatchAssignModal(record)}
+          />
+          <TableActionButton
+            label={t('common.delete')}
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDeleteGroup(record)}
+          />
+        </TableActions>
       ),
     },
   ];
@@ -441,25 +494,33 @@ const ConfigCascading = () => {
       title: t('configCascading.entityId'),
       dataIndex: 'entityId',
       key: 'entityId',
+      // INTERACTION-002: flexible column (min 120px via scroll.x) so the
+      // 72px action column does not stretch inside the 900px modal.
     },
     {
       title: t('configCascading.entityType'),
       dataIndex: 'entityType',
       key: 'entityType',
+      width: 120,
       render: (value: EntityType) => (value === 'tenant' ? t('configCascading.tenant') : t('configCascading.customer')),
     },
     {
       title: t('common.createdAt'),
       dataIndex: 'addedAt',
       key: 'addedAt',
+      width: 180,
     },
     {
       title: t('common.actions'),
       key: 'actions',
+      width: TABLE_ACTION_COLUMN_WIDTH[1],
       render: (_: unknown, record: EntityGroupMember) => (
-        <Button danger icon={<DeleteOutlined />} onClick={() => handleRemoveMember(record)}>
-          {t('configCascading.removeMember')}
-        </Button>
+        <TableActionButton
+          label={t('configCascading.removeMember')}
+          danger
+          icon={<DeleteOutlined />}
+          onClick={() => handleRemoveMember(record)}
+        />
       ),
     },
   ];
@@ -469,17 +530,18 @@ const ConfigCascading = () => {
   }
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <Space direction="vertical" size={16} className="tds-config-cascading" style={{ width: '100%' }}>
       <Card bordered={false}>
         <Divider orientation="left">{t('configCascading.lockManagement')}</Divider>
-        <Form form={lockQueryForm} layout="inline" style={{ marginBottom: 16 }}>
+        {/* INTERACTION-007: responsive layout lives in configuration.css (.tds-config-cascading__*). */}
+        <Form form={lockQueryForm} layout="inline" className="tds-config-cascading__lock-query">
           <Form.Item
             name="entityType"
             label={t('configCascading.entityType')}
             rules={[{ required: true, message: t('configCascading.selectEntityFirst') }]}
           >
             <Select
-              style={{ width: 180 }}
+              className="tds-config-cascading__field-control"
               options={[
                 { label: t('configCascading.tenant'), value: 'tenant' },
                 { label: t('configCascading.customer'), value: 'customer' },
@@ -491,10 +553,10 @@ const ConfigCascading = () => {
             label={t('configCascading.entityId')}
             rules={[{ required: true, message: t('configCascading.selectEntityFirst') }]}
           >
-            <Input style={{ width: 180 }} type="number" min={1} />
+            <Input className="tds-config-cascading__field-control" type="number" min={1} />
           </Form.Item>
           <Form.Item>
-            <Space>
+            <div className="tds-config-cascading__lock-actions">
               <Button type="primary" onClick={handleLoadLocks} icon={<UnlockOutlined />}>
                 {t('configCascading.loadLocks')}
               </Button>
@@ -504,7 +566,7 @@ const ConfigCascading = () => {
               <Button danger icon={<DeleteOutlined />} onClick={handleRemoveAllLocks}>
                 {t('configCascading.removeAllLocks')}
               </Button>
-            </Space>
+            </div>
           </Form.Item>
         </Form>
 
@@ -514,6 +576,8 @@ const ConfigCascading = () => {
           columns={lockColumns}
           dataSource={lockItems}
           pagination={{ pageSize: 10 }}
+          tableLayout="fixed"
+          scroll={{ x: 728 }}
         />
       </Card>
 
@@ -530,6 +594,8 @@ const ConfigCascading = () => {
           columns={groupColumns}
           dataSource={groups}
           pagination={{ pageSize: 10 }}
+          tableLayout="fixed"
+          scroll={{ x: 1156 }}
         />
       </Card>
 
@@ -537,11 +603,14 @@ const ConfigCascading = () => {
         title={editingLock ? t('configCascading.editLock') : t('configCascading.addLock')}
         open={lockModalOpen}
         onCancel={() => {
+          if (mutation.submitting) return;
           setLockModalOpen(false);
           lockForm.resetFields();
           setEditingLock(null);
         }}
         onOk={handleSaveLock}
+        confirmLoading={mutation.submitting}
+        cancelButtonProps={{ disabled: mutation.submitting }}
         okText={t('common.save')}
         cancelText={t('common.cancel')}
       >
@@ -576,11 +645,14 @@ const ConfigCascading = () => {
         title={editingGroup ? t('configCascading.editGroup') : t('configCascading.createGroup')}
         open={groupModalOpen}
         onCancel={() => {
+          if (mutation.submitting) return;
           setGroupModalOpen(false);
           groupForm.resetFields();
           setEditingGroup(null);
         }}
         onOk={handleSaveGroup}
+        confirmLoading={mutation.submitting}
+        cancelButtonProps={{ disabled: mutation.submitting }}
         okText={t('common.save')}
         cancelText={t('common.cancel')}
       >
@@ -627,6 +699,8 @@ const ConfigCascading = () => {
           columns={memberColumns}
           dataSource={members}
           pagination={{ pageSize: 8 }}
+          tableLayout="fixed"
+          scroll={{ x: 492 }}
           style={{ marginBottom: 16 }}
         />
 
@@ -653,7 +727,7 @@ const ConfigCascading = () => {
             />
           </Form.Item>
           <Form.Item>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddMember}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddMember} loading={mutation.submitting}>
               {t('configCascading.addMember')}
             </Button>
           </Form.Item>
@@ -668,7 +742,7 @@ const ConfigCascading = () => {
           batchForm.resetFields();
         }}
         onOk={handleBatchAssign}
-        confirmLoading={batchSubmitting}
+        confirmLoading={batchSubmitting || mutation.submitting}
         okText={t('common.confirm')}
         cancelText={t('common.cancel')}
       >

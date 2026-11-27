@@ -118,13 +118,13 @@ public class AttackEventJdbcSink {
      */
     public static SinkFunction<AttackEvent> createSinkWithEnvConfig() {
         String jdbcUrl = System.getenv().getOrDefault(
-            "JDBC_URL", 
+            "DB_URL", 
             "jdbc:postgresql://postgres:5432/threat_detection");
         String jdbcUser = System.getenv().getOrDefault(
-            "JDBC_USER", 
+            "DB_USER", 
             "threat_user");
         String jdbcPassword = System.getenv().getOrDefault(
-            "JDBC_PASSWORD", 
+            "DB_PASSWORD", 
             "threat_password");
         
         return createSink(jdbcUrl, jdbcUser, jdbcPassword);

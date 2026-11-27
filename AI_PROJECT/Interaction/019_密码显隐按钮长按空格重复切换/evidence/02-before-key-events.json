@@ -1,0 +1,85 @@
+[
+  {
+    "title": "Space holds toggle once, release safely and do not submit valid forms",
+    "status": "failed",
+    "evidence": {
+      "mode": {
+        "name": "ordinary",
+        "bootstrap": false,
+        "language": "en-US",
+        "mobile": false
+      },
+      "key": "Space",
+      "events": [
+        {
+          "type": "keyup",
+          "key": "Tab",
+          "repeat": false,
+          "field": "login_password"
+        },
+        {
+          "type": "keydown",
+          "key": " ",
+          "repeat": false,
+          "field": "login_password"
+        },
+        {
+          "type": "keydown",
+          "key": " ",
+          "repeat": true,
+          "field": "login_password"
+        },
+        {
+          "type": "keyup",
+          "key": " ",
+          "repeat": false,
+          "field": "login_password"
+        }
+      ],
+      "snapshots": [
+        {
+          "stage": "password:Space:initial-true",
+          "fields": [
+            {
+              "id": "login_password",
+              "type": "text",
+              "value": "Valid 019",
+              "pressed": "true",
+              "name": "Hide password",
+              "focused": true,
+              "width": 44,
+              "height": 44
+            }
+          ],
+          "posts": {
+            "bootstrap": 0,
+            "login": 0
+          }
+        },
+        {
+          "stage": "password:Space:repeat-1-true",
+          "fields": [
+            {
+              "id": "login_password",
+              "type": "password",
+              "value": "Valid 019",
+              "pressed": "false",
+              "name": "Show password",
+              "focused": true,
+              "width": 44,
+              "height": 44
+            }
+          ],
+          "posts": {
+            "bootstrap": 0,
+            "login": 0
+          }
+        }
+      ],
+      "posts": {
+        "bootstrap": 0,
+        "login": 0
+      }
+    }
+  }
+]

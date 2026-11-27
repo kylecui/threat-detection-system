@@ -20,6 +20,7 @@ export enum ThreatLevel {
 /** 告警状态 */
 export enum AlertStatus {
   NEW = 'NEW',
+  IN_PROGRESS = 'IN_PROGRESS',
   DEDUPLICATED = 'DEDUPLICATED',
   ENRICHED = 'ENRICHED',
   NOTIFIED = 'NOTIFIED',
@@ -46,22 +47,19 @@ export enum CustomerStatus {
 
 /** 订阅等级 */
 export enum SubscriptionTier {
+  FREE = 'FREE',
   BASIC = 'BASIC',
-  STANDARD = 'STANDARD',
-  PREMIUM = 'PREMIUM',
+  PROFESSIONAL = 'PROFESSIONAL',
   ENTERPRISE = 'ENTERPRISE',
 }
 
 /** IOC类型 */
 export enum IocType {
-  IPV4 = 'IPV4',
-  IPV6 = 'IPV6',
+  IP_V4 = 'IP_V4',
+  IP_V6 = 'IP_V6',
+  CIDR = 'CIDR',
   DOMAIN = 'DOMAIN',
-  URL = 'URL',
-  MD5 = 'MD5',
-  SHA1 = 'SHA1',
-  SHA256 = 'SHA256',
-  EMAIL = 'EMAIL',
+  FILE_HASH = 'FILE_HASH',
 }
 
 /** 威胁情报严重性 */
@@ -240,6 +238,7 @@ export interface EscalationAnalytics {
 export interface Customer {
   id: number;
   customerId: string;
+  tenantId?: number;
   name: string;
   email: string;
   phone?: string;
@@ -276,6 +275,76 @@ export interface Device {
   isActive?: boolean;
   description?: string;
   realHostCount?: number;
+  /** Last heartbeat accepted by the ingestion pipeline. */
+  lastHeartbeatAt?: string;
+  /** Last raw attack event accepted for this device. */
+  lastAttackAt?: string;
+  /** Most recent heartbeat or raw attack event accepted by platform storage. */
+  lastIngestedAt?: string;
+  attackEvents24h?: number;
+  /** Last threat assessment produced from this device's attack events. */
+  lastThreatAt?: string;
+  /** @deprecated Compatibility alias for heartbeatState. */
+  connectionState?: 'DISABLED' | 'NEVER_SEEN' | 'ONLINE' | 'DELAYED' | 'OFFLINE';
+  heartbeatState?: 'DISABLED' | 'NEVER_SEEN' | 'ONLINE' | 'DELAYED' | 'OFFLINE';
+  dataActivityState?: 'DISABLED' | 'NEVER_SEEN' | 'ACTIVE' | 'IDLE';
+  expectedHeartbeatIntervalSeconds?: number;
+  heartbeatDelayedAfterSeconds?: number;
+  heartbeatOfflineAfterSeconds?: number;
+  pipelineState?:
+    | 'DISABLED'
+    | 'WAITING_FOR_DATA'
+    | 'NO_ATTACK_DATA'
+    | 'RECEIVING'
+    | 'PROCESSING_DELAY'
+    | 'PROCESSED';
+}
+
+export interface DeviceAttackEvent {
+  id: number;
+  devSerial: string;
+  attackMac?: string;
+  attackIp?: string;
+  responseIp?: string;
+  responsePort?: number;
+  eventTimestamp?: string;
+  receivedAt?: string;
+}
+
+export interface DeviceBatchFailure {
+  devSerial: string;
+  reason: string;
+}
+
+export interface DeviceBatchOperationResult {
+  total: number;
+  succeeded: number;
+  failed: number;
+  successfulDevices: string[];
+  failures: DeviceBatchFailure[];
+}
+
+export interface OverviewSnapshot {
+  generatedAt: string;
+  statistics: Statistics;
+  /** API DTO (后端 TrendDataPoint)；图表使用前须经 toTrendChartData 转换 */
+  trend: ThreatTrendPoint[];
+  portDistribution: PortDistribution[];
+  nonPortProtocols: NonPortProtocolDistribution[];
+  topAttackers: TopAttacker[];
+  recentThreats: ThreatAssessment[];
+}
+
+export interface NonPortProtocolDistribution {
+  protocol: 'ARP' | 'ICMP' | 'ICMPv6' | 'GRE' | 'ESP' | 'AH' | 'PORT_ANOMALY' | 'OTHER' | string;
+  count: number;
+}
+
+export interface PortDistribution {
+  port: number;
+  portName?: string | null;
+  count: number;
+  percentage: number;
 }
 
 /** 设备配额 */
@@ -300,14 +369,28 @@ export interface NetSegmentWeight {
 
 /** 通知配置 */
 export interface NotificationConfig {
+  id?: number;
   customerId: string;
   emailEnabled: boolean;
   smsEnabled: boolean;
   slackEnabled: boolean;
   webhookEnabled: boolean;
   emailRecipients?: string[];
+  smsRecipients?: string[];
   slackWebhookUrl?: string;
+  slackChannel?: string;
   webhookUrl?: string;
+  webhookHeaders?: Record<string, string>;
+  minSeverityLevel?: 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  notifyOnSeverities?: Array<'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'>;
+  maxNotificationsPerHour?: number;
+  enableRateLimiting?: boolean;
+  quietHoursEnabled?: boolean;
+  quietHoursStart?: string;
+  quietHoursEnd?: string;
+  quietHoursTimezone?: string;
+  isActive?: boolean;
+  description?: string;
 }
 
 // ============================================================
@@ -340,15 +423,21 @@ export interface ThreatIndicator {
 /** 威胁情报Feed */
 export interface ThreatFeed {
   id: number;
-  name: string;
-  url: string;
+  feedName: string;
+  feedUrl?: string;
   feedType: string;
   enabled: boolean;
-  pollingIntervalMinutes: number;
-  lastPolledAt?: string;
-  lastSuccessAt?: string;
+  pollIntervalHours: number;
+  apiKeyEnvVar?: string;
+  sourceWeight: number;
+  lastPollAt?: string;
+  lastPollStatus?: string;
+  lastPollError?: string;
   indicatorCount: number;
-  status: string;
+  pollable?: boolean;
+  capability?: 'LOCAL_WRITE' | 'SCHEDULED_AND_MANUAL_POLL' | 'UNSUPPORTED' | string;
+  nonPollableReason?: string;
+  pollBatchLimit?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -357,17 +446,21 @@ export interface ThreatFeed {
 export interface IpLookupResult {
   ip: string;
   found: boolean;
-  indicators: ThreatIndicator[];
-  reputation?: number;
-  categories?: string[];
+  confidence: number;
+  severity: string;
+  intelWeight: number;
+  sources: string[];
+  indicatorCount: number;
+  lastSeenAt?: string;
+  tireScore?: number;
+  tireLevel?: string;
+  tireVerdict?: string;
 }
 
 /** 威胁情报统计 */
 export interface IntelStatistics {
   totalIndicators: number;
   activeIndicators: number;
-  expiredIndicators: number;
-  byType: Record<string, number>;
   bySeverity: Record<string, number>;
   bySource: Record<string, number>;
   totalFeeds: number;
@@ -436,6 +529,8 @@ export interface MlTrainingStatus {
   elapsedSeconds?: number;
   results?: Record<number, Record<string, unknown>>;
   error?: string;
+  currentTier?: number | null;
+  completedTiers?: number;
 }
 
 /** ML训练数据就绪状态 */
@@ -483,9 +578,7 @@ export interface ApiResponse<T> {
 /** 分页参数 */
 export interface PaginationParams {
   page: number;
-  page_size: number;
-  sort_by?: string;
-  sort_order?: 'asc' | 'desc';
+  size: number;
 }
 
 /** 分页响应 (Spring Data Page格式) */
@@ -515,6 +608,7 @@ export interface ThreatQueryFilter extends PaginationParams {
   start_time?: string;
   end_time?: string;
   attack_mac?: string;
+  detection_tier?: 1 | 2 | 3;
 }
 
 /** 告警查询过滤器 */
@@ -536,7 +630,28 @@ export interface TimeRange {
   end: string;
 }
 
-/** 图表数据点 */
+/**
+ * 威胁趋势点（API 传输类型，INTERACTION-008）
+ *
+ * 与后端 `com.threatdetection.assessment.dto.TrendDataPoint` 一一对应，由
+ * Overview 快照的 `trend`、`GET /api/v1/assessment/trend` 与
+ * `GET /api/v1/assessment/trend/tenant` 返回。后端对空时间桶也会补齐全部
+ * 字段（数值为 0），因此全部字段必填。不要直接交给图表；在展示边界用
+ * `pages/Overview/trend.ts` 的 `toTrendChartData` 转换为 `ChartDataPoint`。
+ */
+export interface ThreatTrendPoint {
+  /** 时间桶起点，ISO-8601 字符串 */
+  timestamp: string;
+  /** 该时间桶内的威胁评估数量 */
+  count: number;
+  averageScore: number;
+  maxScore: number;
+  criticalCount: number;
+  highCount: number;
+  mediumCount: number;
+}
+
+/** 图表数据点（前端展示模型，不是 API 响应） */
 export interface ChartDataPoint {
   time: string;
   value: number;
@@ -568,18 +683,21 @@ export type SystemConfigCategory = 'tire_api_keys' | 'llm' | 'tire_general' | 't
 
 /** SMTP配置 */
 export interface SmtpConfig {
-  id: number;
-  host: string;
-  port: number;
-  username: string;
+  configured: boolean;
+  id?: number;
+  configName?: string;
+  host?: string;
+  port?: number;
+  username?: string;
   password?: string;
-  fromAddress: string;
+  passwordConfigured: boolean;
+  fromAddress?: string;
   fromName?: string;
-  encryption: 'NONE' | 'TLS' | 'SSL';
-  enabled: boolean;
+  encryption: 'NONE' | 'TLS' | 'STARTTLS' | 'SSL';
+  active: boolean;
   isDefault: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // ============================================================
@@ -597,6 +715,7 @@ export enum TenantStatus {
 export enum UserRole {
   SUPER_ADMIN = 'SUPER_ADMIN',
   TENANT_ADMIN = 'TENANT_ADMIN',
+  CUSTOMER_ADMIN = 'CUSTOMER_ADMIN',
   CUSTOMER_USER = 'CUSTOMER_USER',
 }
 

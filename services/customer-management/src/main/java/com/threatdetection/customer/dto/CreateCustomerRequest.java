@@ -3,6 +3,7 @@ package com.threatdetection.customer.dto;
 import com.threatdetection.customer.model.Customer;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,8 +22,12 @@ import java.time.Instant;
 public class CreateCustomerRequest {
 
     @NotBlank(message = "客户ID不能为空")
-    @Size(max = 100, message = "客户ID长度不能超过100")
+    @Size(max = 50, message = "客户ID长度不能超过50")
+    @Pattern(regexp = "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+            message = "客户ID必须以英文字母或数字开头，且只能包含英文字母、数字、-或_")
     private String customerId;
+
+    private Long tenantId;
 
     @NotBlank(message = "客户名称不能为空")
     @Size(max = 200, message = "客户名称长度不能超过200")
@@ -50,4 +55,13 @@ public class CreateCustomerRequest {
     private Instant subscriptionEndDate;
 
     private Boolean alertEnabled;
+
+    /** Whether to provision the customer-scoped login in the same transaction. */
+    private Boolean createAdmin;
+
+    @Size(max = 64, message = "管理员账号长度不能超过64")
+    private String adminUsername;
+
+    @Size(min = 8, max = 16, message = "管理员密码长度必须为8-16位")
+    private String adminPassword;
 }

@@ -12,23 +12,26 @@ x-common-env: &common-env
   # Hibernate optimization
   SPRING_JPA_OPEN_IN_VIEW: "true"
   SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "false"
+  SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${DB_POOL_MAX_SIZE:-10}
+  SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: ${DB_POOL_MIN_IDLE:-2}
+  SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 3000
 
 services:
   postgres:
     image: postgres:15-alpine
     hostname: postgres
-    container_name: postgres
     ports: ["5432:5432"]
     environment:
-      POSTGRES_DB: threat_detection
-      POSTGRES_USER: threat_user
-      POSTGRES_PASSWORD: threat_password
+      POSTGRES_DB: ${POSTGRES_DB:-threat_detection}
+      POSTGRES_USER: ${POSTGRES_USER:-threat_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./00-schema-migrations.sql:/docker-entrypoint-initdb.d/00-schema-migrations.sql
       - ./01-init-db-production-safe.sql:/docker-entrypoint-initdb.d/01-init-db-production-safe.sql
       - ./17-customers-init.sql:/docker-entrypoint-initdb.d/17-customers-init.sql
       - ./02-attack-events-storage.sql:/docker-entrypoint-initdb.d/02-attack-events-storage.sql
-      - ./03-port-weights.sql:/docker-entrypoint-initdb.d/03-port-weights.sql
+      - ./port_weights_migration.sql:/docker-entrypoint-initdb.d/03-port-weights.sql
       - ./04-alert-management-tables.sql:/docker-entrypoint-initdb.d/04-alert-management-tables.sql
       - ./04-threat-assessment-tables.sql:/docker-entrypoint-initdb.d/04-threat-assessment-tables.sql
       - ./05-notification-config-tables.sql:/docker-entrypoint-initdb.d/05-notification-config-tables.sql
@@ -61,33 +64,43 @@ services:
       - ./33-plugin-configs.sql:/docker-entrypoint-initdb.d/33-plugin-configs.sql
       - ./34-tire-llm-multitenant.sql:/docker-entrypoint-initdb.d/34-tire-llm-multitenant.sql
       - ./35-config-assignments-v2.sql:/docker-entrypoint-initdb.d/35-config-assignments-v2.sql
-      - ./36-demo-customer-seed.sql:/docker-entrypoint-initdb.d/36-demo-customer-seed.sql
       - ./37-config-cascading.sql:/docker-entrypoint-initdb.d/37-config-cascading.sql
       - ./38-auth-users-customer-fk.sql:/docker-entrypoint-initdb.d/38-auth-users-customer-fk.sql
+      - ./39-score-breakdown-columns.sql:/docker-entrypoint-initdb.d/39-score-breakdown-columns.sql
+      - ./40-device-status-history-columns.sql:/docker-entrypoint-initdb.d/40-device-status-history-columns.sql
+      - ./41-auth-users-tenant-id.sql:/docker-entrypoint-initdb.d/41-auth-users-tenant-id.sql
+      - ./42-performance-foundation.sql:/docker-entrypoint-initdb.d/42-performance-foundation.sql
+      - ./43-customer-admin-role.sql:/docker-entrypoint-initdb.d/43-customer-admin-role.sql
+      - ./44-device-flow-observability.sql:/docker-entrypoint-initdb.d/44-device-flow-observability.sql
+      - ./45-device-binding-integrity.sql:/docker-entrypoint-initdb.d/45-device-binding-integrity.sql
+      - ./46-threat-window-idempotency.sql:/docker-entrypoint-initdb.d/46-threat-window-idempotency.sql
+      - ./47-overview-query-performance.sql:/docker-entrypoint-initdb.d/47-overview-query-performance.sql
+      - ./48-threat-intel-feed-contract.sql:/docker-entrypoint-initdb.d/48-threat-intel-feed-contract.sql
+      - ./49-notification-runtime-reliability.sql:/docker-entrypoint-initdb.d/49-notification-runtime-reliability.sql
     networks:
       - threat-detection-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U threat_user -d threat_detection"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" && psql -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -Atqc \"SELECT to_regclass('public.port_risk_configs') IS NOT NULL AND to_regclass('public.whitelist_config') IS NOT NULL AND to_regclass('public.auth_users') IS NOT NULL AND to_regclass('public.device_status_history') IS NOT NULL\" | grep -qx t"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 30s
+    restart: unless-stopped
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
     hostname: zookeeper
-    container_name: zookeeper
     ports: ["2181:2181"]
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     networks:
       - threat-detection-network
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     hostname: redis
-    container_name: redis
     ports: ["6379:6379"]
     command: redis-server --appendonly yes
     networks:
@@ -98,10 +111,11 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+    restart: unless-stopped
 
   logstash:
     build: ../infrastructure/logging/logstash
-    container_name: logstash
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-logstash:${RELEASE_VERSION:-3.1.39}
     depends_on:
       - kafka
     ports:
@@ -121,19 +135,19 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    restart: unless-stopped
 
   emqx:
     image: emqx/emqx:5.5.1
     hostname: emqx
-    container_name: emqx
     ports:
       - "1883:1883"      # MQTT TCP
       - "8883:8883"      # MQTT TLS (预留)
-      - "8083:8083"      # MQTT WebSocket
+      - "${EMQX_WS_HOST_PORT:-18084}:8083" # MQTT WebSocket (host:container)
       - "18083:18083"    # EMQX Dashboard
     environment:
-      EMQX_NAME: threat-detection-emqx
-      EMQX_HOST: emqx
+      # Single-node deployment: let the image derive node.name from its current
+      # container IP so `emqx ctl status` can reach the running Erlang node.
       # Allow anonymous for dev; production should disable
       EMQX_ALLOW_ANONYMOUS: "true"
       EMQX_LOADED_PLUGINS: "emqx_dashboard"
@@ -163,7 +177,6 @@ services:
   kafka:
     image: confluentinc/cp-kafka:7.4.0
     hostname: kafka
-    container_name: kafka
     depends_on:
       - zookeeper
     ports: ["9092:9092", "9101:9101"]
@@ -176,14 +189,17 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_NUM_PARTITIONS: ${KAFKA_TOPIC_PARTITIONS:-12}
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
     networks:
       - threat-detection-network
     healthcheck:
       test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
       interval: 30s
       timeout: 10s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 180s
+    restart: unless-stopped
 
   data-ingestion:
     build:
@@ -195,9 +211,8 @@ services:
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
         USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
-    image: data-ingestion:latest
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-data-ingestion:${RELEASE_VERSION:-3.1.39}
     hostname: data-ingestion
-    container_name: data-ingestion-service
     depends_on:
       - kafka
       - redis
@@ -206,6 +221,18 @@ services:
       <<: *common-env
       SPRING_PROFILES_ACTIVE: docker
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-threat_detection}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-threat_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      SPRING_KAFKA_PRODUCER_ACKS: all
+      SPRING_KAFKA_PRODUCER_COMPRESSION_TYPE: zstd
+      SPRING_KAFKA_PRODUCER_BATCH_SIZE: 65536
+      SPRING_KAFKA_PRODUCER_PROPERTIES_ENABLE_IDEMPOTENCE: "true"
+      SPRING_KAFKA_PRODUCER_PROPERTIES_LINGER_MS: 10
+      KAFKA_CONSUMER_CONCURRENCY: ${KAFKA_CONSUMER_CONCURRENCY:-4}
+      INGEST_EXECUTOR_CORE_SIZE: ${INGEST_EXECUTOR_CORE_SIZE:-8}
+      INGEST_EXECUTOR_MAX_SIZE: ${INGEST_EXECUTOR_MAX_SIZE:-16}
+      INGEST_EXECUTOR_QUEUE_CAPACITY: ${INGEST_EXECUTOR_QUEUE_CAPACITY:-2000}
     networks:
       - threat-detection-network
     healthcheck:
@@ -234,9 +261,8 @@ services:
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
         USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
-    image: stream-processing:latest
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-stream-processing:${RELEASE_VERSION:-3.1.39}
     hostname: stream-processing
-    container_name: stream-processing
     depends_on:
       kafka:
         condition: service_healthy
@@ -244,18 +270,30 @@ services:
         condition: service_started
       topic-init:
         condition: service_completed_successfully
+      flink-checkpoint-init:
+        condition: service_completed_successfully
     ports: ["8081:8081"]
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: stream-processing
-        parallelism.default: 1
-        taskmanager.numberOfTaskSlots: 1
+        parallelism.default: ${FLINK_PARALLELISM:-2}
+        taskmanager.numberOfTaskSlots: ${FLINK_TASK_SLOTS:-4}
         rest.port: 8081
+        state.checkpoints.dir: file:///opt/flink/checkpoints
+        execution.checkpointing.interval: 60s
+        restart-strategy.type: fixed-delay
+        restart-strategy.fixed-delay.attempts: 3
+        restart-strategy.fixed-delay.delay: 10s
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       INPUT_TOPIC: attack-events
       STATUS_TOPIC: status-events
       OUTPUT_TOPIC: threat-alerts
       AGGREGATION_TOPIC: minute-aggregations
+      JDBC_SINK_PARALLELISM: ${FLINK_JDBC_SINK_PARALLELISM:-2}
+      APT_SINK_PARALLELISM: ${FLINK_APT_SINK_PARALLELISM:-1}
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-threat_detection}
+      DB_USER: ${POSTGRES_USER:-threat_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       
       # ✅ 端口权重服务配置 (Port Weight Service Integration)
       THREAT_ASSESSMENT_SERVICE_URL: http://threat-assessment:8082
@@ -273,6 +311,8 @@ services:
       TIER3_WINDOW_NAME: "APT慢速扫描检测"     # Tier 3 窗口名称
     networks:
       - threat-detection-network
+    volumes:
+      - flink_checkpoints:/opt/flink/checkpoints
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8081/overview"]
       interval: 30s
@@ -290,25 +330,33 @@ services:
           memory: 1.5G
     restart: unless-stopped
 
+  flink-checkpoint-init:
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-stream-processing:${RELEASE_VERSION:-3.1.39}
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "install -d -m 0770 -o 9999 -g 9999 /opt/flink/checkpoints && chown -R 9999:9999 /opt/flink/checkpoints"
+    volumes:
+      - flink_checkpoints:/opt/flink/checkpoints
+    restart: "no"
+
   taskmanager:
-    build:
-      context: ..
-      dockerfile: services/stream-processing/Dockerfile
-      args:
-        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-stream-processing:${RELEASE_VERSION:-3.1.39}
     hostname: taskmanager
-    container_name: taskmanager
     depends_on:
       stream-processing:
         condition: service_started
     environment:
       FLINK_PROPERTIES: |
         jobmanager.rpc.address: stream-processing
-        taskmanager.numberOfTaskSlots: 2
+        taskmanager.numberOfTaskSlots: ${FLINK_TASK_SLOTS:-4}
         taskmanager.memory.process.size: 1728m
+        state.checkpoints.dir: file:///opt/flink/checkpoints
     command: "taskmanager"
     networks:
       - threat-detection-network
+    volumes:
+      - flink_checkpoints:/opt/flink/checkpoints
     restart: unless-stopped
 
   threat-assessment:
@@ -320,9 +368,8 @@ services:
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
         USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
-    image: threat-assessment:latest
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-threat-assessment:${RELEASE_VERSION:-3.1.39}
     hostname: threat-assessment
-    container_name: threat-assessment-service
     depends_on:
       - kafka
       - postgres
@@ -332,9 +379,9 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SERVER_PORT: 8083
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
-      SPRING_DATASOURCE_USERNAME: threat_user
-      SPRING_DATASOURCE_PASSWORD: threat_password
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-threat_detection}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-threat_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       ML_WEIGHT_ENABLED: "true"
       ML_WEIGHT_CACHE_TTL: "300"
     networks:
@@ -365,31 +412,43 @@ services:
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
         USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
-    image: alert-management:latest
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-alert-management:${RELEASE_VERSION:-3.1.39}
     hostname: alert-management
-    container_name: alert-management-service
     depends_on:
       - kafka
       - postgres
-    ports: ["8082:8082"]
+    # Internal service only. Browser/API clients must use the authenticated
+    # gateway on 8888; publishing 8082 would bypass gateway JWT/RBAC checks.
+    expose: ["8082"]
     environment:
       <<: *common-env
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
-      SPRING_DATASOURCE_USERNAME: threat_user
-      SPRING_DATASOURCE_PASSWORD: threat_password
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-threat_detection}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-threat_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       SPRING_JPA_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      SPRING_MAIL_HOST: smtp.163.com
-      SPRING_MAIL_PORT: 25
-      SPRING_MAIL_USERNAME: threat_detection@163.com
-      SPRING_MAIL_PASSWORD: ${SMTP_PASSWORD:-changeme}
-      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "true"
-      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "false"
-      INTEGRATION_TEST_EMAIL_RECIPIENT: kylecui@outlook.com
+      SPRING_MAIL_HOST: ${SMTP_HOST:-smtp.163.com}
+      SPRING_MAIL_PORT: ${SMTP_PORT:-25}
+      SPRING_MAIL_USERNAME: ${SMTP_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SMTP_PASSWORD:-}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: ${SMTP_AUTH:-false}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: ${SMTP_STARTTLS_ENABLED:-false}
+      CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY:?CONFIG_ENCRYPTION_KEY is required}
+      ALERT_INTERNAL_SERVICE_TOKEN: ${ALERT_INTERNAL_SERVICE_TOKEN:?ALERT_INTERNAL_SERVICE_TOKEN is required}
+      ALERT_INGESTION_MINIMUM_SEVERITY: ${ALERT_INGESTION_MINIMUM_SEVERITY:-LOW}
+      INTEGRATION_TEST_EMAIL_RECIPIENT: ${INTEGRATION_TEST_EMAIL_RECIPIENT:-}
+      SMS_PROVIDER: ${SMS_PROVIDER:-twilio}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+      ALIYUN_ACCESS_KEY_ID: ${ALIYUN_ACCESS_KEY_ID:-}
+      ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET:-}
+      ALIYUN_SMS_SIGN_NAME: ${ALIYUN_SMS_SIGN_NAME:-}
+      ALIYUN_SMS_TEMPLATE_CODE: ${ALIYUN_SMS_TEMPLATE_CODE:-}
     networks:
       - threat-detection-network
     healthcheck:
@@ -418,22 +477,29 @@ services:
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
         USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
-    image: customer-management:latest
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-customer-management:${RELEASE_VERSION:-3.1.39}
     hostname: customer-management
-    container_name: customer-management-service
     depends_on:
       - postgres
-    ports: ["8084:8084"]
+    # Internal service only. In particular, do not expose the real notification
+    # test proxy directly on the host and bypass gateway authorization.
+    expose: ["8084"]
     environment:
       <<: *common-env
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
-      SPRING_DATASOURCE_USERNAME: threat_user
-      SPRING_DATASOURCE_PASSWORD: threat_password
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-threat_detection}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-threat_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics,prometheus,mappings
+      DEVICE_EXPECTED_HEARTBEAT_INTERVAL_SECONDS: ${DEVICE_EXPECTED_HEARTBEAT_INTERVAL_SECONDS:-1800}
+      DEVICE_HEARTBEAT_DELAYED_AFTER_SECONDS: ${DEVICE_HEARTBEAT_DELAYED_AFTER_SECONDS:-2100}
+      DEVICE_HEARTBEAT_OFFLINE_AFTER_SECONDS: ${DEVICE_HEARTBEAT_OFFLINE_AFTER_SECONDS:-3900}
+      DEVICE_DATA_ACTIVE_WINDOW_SECONDS: ${DEVICE_DATA_ACTIVE_WINDOW_SECONDS:-2100}
+      ALERT_MANAGEMENT_URL: http://alert-management:8082
+      ALERT_INTERNAL_SERVICE_TOKEN: ${ALERT_INTERNAL_SERVICE_TOKEN:?ALERT_INTERNAL_SERVICE_TOKEN is required}
     networks:
       - threat-detection-network
     healthcheck:
@@ -461,9 +527,8 @@ services:
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
         USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
-    image: threat-intelligence:latest
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-threat-intelligence:${RELEASE_VERSION:-3.1.39}
     hostname: threat-intelligence
-    container_name: threat-intelligence-service
     depends_on:
       postgres:
         condition: service_healthy
@@ -471,13 +536,14 @@ services:
     environment:
       <<: *common-env
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/threat_detection
-      SPRING_DATASOURCE_USERNAME: threat_user
-      SPRING_DATASOURCE_PASSWORD: threat_password
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-threat_detection}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-threat_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
       ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
       OTX_API_KEY: ${OTX_API_KEY:-}
+      VT_API_KEY: ${VT_API_KEY:-}
       VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
       GREYNOISE_API_KEY: ${GREYNOISE_API_KEY:-}
       FEED_POLLER_ENABLED: ${FEED_POLLER_ENABLED:-true}
@@ -499,6 +565,41 @@ services:
           memory: 512M
     restart: unless-stopped
 
+  tire:
+    build:
+      context: ../services/tire
+      dockerfile: Dockerfile
+      args:
+        USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-tire:${RELEASE_VERSION:-3.1.39}
+    hostname: tire
+    environment:
+      TIRE_FERNET_KEY: ${TIRE_FERNET_KEY:?TIRE_FERNET_KEY is required}
+      SESSION_SECRET_KEY: ${TIRE_SESSION_SECRET:?TIRE_SESSION_SECRET is required}
+      LLM_RUNTIME_CONFIG_URL: http://api-gateway:8888/internal/v1/runtime-config/llm/effective
+      LLM_RUNTIME_SERVICE_TOKEN: ${TIRE_INTERNAL_SERVICE_TOKEN:?TIRE_INTERNAL_SERVICE_TOKEN is required}
+      LLM_RUNTIME_CACHE_TTL_SECONDS: 45
+      LLM_RUNTIME_STALE_TTL_SECONDS: 3600
+      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
+      OTX_API_KEY: ${OTX_API_KEY:-}
+      GREYNOISE_API_KEY: ${GREYNOISE_API_KEY:-}
+      VT_API_KEY: ${VT_API_KEY:-}
+      SHODAN_API_KEY: ${SHODAN_API_KEY:-}
+      THREATBOOK_API_KEY: ${THREATBOOK_API_KEY:-}
+      TIANJIYOUMENG_API_KEY: ${TIANJIYOUMENG_API_KEY:-}
+      LOG_LEVEL: INFO
+    volumes:
+      - tire_data:/app/data
+    networks:
+      - threat-detection-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
   api-gateway:
     build:
       context: ..
@@ -508,15 +609,15 @@ services:
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
         USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
-    image: api-gateway:latest
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-api-gateway:${RELEASE_VERSION:-3.1.39}
     hostname: api-gateway
-    container_name: api-gateway
     depends_on:
       - redis
       - customer-management
       - data-ingestion
       - threat-assessment
       - alert-management
+      - tire
     ports: ["8888:8888"]
     environment:
       <<: *common-env
@@ -527,6 +628,15 @@ services:
       RATE_LIMIT_ENABLED: "true"
       RATE_LIMIT_CAPACITY: 100
       RATE_LIMIT_REFILL_RATE: 10
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-threat_detection}
+      POSTGRES_USER: ${POSTGRES_USER:-threat_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY:?CONFIG_ENCRYPTION_KEY is required}
+      TIRE_INTERNAL_SERVICE_TOKEN: ${TIRE_INTERNAL_SERVICE_TOKEN:?TIRE_INTERNAL_SERVICE_TOKEN is required}
+      ALERT_INTERNAL_SERVICE_TOKEN: ${ALERT_INTERNAL_SERVICE_TOKEN:?ALERT_INTERNAL_SERVICE_TOKEN is required}
     networks:
       - threat-detection-network
     healthcheck:
@@ -555,9 +665,8 @@ services:
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
         USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
-    image: config-server:latest
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-config-server:${RELEASE_VERSION:-3.1.39}
     hostname: config-server
-    container_name: config-server
     ports: ["8899:8899"]
     environment:
       <<: *common-env
@@ -590,9 +699,8 @@ services:
       dockerfile: Dockerfile
       args:
         USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
-    image: ml-detection:latest
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-ml-detection:${RELEASE_VERSION:-3.1.39}
     hostname: ml-detection
-    container_name: ml-detection-service
     depends_on:
       - kafka
       - postgres
@@ -606,7 +714,9 @@ services:
       MODEL_DIR: /app/models
       ML_CONFIDENCE_THRESHOLD: 0.3
       ML_DEFAULT_WEIGHT: 1.0
-      DATABASE_URL: postgresql://threat_user:threat_password@postgres:5432/threat_detection
+      DATA_READINESS_CACHE_SECONDS: ${DATA_READINESS_CACHE_SECONDS:-30}
+      DATA_READINESS_QUERY_TIMEOUT_MS: ${DATA_READINESS_QUERY_TIMEOUT_MS:-5000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-threat_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-threat_detection}
       LOG_LEVEL: INFO
     networks:
       - threat-detection-network
@@ -632,14 +742,17 @@ services:
       dockerfile: Dockerfile
       args:
         USE_CHINA_MIRROR: ${USE_CHINA_MIRROR:-false}
-    image: frontend:latest
+        VITE_APP_VERSION: ${RELEASE_VERSION:-3.1.39}
+    image: ${COMPOSE_PROJECT_NAME:-threat-detection}-frontend:${RELEASE_VERSION:-3.1.39}
     hostname: frontend
-    container_name: frontend
     ports:
       - "3000:80"
     depends_on:
       api-gateway:
-        condition: service_healthy
+        # The gateway can transiently report unhealthy while its downstream
+        # services warm up on small hosts. Runtime readiness is enforced by
+        # the installer; do not make that transient state abort Compose.
+        condition: service_started
     networks:
       - threat-detection-network
     healthcheck:
@@ -653,19 +766,22 @@ services:
   topic-init:
     image: confluentinc/cp-kafka:7.4.0
     hostname: topic-init
-    container_name: topic-init
     depends_on:
       kafka:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
+    environment:
+      KAFKA_TOPIC_PARTITIONS: ${KAFKA_TOPIC_PARTITIONS:-12}
     command: >-
       "
-      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic attack-events &&
-      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic status-events &&
-      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic threat-alerts &&
-      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic minute-aggregations &&
-      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic device-health-alerts &&
-      kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic ml-threat-detections
+      set -eu;
+      for topic in attack-events status-events sniffer-events threat-detection-events policy-events bg-traffic-events audit-events threat-alerts minute-aggregations device-health-alerts ml-threat-detections; do
+        kafka-topics --bootstrap-server kafka:29092 --if-not-exists --create --replication-factor 1 --partitions $$KAFKA_TOPIC_PARTITIONS --topic $$topic;
+        current=$$(kafka-topics --bootstrap-server kafka:29092 --describe --topic $$topic | sed -n 's/.*PartitionCount: \\([0-9][0-9]*\\).*/\\1/p' | head -n1);
+        if [ -n "$$current" ] && [ "$$current" -lt "$$KAFKA_TOPIC_PARTITIONS" ]; then
+          kafka-topics --bootstrap-server kafka:29092 --alter --topic $$topic --partitions $$KAFKA_TOPIC_PARTITIONS;
+        fi;
+      done
       "
     networks:
       - threat-detection-network
@@ -677,7 +793,9 @@ volumes:
   logstash_logs:
   emqx_data:
   emqx_log:
+  flink_checkpoints:
+  tire_data:
 
 networks:
   threat-detection-network:
-    name: threat-detection-network
+    name: ${TDS_DOCKER_NETWORK:-threat-detection-network}

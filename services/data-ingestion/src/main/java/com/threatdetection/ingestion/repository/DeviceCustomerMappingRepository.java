@@ -44,8 +44,23 @@ public interface DeviceCustomerMappingRepository extends JpaRepository<DeviceCus
     /**
      * 查找设备当前有效映射（向后兼容）
      */
-    @Query("SELECT m.customerId FROM DeviceCustomerMapping m WHERE UPPER(m.devSerial) = UPPER(:devSerial) AND m.unbindTime IS NULL")
+    @Query(value = "SELECT m.customer_id FROM device_customer_mapping m " +
+            "JOIN customers c ON c.customer_id = m.customer_id " +
+            "WHERE UPPER(m.dev_serial) = UPPER(:devSerial) " +
+            "AND m.unbind_time IS NULL AND m.is_active = TRUE AND c.status = 'ACTIVE'",
+            nativeQuery = true)
     Optional<String> findCustomerIdByDevSerial(@Param("devSerial") String devSerial);
+
+    @Query(value = "SELECT m.* FROM device_customer_mapping m " +
+            "JOIN customers c ON c.customer_id = m.customer_id " +
+            "WHERE m.is_active = TRUE AND m.unbind_time IS NULL AND c.status = 'ACTIVE'",
+            nativeQuery = true)
+    List<DeviceCustomerMapping> findAllOperationalMappings();
+
+    @Query(value = "SELECT EXISTS (SELECT 1 FROM customers " +
+            "WHERE customer_id = :customerId AND status = 'ACTIVE')",
+            nativeQuery = true)
+    boolean isCustomerOperational(@Param("customerId") String customerId);
 
     // ========== 向后兼容的方法 ==========
 
@@ -67,7 +82,12 @@ public interface DeviceCustomerMappingRepository extends JpaRepository<DeviceCus
     /**
      * Check if a device serial exists and is active (legacy method)
      */
-    boolean existsByDevSerialAndIsActiveTrue(String devSerial);
+    @Query(value = "SELECT EXISTS (SELECT 1 FROM device_customer_mapping m " +
+            "JOIN customers c ON c.customer_id = m.customer_id " +
+            "WHERE UPPER(m.dev_serial) = UPPER(:devSerial) " +
+            "AND m.is_active = TRUE AND m.unbind_time IS NULL AND c.status = 'ACTIVE')",
+            nativeQuery = true)
+    boolean existsByDevSerialAndIsActiveTrue(@Param("devSerial") String devSerial);
 
     /**
      * Find mappings by customer ID (including inactive ones, legacy method)

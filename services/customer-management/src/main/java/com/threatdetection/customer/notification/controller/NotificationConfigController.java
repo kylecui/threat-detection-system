@@ -3,6 +3,7 @@ package com.threatdetection.customer.notification.controller;
 import com.threatdetection.customer.notification.dto.NotificationConfigRequest;
 import com.threatdetection.customer.notification.dto.NotificationConfigResponse;
 import com.threatdetection.customer.notification.service.NotificationConfigService;
+import com.threatdetection.customer.notification.service.NotificationDeliveryClient;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +23,7 @@ import java.util.Map;
 public class NotificationConfigController {
 
     private final NotificationConfigService notificationConfigService;
+    private final NotificationDeliveryClient notificationDeliveryClient;
 
     /**
      * 获取客户的通知配置
@@ -98,7 +100,7 @@ public class NotificationConfigController {
             @PathVariable("customerId") String customerId) {
         
         log.info("POST /api/v1/customers/{}/notification-config/test", customerId);
-        Map<String, Object> testResult = notificationConfigService.testConfig(customerId);
+        Map<String, Object> testResult = notificationDeliveryClient.testCustomerConfig(customerId);
         return ResponseEntity.ok(testResult);
     }
 

@@ -83,6 +83,16 @@ spec:
           value: "tcp://emqx:1883"
         - name: MQTT_ENABLED
           value: "true"
+        - name: SPRING_KAFKA_CONSUMER_PROPERTIES_MAX_POLL_RECORDS
+          value: "500"
+        - name: KAFKA_CONSUMER_CONCURRENCY
+          value: "4"
+        - name: INGEST_EXECUTOR_CORE_SIZE
+          value: "8"
+        - name: INGEST_EXECUTOR_MAX_SIZE
+          value: "16"
+        - name: INGEST_EXECUTOR_QUEUE_CAPACITY
+          value: "2000"
         resources:
           requests:
             memory: "256Mi"

@@ -18,6 +18,8 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Tenant management REST controller — SUPER_ADMIN only
@@ -37,6 +39,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TenantController {
 
+    private static final Pattern TENANT_ID_PATTERN = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9_-]{0,49}$");
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+    private static final Set<String> TENANT_STATUSES = Set.of("ACTIVE", "SUSPENDED", "DISABLED");
+
     private final TenantRepository tenantRepository;
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -47,6 +53,38 @@ public class TenantController {
                         .map(this::toMap)
                         .collectList()
                         .map(ResponseEntity::ok))
+                .onErrorResume(SecurityException.class, e ->
+                        Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build()));
+    }
+
+    /** Server-side search used by the scope selector; never sends the entire tenant table. */
+    @GetMapping("/search")
+    public Mono<ResponseEntity<Map<String, Object>>> searchTenants(
+            @RequestParam(defaultValue = "") String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            ServerWebExchange exchange) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(100, size));
+        String safeKeyword = keyword == null ? "" : keyword.trim();
+        long offset = (long) safePage * safeSize;
+
+        return requireSuperAdmin(exchange)
+                .flatMap(ok -> Mono.zip(
+                                tenantRepository.search(safeKeyword, safeSize, offset)
+                                        .map(this::toMap)
+                                        .collectList(),
+                                tenantRepository.countSearch(safeKeyword))
+                        .map(tuple -> {
+                            long total = tuple.getT2();
+                            Map<String, Object> body = new HashMap<>();
+                            body.put("content", tuple.getT1());
+                            body.put("totalElements", total);
+                            body.put("totalPages", (total + safeSize - 1) / safeSize);
+                            body.put("number", safePage);
+                            body.put("size", safeSize);
+                            return ResponseEntity.ok(body);
+                        }))
                 .onErrorResume(SecurityException.class, e ->
                         Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).build()));
     }
@@ -74,9 +112,26 @@ public class TenantController {
                         return Mono.just(ResponseEntity.badRequest()
                                 .body(Map.<String, Object>of("error", "tenantId is required")));
                     }
+                    if (!TENANT_ID_PATTERN.matcher(request.getTenantId()).matches()) {
+                        return Mono.just(ResponseEntity.badRequest()
+                                .body(Map.<String, Object>of("error", "tenantId must be 1-50 letters, numbers, underscores or hyphens")));
+                    }
                     if (request.getName() == null || request.getName().isBlank()) {
                         return Mono.just(ResponseEntity.badRequest()
                                 .body(Map.<String, Object>of("error", "name is required")));
+                    }
+                    if (request.getName().length() > 128) {
+                        return Mono.just(ResponseEntity.badRequest()
+                                .body(Map.<String, Object>of("error", "name must not exceed 128 characters")));
+                    }
+                    if (request.getContactEmail() != null && !request.getContactEmail().isBlank()
+                            && !EMAIL_PATTERN.matcher(request.getContactEmail()).matches()) {
+                        return Mono.just(ResponseEntity.badRequest()
+                                .body(Map.<String, Object>of("error", "contactEmail is invalid")));
+                    }
+                    if (request.getMaxCustomers() != null && request.getMaxCustomers() < 1) {
+                        return Mono.just(ResponseEntity.badRequest()
+                                .body(Map.<String, Object>of("error", "maxCustomers must be positive")));
                     }
 
                     return tenantRepository.existsByTenantId(request.getTenantId())
@@ -120,6 +175,23 @@ public class TenantController {
         return requireSuperAdmin(exchange)
                 .flatMap(ok -> tenantRepository.findById(id)
                         .flatMap(existing -> {
+                            if (request.getName() != null && request.getName().isBlank()) {
+                                return Mono.just(ResponseEntity.badRequest()
+                                        .body(Map.<String, Object>of("error", "name cannot be blank")));
+                            }
+                            if (request.getContactEmail() != null && !request.getContactEmail().isBlank()
+                                    && !EMAIL_PATTERN.matcher(request.getContactEmail()).matches()) {
+                                return Mono.just(ResponseEntity.badRequest()
+                                        .body(Map.<String, Object>of("error", "contactEmail is invalid")));
+                            }
+                            if (request.getStatus() != null && !TENANT_STATUSES.contains(request.getStatus())) {
+                                return Mono.just(ResponseEntity.badRequest()
+                                        .body(Map.<String, Object>of("error", "unsupported tenant status")));
+                            }
+                            if (request.getMaxCustomers() != null && request.getMaxCustomers() < 1) {
+                                return Mono.just(ResponseEntity.badRequest()
+                                        .body(Map.<String, Object>of("error", "maxCustomers must be positive")));
+                            }
                             if (request.getName() != null) existing.setName(request.getName());
                             if (request.getDescription() != null) existing.setDescription(request.getDescription());
                             if (request.getContactEmail() != null) existing.setContactEmail(request.getContactEmail());

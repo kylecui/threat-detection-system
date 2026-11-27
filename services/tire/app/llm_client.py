@@ -42,6 +42,8 @@ class LLMClient:
         """Check if LLM is available, considering optional per-user overrides."""
         if overrides and overrides.get("api_key"):
             return True
+        if overrides and overrides.get("allow_environment_fallback") is False:
+            return False
         return self.enabled
 
     async def generate(
@@ -58,6 +60,7 @@ class LLMClient:
         source: str = "template",
         fingerprint: str = "",
         shared_config_id: int | None = None,
+        allow_environment_fallback: bool = True,
     ) -> Optional[str]:
         """
         Generate text using LLM API.
@@ -70,11 +73,18 @@ class LLMClient:
             api_key: Per-request override (from user's admin settings)
             model: Per-request override
             base_url: Per-request override
+            allow_environment_fallback: Whether a missing request key may use
+                the process-level legacy key. Authoritative platform/local
+                policy decisions set this to False.
 
         Returns:
             Generated text, or None if LLM is unavailable/failed
         """
-        effective_key = api_key or self.api_key
+        effective_key = api_key or (
+            self.api_key if allow_environment_fallback else None
+        )
+        # Model and URL defaults carry no authorization by themselves. Keep
+        # them for legacy provider compatibility while gating the credential.
         effective_model = model or self.model
         effective_base = (base_url or self.base_url).rstrip("/")
 

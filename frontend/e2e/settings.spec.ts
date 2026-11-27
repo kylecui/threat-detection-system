@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { setAuthState } from './helpers/auth';
+import { gotoReady } from './helpers/ready';
 
 test.describe('Configuration pages', () => {
   test.beforeEach(async ({ page }) => {
@@ -8,22 +9,31 @@ test.describe('Configuration pages', () => {
 
   test('config sub-routes load', async ({ page }) => {
     const routes = [
-      '/config/general',
-      '/config/notifications',
-      '/config/integrations',
-      '/config/ai',
-      '/config/plugins',
+      { path: '/config/general', title: 'General', content: 'Auto Refresh' },
+      { path: '/config/notifications', title: 'Notifications', content: 'SMTP Server' },
+      {
+        path: '/config/integrations',
+        title: 'Integrations',
+        content: 'Integration Configuration',
+      },
+      { path: '/config/ai', title: 'AI', content: 'Global AI Configuration' },
+      { path: '/config/plugins', title: 'Plugins', content: 'Plugin Configuration' },
     ];
 
     for (const route of routes) {
-      await page.goto(route);
-      await expect(page).toHaveURL(new RegExp(`${route.replace('/', '\\/')}$`));
-      await expect(page.locator('.ant-card').first()).toBeVisible();
+      await gotoReady(page, route.path);
+      await expect(page).toHaveURL(
+        new RegExp(`${route.path.replace('/', '\\/')}$`),
+      );
+      await expect(
+        page.getByRole('heading', { level: 1, name: route.title }),
+      ).toBeVisible();
+      await expect(page.getByText(route.content).first()).toBeVisible();
     }
   });
 
   test('can navigate between configuration pages via menu links', async ({ page }) => {
-    await page.goto('/config/general');
+    await gotoReady(page, '/config/general');
     await page.getByText(/通知配置|Notifications/).first().click();
     await expect(page).toHaveURL(/\/config\/notifications$/);
 

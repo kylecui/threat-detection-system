@@ -2,6 +2,7 @@ package com.threatdetection.gateway;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.route.RouteLocator;
 import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
 import org.springframework.context.annotation.Bean;
@@ -57,7 +58,13 @@ public class ApiGatewayApplication {
      * @return RouteLocator
      */
     @Bean
-    public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
+    public RouteLocator customRouteLocator(
+            RouteLocatorBuilder builder,
+            @Value("${internal.alert-service-token}") String alertServiceToken) {
+        if (alertServiceToken == null || alertServiceToken.length() < 64) {
+            throw new IllegalStateException(
+                    "ALERT_INTERNAL_SERVICE_TOKEN must contain at least 64 characters");
+        }
         return builder.routes()
             // Customer Management Service (8084)
             .route("customer-management-customers", r -> r
@@ -133,7 +140,10 @@ public class ApiGatewayApplication {
                 .path("/api/notification-config/**")
                 .filters(f -> f
                     .stripPrefix(0)
-                    .addRequestHeader("X-Gateway-Service", "alert-management"))
+                    .addRequestHeader("X-Gateway-Service", "alert-management")
+                    // Replace, rather than append, so a caller cannot smuggle a
+                    // second token header through the public gateway.
+                    .setRequestHeader("X-Internal-Service-Token", alertServiceToken))
                 .uri("http://alert-management:8082"))
 
             // Threat Intelligence Service (8085)

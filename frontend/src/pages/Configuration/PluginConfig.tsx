@@ -36,6 +36,11 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import type { TireCustomPlugin } from '@/services/tire';
 import type { SystemConfig } from '@/types';
+import useSubmitGuard from '@/hooks/useSubmitGuard';
+import TableActionButton from '@/components/TableActionButton';
+import TableActions from '@/components/TableActions';
+import TableCellText from '@/components/TableCellText';
+import './configuration.css';
 
 const { Text } = Typography;
 
@@ -51,6 +56,7 @@ const PluginConfig = () => {
   const [customPluginLoading, setCustomPluginLoading] = useState(false);
   const [customPluginModalOpen, setCustomPluginModalOpen] = useState(false);
   const [editingPlugin, setEditingPlugin] = useState<TireCustomPlugin | null>(null);
+  const customPluginMutation = useSubmitGuard();
 
   const { isSuperAdmin, isAdminRole: isAdmin } = usePermission();
 
@@ -88,12 +94,12 @@ const PluginConfig = () => {
     } finally {
       setCustomPluginLoading(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, t]);
 
   useEffect(() => {
     loadPluginConfigs();
     loadCustomPlugins();
-  }, []);
+  }, [loadCustomPlugins, loadPluginConfigs]);
 
   const handlePluginSave = async (values: Record<string, boolean | number>) => {
     try {
@@ -156,6 +162,7 @@ const PluginConfig = () => {
   };
 
   const handleCustomPluginSubmit = async () => {
+    if (!customPluginMutation.begin()) return;
     try {
       const values = await customPluginForm.validateFields();
       if (editingPlugin) {
@@ -170,6 +177,9 @@ const PluginConfig = () => {
       setEditingPlugin(null);
       loadCustomPlugins();
     } catch {
+      // Validation errors remain visible on their corresponding form fields.
+    } finally {
+      customPluginMutation.end();
     }
   };
 
@@ -250,43 +260,53 @@ const PluginConfig = () => {
       title: t('common.name'),
       dataIndex: 'name',
       key: 'name',
+      width: 180,
+      render: (name: string) => <TableCellText value={name} />,
     },
     {
       title: 'Slug',
       dataIndex: 'slug',
       key: 'slug',
+      width: 160,
+      render: (slug: string) => <TableCellText value={slug} />,
     },
     {
       title: t('pluginConfig.pluginUrl'),
       dataIndex: 'pluginUrl',
       key: 'pluginUrl',
-      ellipsis: true,
+      width: 280,
+      render: (pluginUrl: string) => <TableCellText value={pluginUrl} />,
     },
     {
       title: t('pluginConfig.requestMethod'),
       dataIndex: 'requestMethod',
       key: 'requestMethod',
+      width: 120,
     },
     {
       title: t('common.enabled'),
       dataIndex: 'enabled',
       key: 'enabled',
+      width: 96,
       render: (enabled: boolean) => (enabled ? <Tag color="green">{t('common.on')}</Tag> : <Tag color="red">{t('common.off')}</Tag>),
     },
     {
       title: t('common.priority'),
       dataIndex: 'priority',
       key: 'priority',
+      width: 96,
     },
     {
       title: t('common.timeoutSeconds'),
       dataIndex: 'timeout',
       key: 'timeout',
+      width: 136,
     },
     {
       title: t('common.owner'),
       dataIndex: 'ownerType',
       key: 'ownerType',
+      width: 144,
       render: (ownerType: TireCustomPlugin['ownerType']) => {
         if (ownerType === 'SYSTEM') return <Tag color="blue">SYSTEM</Tag>;
         if (ownerType === 'TENANT') return <Tag color="green">TENANT</Tag>;
@@ -296,130 +316,139 @@ const PluginConfig = () => {
     {
       title: t('common.actions'),
       key: 'actions',
+      width: 108,
+      fixed: 'right',
       render: (_: unknown, record: TireCustomPlugin) => (
-        <Space>
-          <Button icon={<EditOutlined />} onClick={() => openCustomPluginModal(record)}>
-            {t('common.edit')}
-          </Button>
-          <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteCustomPlugin(record)}>
-            {t('common.delete')}
-          </Button>
-        </Space>
+        <TableActions label={t('common.actions')}>
+          <TableActionButton
+            label={t('common.edit')}
+            icon={<EditOutlined />}
+            onClick={() => openCustomPluginModal(record)}
+          />
+          <TableActionButton
+            label={t('common.delete')}
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDeleteCustomPlugin(record)}
+          />
+        </TableActions>
       ),
     },
   ];
 
   return (
-    <Card bordered={false}>
+    <div className="tds-config-page tds-config-plugins">
       {isSuperAdmin && (
-        <Spin spinning={pluginLoading}>
-          <Alert
-            message={t('pluginConfig.title')}
-            description={t('pluginConfig.description')}
-            type="info"
-            showIcon
-            style={{ marginBottom: 24 }}
-          />
-          <Form
-            form={pluginForm}
-            layout="vertical"
-            onFinish={handlePluginSave}
-          >
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                gap: 12,
-                alignItems: 'center',
-                marginBottom: 12,
-                padding: '0 8px',
-              }}
+        <section className="tds-config-panel tds-config-panel--form">
+          <Spin spinning={pluginLoading}>
+            <Alert
+              className="tds-config-note"
+              message={t('pluginConfig.title')}
+              type="info"
+              showIcon
+            />
+            <Form
+              className="tds-config-form tds-config-form--full"
+              form={pluginForm}
+              layout="vertical"
+              onFinish={handlePluginSave}
             >
+              <div className="tds-config-plugin-grid tds-config-plugin-grid--header">
               <Text type="secondary">{t('pluginConfig.pluginName')}</Text>
               <Text type="secondary">{t('pluginConfig.enabledState')}</Text>
               <Text type="secondary">{t('common.priority')}</Text>
               <Text type="secondary">{t('common.timeoutSeconds')}</Text>
-            </div>
-            <Space direction="vertical" style={{ width: '100%' }} size={8}>
-              {pluginRows.map((row) => (
-                <Card key={row.pluginName} size="small">
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                      gap: 12,
-                      alignItems: 'center',
-                    }}
-                  >
+              </div>
+              <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                {pluginRows.map((row) => (
+                  <Card className="tds-config-plugin-record" key={row.pluginName} size="small">
+                    <div className="tds-config-plugin-grid">
                     <Text strong>{row.label}</Text>
-                    <Form.Item name={row.enabledKey} valuePropName="checked" style={{ marginBottom: 0 }}>
-                      <Switch checkedChildren={t('common.on')} unCheckedChildren={t('common.off')} />
-                    </Form.Item>
-                    <Form.Item name={row.priorityKey} style={{ marginBottom: 0 }}>
-                      <InputNumber min={1} max={100} style={{ width: '100%' }} />
-                    </Form.Item>
-                    <Form.Item name={row.timeoutKey} style={{ marginBottom: 0 }}>
-                      <InputNumber min={5} max={300} addonAfter={t('common.secondShort')} style={{ width: '100%' }} />
-                    </Form.Item>
-                  </div>
-                </Card>
-              ))}
-            </Space>
-            {pluginRows.length === 0 && (
-              <Alert
-                message={t('pluginConfig.noConfigItems')}
-                description={t('pluginConfig.initHint')}
-                type="warning"
-                style={{ marginTop: 12 }}
-              />
-            )}
-            <Form.Item style={{ marginTop: 24 }}>
-              <Space>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  icon={<SaveOutlined />}
-                  loading={pluginSaving}
-                >
-                  {t('pluginConfig.save')}
-                </Button>
-                <Button icon={<ReloadOutlined />} onClick={loadPluginConfigs}>
-                  {t('common.refresh')}
-                </Button>
+                      <div className="tds-config-plugin-field">
+                        <Text className="tds-config-plugin-label" type="secondary">{t('pluginConfig.enabledState')}</Text>
+                        <Form.Item name={row.enabledKey} valuePropName="checked" style={{ marginBottom: 0 }}>
+                          <Switch checkedChildren={t('common.on')} unCheckedChildren={t('common.off')} />
+                        </Form.Item>
+                      </div>
+                      <div className="tds-config-plugin-field">
+                        <Text className="tds-config-plugin-label" type="secondary">{t('common.priority')}</Text>
+                        <Form.Item name={row.priorityKey} style={{ marginBottom: 0 }}>
+                          <InputNumber min={1} max={100} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </div>
+                      <div className="tds-config-plugin-field">
+                        <Text className="tds-config-plugin-label" type="secondary">{t('common.timeoutSeconds')}</Text>
+                        <Form.Item name={row.timeoutKey} style={{ marginBottom: 0 }}>
+                          <InputNumber min={5} max={300} addonAfter={t('common.secondShort')} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
               </Space>
-            </Form.Item>
-          </Form>
-        </Spin>
+              {pluginRows.length === 0 && (
+                <Alert
+                  className="tds-config-inline-state"
+                  message={t('pluginConfig.noConfigItems')}
+                  description={t('pluginConfig.initHint')}
+                  type="warning"
+                />
+              )}
+              <Form.Item style={{ marginTop: 24 }}>
+                <Space className="tds-config-actions" wrap>
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    icon={<SaveOutlined />}
+                    loading={pluginSaving}
+                  >
+                    {t('pluginConfig.save')}
+                  </Button>
+                  <Button icon={<ReloadOutlined />} onClick={loadPluginConfigs}>
+                    {t('common.refresh')}
+                  </Button>
+                </Space>
+              </Form.Item>
+            </Form>
+          </Spin>
+        </section>
       )}
 
-      <Divider orientation="left">{t('pluginConfig.customPlugins')}</Divider>
-      <Space style={{ marginBottom: 16 }}>
-        {isAdmin && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => openCustomPluginModal()}>
-            {t('pluginConfig.addCustomPlugin')}
+      <section className="tds-config-panel tds-config-panel--form">
+        <Divider orientation="left">{t('pluginConfig.customPlugins')}</Divider>
+        <Space className="tds-config-actions" wrap>
+          {isAdmin && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => openCustomPluginModal()}>
+              {t('pluginConfig.addCustomPlugin')}
+            </Button>
+          )}
+          <Button icon={<ReloadOutlined />} onClick={loadCustomPlugins}>
+            {t('common.refresh')}
           </Button>
-        )}
-        <Button icon={<ReloadOutlined />} onClick={loadCustomPlugins}>
-          {t('common.refresh')}
-        </Button>
-      </Space>
-      <Table<TireCustomPlugin>
-        rowKey="id"
-        loading={customPluginLoading}
-        columns={customPluginColumns}
-        dataSource={customPlugins}
-        pagination={{ pageSize: 10 }}
-      />
+        </Space>
+        <Table<TireCustomPlugin>
+          rowKey="id"
+          loading={customPluginLoading}
+          columns={customPluginColumns}
+          dataSource={customPlugins}
+          pagination={{ pageSize: 10 }}
+          tableLayout="fixed"
+          scroll={{ x: 1320 }}
+        />
+      </section>
 
       <Modal
         title={editingPlugin ? t('pluginConfig.editCustomPlugin') : t('pluginConfig.addCustomPlugin')}
         open={customPluginModalOpen}
         onCancel={() => {
+          if (customPluginMutation.submitting) return;
           setCustomPluginModalOpen(false);
           customPluginForm.resetFields();
           setEditingPlugin(null);
         }}
         onOk={handleCustomPluginSubmit}
+        confirmLoading={customPluginMutation.submitting}
+        cancelButtonProps={{ disabled: customPluginMutation.submitting }}
         okText={t('common.save')}
         cancelText={t('common.cancel')}
       >
@@ -491,7 +520,7 @@ const PluginConfig = () => {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 };
 

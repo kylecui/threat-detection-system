@@ -1,0 +1,16 @@
+# Threat Detection System Docker/containerd runtime reconciliation
+
+[Unit]
+Description=Threat Detection System container runtime watchdog
+Documentation=file:/opt/threat-detection-system/README.md
+Requires=docker.service
+After=docker.service threat-detection-compose.service
+ConditionPathExists=/opt/threat-detection-system/.env
+
+[Service]
+Type=oneshot
+ExecStart=/opt/threat-detection-system/scripts/runtime-watchdog.sh --recover
+TimeoutStartSec=420
+
+[Install]
+WantedBy=multi-user.target

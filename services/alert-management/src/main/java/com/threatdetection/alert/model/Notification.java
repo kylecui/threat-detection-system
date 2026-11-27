@@ -27,6 +27,9 @@ public class Notification {
     @JoinColumn(name = "alert_id")
     private Alert alert;
 
+    @Column(name = "customer_id", length = 100)
+    private String customerId;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -58,6 +61,9 @@ public class Notification {
     @Column(name = "sent_at")
     private LocalDateTime sentAt;
 
+    @Column(name = "next_retry_at")
+    private LocalDateTime nextRetryAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -86,6 +92,14 @@ public class Notification {
 
     public void setAlert(Alert alert) {
         this.alert = alert;
+    }
+
+    public String getCustomerId() {
+        return customerId;
+    }
+
+    public void setCustomerId(String customerId) {
+        this.customerId = customerId;
     }
 
     public NotificationChannel getChannel() {
@@ -160,6 +174,14 @@ public class Notification {
         this.sentAt = sentAt;
     }
 
+    public LocalDateTime getNextRetryAt() {
+        return nextRetryAt;
+    }
+
+    public void setNextRetryAt(LocalDateTime nextRetryAt) {
+        this.nextRetryAt = nextRetryAt;
+    }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -170,16 +192,18 @@ public class Notification {
 
     // Helper methods
     public boolean canRetry() {
-        return retryCount < maxRetries;
+        return (retryCount == null ? 0 : retryCount) < (maxRetries == null ? 3 : maxRetries);
     }
 
     public void incrementRetryCount() {
-        this.retryCount++;
+        this.retryCount = (retryCount == null ? 0 : retryCount) + 1;
     }
 
     public void markAsSent() {
         this.status = NotificationStatus.SENT;
         this.sentAt = LocalDateTime.now();
+        this.nextRetryAt = null;
+        this.errorMessage = null;
     }
 
     public void markAsFailed(String errorMessage) {
@@ -192,6 +216,7 @@ public class Notification {
         return "Notification{" +
                 "id=" + id +
                 ", alertId=" + (alert != null ? alert.getId() : null) +
+                ", customerId='" + customerId + '\'' +
                 ", channel=" + channel +
                 ", recipient='" + recipient + '\'' +
                 ", status=" + status +

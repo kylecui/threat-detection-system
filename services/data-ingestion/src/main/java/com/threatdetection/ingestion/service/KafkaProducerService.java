@@ -10,7 +10,10 @@ import com.threatdetection.ingestion.model.ThreatDetectionEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
+
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class KafkaProducerService {
@@ -32,77 +35,63 @@ public class KafkaProducerService {
         this.kafkaTemplate = kafkaTemplate;
     }
     
-    public void sendAttackEvent(AttackEvent event) {
+    public CompletableFuture<SendResult<String, Object>> sendAttackEvent(AttackEvent event) {
         try {
-            kafkaTemplate.send(ATTACK_EVENTS_TOPIC, event.getDevSerial(), event);
-            logger.info("Sent attack event to Kafka: devSerial={}, attackIp={}, responseIp={}", 
-                       event.getDevSerial(), event.getAttackIp(), event.getResponseIp());
+            return kafkaTemplate.send(ATTACK_EVENTS_TOPIC, event.getDevSerial(), event);
         } catch (Exception e) {
-            logger.error("Failed to send attack event to Kafka: {}", event, e);
+            logger.error("Failed to send attack event to Kafka: devSerial={}", event.getDevSerial(), e);
             throw e;
         }
     }
     
-    public void sendStatusEvent(StatusEvent event) {
+    public CompletableFuture<SendResult<String, Object>> sendStatusEvent(StatusEvent event) {
         try {
-            kafkaTemplate.send(STATUS_EVENTS_TOPIC, event.getDevSerial(), event);
-            logger.info("Sent status event to Kafka: devSerial={}, sentryCount={}, realHostCount={}", 
-                       event.getDevSerial(), event.getSentryCount(), event.getRealHostCount());
+            return kafkaTemplate.send(STATUS_EVENTS_TOPIC, event.getDevSerial(), event);
         } catch (Exception e) {
-            logger.error("Failed to send status event to Kafka: {}", event, e);
+            logger.error("Failed to send status event to Kafka: devSerial={}", event.getDevSerial(), e);
             throw e;
         }
     }
 
-    public void sendSnifferEvent(SnifferEvent event) {
+    public CompletableFuture<SendResult<String, Object>> sendSnifferEvent(SnifferEvent event) {
         try {
-            kafkaTemplate.send(SNIFFER_EVENTS_TOPIC, event.getDeviceId(), event);
-            logger.info("Sent sniffer event to Kafka: deviceId={}, suspectIp={}, customerId={}",
-                       event.getDeviceId(), event.getSuspectIp(), event.getCustomerId());
+            return kafkaTemplate.send(SNIFFER_EVENTS_TOPIC, event.getDeviceId(), event);
         } catch (Exception e) {
             logger.error("Failed to send sniffer event to Kafka: deviceId={}", event.getDeviceId(), e);
             throw e;
         }
     }
 
-    public void sendThreatDetectionEvent(ThreatDetectionEvent event) {
+    public CompletableFuture<SendResult<String, Object>> sendThreatDetectionEvent(ThreatDetectionEvent event) {
         try {
-            kafkaTemplate.send(THREAT_DETECTION_EVENTS_TOPIC, event.getDeviceId(), event);
-            logger.info("Sent threat detection event to Kafka: deviceId={}, patternId={}, srcIp={}, customerId={}",
-                       event.getDeviceId(), event.getPatternId(), event.getSrcIp(), event.getCustomerId());
+            return kafkaTemplate.send(THREAT_DETECTION_EVENTS_TOPIC, event.getDeviceId(), event);
         } catch (Exception e) {
             logger.error("Failed to send threat detection event to Kafka: deviceId={}", event.getDeviceId(), e);
             throw e;
         }
     }
 
-    public void sendPolicyEvent(PolicyEvent event) {
+    public CompletableFuture<SendResult<String, Object>> sendPolicyEvent(PolicyEvent event) {
         try {
-            kafkaTemplate.send(POLICY_EVENTS_TOPIC, event.getDeviceId(), event);
-            logger.info("Sent policy event to Kafka: deviceId={}, policyId={}, action={}, customerId={}",
-                       event.getDeviceId(), event.getPolicyId(), event.getAction(), event.getCustomerId());
+            return kafkaTemplate.send(POLICY_EVENTS_TOPIC, event.getDeviceId(), event);
         } catch (Exception e) {
             logger.error("Failed to send policy event to Kafka: deviceId={}", event.getDeviceId(), e);
             throw e;
         }
     }
 
-    public void sendBgTrafficEvent(BgTrafficEvent event) {
+    public CompletableFuture<SendResult<String, Object>> sendBgTrafficEvent(BgTrafficEvent event) {
         try {
-            kafkaTemplate.send(BG_TRAFFIC_EVENTS_TOPIC, event.getDeviceId(), event);
-            logger.info("Sent bg traffic event to Kafka: deviceId={}, periodStart={}, customerId={}",
-                       event.getDeviceId(), event.getPeriodStart(), event.getCustomerId());
+            return kafkaTemplate.send(BG_TRAFFIC_EVENTS_TOPIC, event.getDeviceId(), event);
         } catch (Exception e) {
             logger.error("Failed to send bg traffic event to Kafka: deviceId={}", event.getDeviceId(), e);
             throw e;
         }
     }
 
-    public void sendAuditEvent(AuditEvent event) {
+    public CompletableFuture<SendResult<String, Object>> sendAuditEvent(AuditEvent event) {
         try {
-            kafkaTemplate.send(AUDIT_EVENTS_TOPIC, event.getDeviceId(), event);
-            logger.info("Sent audit event to Kafka: deviceId={}, action={}, actor={}, customerId={}",
-                       event.getDeviceId(), event.getAction(), event.getActor(), event.getCustomerId());
+            return kafkaTemplate.send(AUDIT_EVENTS_TOPIC, event.getDeviceId(), event);
         } catch (Exception e) {
             logger.error("Failed to send audit event to Kafka: deviceId={}", event.getDeviceId(), e);
             throw e;

@@ -1,0 +1,22 @@
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+aiokafka==0.10.0
+numpy==1.26.3
+onnxruntime>=1.17.0
+onnx>=1.15.0
+onnxscript>=0.1.0
+psycopg2-binary==2.9.9
+python-json-logger==2.0.7
+scikit-learn>=1.4.0
+watchdog>=4.0.0
+prometheus-client==0.21.1
+# PyTorch 2.2.2 CPU runtime dependencies are resolved from the selected PyPI
+# mirror before the wheel itself is installed with --no-deps.
+filelock>=3.13.1
+typing-extensions>=4.8.0
+sympy>=1.12,<1.13
+networkx>=2.5.1
+jinja2>=3.1.2
+fsspec>=2023.4.0

@@ -70,6 +70,10 @@ public class AggregatedAttackData {
      * 聚合窗口时间戳
      */
     private Instant timestamp;
+
+    /** Stable Flink window boundaries used for idempotent persistence. */
+    private Instant windowStart;
+    private Instant windowEnd;
     
     /**
      * 端口列表 (用于端口权重计算)

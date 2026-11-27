@@ -1,0 +1,11 @@
+{
+  "old_version": "3.1.32",
+  "candidate_version": "3.1.39",
+  "archive_name": "threat-detection-system-3.1.32-linux-x86_64.tar.gz",
+  "archive_sha256": "af89be1e122b67a47703875009bf145ad13353e6ee628daf4bddee76079baaef",
+  "action": "upgrade",
+  "managed_file_count": 656,
+  "result": "PASS",
+  "elapsed_seconds": 5.276,
+  "scope": "private temporary tree; real bash/rsync; recording Docker/systemd stubs; synthetic credentials"
+}

@@ -13,12 +13,21 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import com.threatdetection.ingestion.service.DevSerialToCustomerMappingService;
+import com.threatdetection.ingestion.service.KafkaProducerService;
+import com.threatdetection.ingestion.model.AttackEvent;
+import com.threatdetection.ingestion.model.StatusEvent;
 
 import java.util.Arrays;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import java.util.concurrent.CompletableFuture;
 
 import org.springframework.context.annotation.Import;
 
@@ -37,6 +46,21 @@ class BatchLogIngestionIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockBean
+    private DevSerialToCustomerMappingService mappingService;
+
+    @MockBean
+    private KafkaProducerService kafkaProducerService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void configureCustomerMapping() {
+        when(mappingService.resolveCustomerId(anyString())).thenReturn("customer-test");
+        when(kafkaProducerService.sendAttackEvent(any(AttackEvent.class)))
+                .thenReturn(CompletableFuture.completedFuture(null));
+        when(kafkaProducerService.sendStatusEvent(any(StatusEvent.class)))
+                .thenReturn(CompletableFuture.completedFuture(null));
+    }
 
     @Test
     @DisplayName("Phase 1A: 集成测试 - 批量处理有效日志")

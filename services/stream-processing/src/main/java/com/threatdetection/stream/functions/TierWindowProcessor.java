@@ -172,7 +172,7 @@ public class TierWindowProcessor
                 .timestamp(Instant.now())
                 .build();
         
-        log.info("Tier {} window: customerId={}, attackMac={}, attackIp={}, mostAccessedHoneypot={}, " +
+        log.debug("Tier {} window: customerId={}, attackMac={}, attackIp={}, mostAccessedHoneypot={}, " +
                 "threatScore={}, threatLevel={}, timeDistWeight={}, netWeight={}, intelWeight={}, burstIntensity={}, " +
                 "count={}, ips={}, ports={}, devices={}, timeSpan={}ms of {}ms window",
                 tier, customerId, attackMac, attackIp, mostAccessedHoneypotIp,

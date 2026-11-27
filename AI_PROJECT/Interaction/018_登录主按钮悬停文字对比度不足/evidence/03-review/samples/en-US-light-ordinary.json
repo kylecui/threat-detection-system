@@ -1,0 +1,131 @@
+{
+  "language": "en-US",
+  "preference": "light",
+  "bootstrap": false,
+  "samples": [
+    {
+      "state": "normal",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(8, 127, 156)",
+      "composedForeground": [
+        255,
+        255,
+        255
+      ],
+      "composedBackground": [
+        8,
+        127,
+        156
+      ],
+      "fontSize": "14px",
+      "fontWeight": "600",
+      "ratio": 4.639721692849931,
+      "hover": false,
+      "active": false,
+      "focusVisible": false
+    },
+    {
+      "state": "hover",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(6, 107, 132)",
+      "composedForeground": [
+        255,
+        255,
+        255
+      ],
+      "composedBackground": [
+        6,
+        107,
+        132
+      ],
+      "fontSize": "14px",
+      "fontWeight": "600",
+      "ratio": 6.0975428627647466,
+      "hover": true,
+      "active": false,
+      "focusVisible": false
+    },
+    {
+      "state": "keyboard-focus",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(8, 127, 156)",
+      "composedForeground": [
+        255,
+        255,
+        255
+      ],
+      "composedBackground": [
+        8,
+        127,
+        156
+      ],
+      "fontSize": "14px",
+      "fontWeight": "600",
+      "ratio": 4.639721692849931,
+      "hover": false,
+      "active": false,
+      "focusVisible": true
+    },
+    {
+      "state": "hover-active",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(0, 90, 117)",
+      "composedForeground": [
+        255,
+        255,
+        255
+      ],
+      "composedBackground": [
+        0,
+        90,
+        117
+      ],
+      "fontSize": "14px",
+      "fontWeight": "600",
+      "ratio": 7.722471658763958,
+      "hover": true,
+      "active": true,
+      "focusVisible": true
+    },
+    {
+      "state": "active-without-hover",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(0, 90, 117)",
+      "composedForeground": [
+        255,
+        255,
+        255
+      ],
+      "composedBackground": [
+        0,
+        90,
+        117
+      ],
+      "fontSize": "14px",
+      "fontWeight": "600",
+      "ratio": 7.722471658763958,
+      "hover": false,
+      "active": true,
+      "focusVisible": true
+    }
+  ],
+  "fieldStates": [
+    {
+      "field": "username",
+      "hoverBorder": "color(srgb 0.272314 0.607216 0.695843)",
+      "focus": {
+        "border": "rgb(8, 127, 156)",
+        "shadow": "color(srgb 0.0313726 0.498039 0.611765 / 0.13) 0px 0px 0px 3px"
+      }
+    },
+    {
+      "field": "password",
+      "hoverBorder": "color(srgb 0.272314 0.607216 0.695843)",
+      "focus": {
+        "border": "rgb(8, 127, 156)",
+        "shadow": "color(srgb 0.0313726 0.498039 0.611765 / 0.13) 0px 0px 0px 3px"
+      }
+    }
+  ],
+  "submitted": []
+}

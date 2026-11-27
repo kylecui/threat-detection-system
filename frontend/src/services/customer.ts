@@ -2,6 +2,8 @@ import apiClient from './api';
 import type {
   Customer,
   Device,
+  DeviceAttackEvent,
+  DeviceBatchOperationResult,
   DeviceQuota,
   NetSegmentWeight,
   NotificationConfig,
@@ -25,9 +27,18 @@ class CustomerService {
   }): Promise<PaginatedResponse<Customer>> {
     const response = await apiClient.get<PaginatedResponse<Customer>>(
       '/api/v1/customers',
-      { params }
+      { params, maxRetries: 1 }
     );
     return response.data;
+  }
+
+  /** Load the active customers that belong to one tenant without inheriting a stale UI scope. */
+  async getCustomersByTenant(tenantId: number): Promise<Customer[]> {
+    const response = await apiClient.get<Customer[]>(
+      `/api/v1/customers/by-tenant/${tenantId}`,
+      { skipScope: true },
+    );
+    return Array.isArray(response.data) ? response.data : [];
   }
 
   /** 搜索客户 */
@@ -65,10 +76,15 @@ class CustomerService {
   }
 
   /** 创建客户 */
-  async createCustomer(data: Partial<Customer>): Promise<Customer> {
+  async createCustomer(data: Partial<Customer> & {
+    createAdmin?: boolean;
+    adminUsername?: string;
+    adminPassword?: string;
+  }): Promise<Customer> {
     const response = await apiClient.post<Customer>(
       '/api/v1/customers',
-      data
+      data,
+      { suppressGlobalError: true }
     );
     return response.data;
   }
@@ -80,7 +96,8 @@ class CustomerService {
   ): Promise<Customer> {
     const response = await apiClient.put<Customer>(
       `/api/v1/customers/${customerId}`,
-      data
+      data,
+      { suppressGlobalError: true }
     );
     return response.data;
   }
@@ -99,7 +116,9 @@ class CustomerService {
 
   /** 删除客户 (软删除) */
   async deleteCustomer(customerId: string): Promise<void> {
-    await apiClient.delete(`/api/v1/customers/${customerId}`);
+    await apiClient.delete(`/api/v1/customers/${customerId}`, {
+      suppressGlobalError: true,
+    });
   }
 
   /** 按状态获取客户 */
@@ -129,7 +148,29 @@ class CustomerService {
     devSerial: string
   ): Promise<Device> {
     const response = await apiClient.get<Device>(
-      `/api/v1/customers/${customerId}/devices/${devSerial}`
+      `/api/v1/customers/${customerId}/devices/${devSerial}`,
+      {
+        suppressGlobalError: true,
+        maxRetries: 1,
+      },
+    );
+    return response.data;
+  }
+
+  /** Paginated raw attack events received from one bound device. */
+  async getDeviceEvents(
+    customerId: string,
+    devSerial: string,
+    page = 0,
+    size = 20,
+  ): Promise<PaginatedResponse<DeviceAttackEvent>> {
+    const response = await apiClient.get<PaginatedResponse<DeviceAttackEvent>>(
+      `/api/v1/customers/${customerId}/devices/${devSerial}/events`,
+      {
+        params: { page, size },
+        suppressGlobalError: true,
+        maxRetries: 1,
+      },
     );
     return response.data;
   }
@@ -138,10 +179,11 @@ class CustomerService {
   async addDevices(
     customerId: string,
     devices: Partial<Device>[]
-  ): Promise<Device[]> {
-    const response = await apiClient.post<Device[]>(
+  ): Promise<DeviceBatchOperationResult> {
+    const response = await apiClient.post<DeviceBatchOperationResult>(
       `/api/v1/customers/${customerId}/devices/batch`,
-      { devices }
+      { devices },
+      { suppressGlobalError: true }
     );
     return response.data;
   }
@@ -154,7 +196,8 @@ class CustomerService {
   ): Promise<Device> {
     const response = await apiClient.put<Device>(
       `/api/v1/customers/${customerId}/devices/${devSerial}`,
-      data
+      data,
+      { suppressGlobalError: true }
     );
     return response.data;
   }
@@ -165,14 +208,17 @@ class CustomerService {
     devSerial: string
   ): Promise<void> {
     await apiClient.delete(
-      `/api/v1/customers/${customerId}/devices/${devSerial}`
+      `/api/v1/customers/${customerId}/devices/${devSerial}`,
+      { suppressGlobalError: true }
     );
   }
 
   /** 同步设备 */
   async syncDevices(customerId: string): Promise<void> {
     await apiClient.post(
-      `/api/v1/customers/${customerId}/devices/sync`
+      `/api/v1/customers/${customerId}/devices/sync`,
+      undefined,
+      { suppressGlobalError: true }
     );
   }
 

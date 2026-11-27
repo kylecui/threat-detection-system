@@ -25,7 +25,7 @@ import java.util.Map;
 /**
  * End-user self-service config controller.
  *
- * CUSTOMER_USER can configure their own LLM provider + TI API keys,
+ * CUSTOMER_ADMIN and CUSTOMER_USER can configure their own LLM provider + TI API keys,
  * subject to admin lock flags on their customer's config_assignments.
  *
  * Resolution order (enforced in GET /resolved):
@@ -49,7 +49,8 @@ public class UserConfigController {
     public Mono<ResponseEntity<Map<String, Object>>> getMyConfig(ServerWebExchange exchange) {
         return extractCaller(exchange)
                 .flatMap(caller -> {
-                    if (!caller.roles.contains("CUSTOMER_USER")) {
+                    if (!caller.roles.contains("CUSTOMER_USER")
+                            && !caller.roles.contains("CUSTOMER_ADMIN")) {
                         return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN)
                                 .<Map<String, Object>>build());
                     }
@@ -96,7 +97,8 @@ public class UserConfigController {
             ServerWebExchange exchange) {
         return extractCaller(exchange)
                 .flatMap(caller -> {
-                    if (!caller.roles.contains("CUSTOMER_USER")) {
+                    if (!caller.roles.contains("CUSTOMER_USER")
+                            && !caller.roles.contains("CUSTOMER_ADMIN")) {
                         return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN)
                                 .<Map<String, Object>>build());
                     }
@@ -208,7 +210,8 @@ public class UserConfigController {
     public Mono<ResponseEntity<Map<String, Object>>> getResolvedConfig(ServerWebExchange exchange) {
         return extractCaller(exchange)
                 .flatMap(caller -> {
-                    if (!caller.roles.contains("CUSTOMER_USER")) {
+                    if (!caller.roles.contains("CUSTOMER_USER")
+                            && !caller.roles.contains("CUSTOMER_ADMIN")) {
                         return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN)
                                 .<Map<String, Object>>build());
                     }

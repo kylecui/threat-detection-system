@@ -93,7 +93,7 @@ public class ThreatAlertPersistenceService {
             // 保存到数据库
             threatAlertRepository.save(entity);
             
-            log.info("Persisted threat alert: customerId={}, attackMac={}, level={}, score={}, tier={}", 
+            log.debug("Persisted threat alert: customerId={}, attackMac={}, level={}, score={}, tier={}", 
                 customerId, attackMac, threatLevel, threatScore, tier);
             
         } catch (Exception e) {

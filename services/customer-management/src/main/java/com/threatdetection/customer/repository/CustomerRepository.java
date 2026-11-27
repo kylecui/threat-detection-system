@@ -47,6 +47,13 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
      */
     Page<Customer> findByStatusNot(Customer.CustomerStatus status, Pageable pageable);
 
+    Page<Customer> findByCustomerIdAndStatusNot(
+            String customerId, Customer.CustomerStatus status, Pageable pageable);
+
+    Page<Customer> findByCustomerId(String customerId, Pageable pageable);
+
+    long countByStatusNot(Customer.CustomerStatus status);
+
     /**
      * 根据订阅套餐查找客户
      */
@@ -54,10 +61,20 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
     List<Customer> findByTenantId(Long tenantId);
 
+    Page<Customer> findByTenantId(Long tenantId, Pageable pageable);
+
     /**
      * 分页查询指定租户下状态不等于指定值的客户
      */
     Page<Customer> findByTenantIdAndStatusNot(Long tenantId, Customer.CustomerStatus status, Pageable pageable);
+
+    List<Customer> findByTenantIdAndStatusNot(Long tenantId, Customer.CustomerStatus status);
+
+    Page<Customer> findByTenantIdAndStatus(
+            Long tenantId, Customer.CustomerStatus status, Pageable pageable);
+
+    Page<Customer> findByCustomerIdAndStatus(
+            String customerId, Customer.CustomerStatus status, Pageable pageable);
 
     /**
      * 根据名称模糊查询 (支持分页)
@@ -66,6 +83,24 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
            "OR LOWER(c.customerId) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR LOWER(c.email) LIKE LOWER(CONCAT('%', :keyword, '%'))")
     Page<Customer> searchCustomers(@Param("keyword") String keyword, Pageable pageable);
+
+    @Query("SELECT c FROM Customer c WHERE c.tenantId = :tenantId AND (" +
+           "LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(c.customerId) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(c.email) LIKE LOWER(CONCAT('%', :keyword, '%')))" )
+    Page<Customer> searchCustomersByTenant(
+            @Param("keyword") String keyword,
+            @Param("tenantId") Long tenantId,
+            Pageable pageable);
+
+    @Query("SELECT c FROM Customer c WHERE c.customerId = :customerId AND (" +
+           "LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(c.customerId) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
+           "LOWER(c.email) LIKE LOWER(CONCAT('%', :keyword, '%')))" )
+    Page<Customer> searchCustomerById(
+            @Param("keyword") String keyword,
+            @Param("customerId") String customerId,
+            Pageable pageable);
 
     /**
      * 统计各状态客户数量

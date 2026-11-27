@@ -1,0 +1,91 @@
+{
+  "scenes": 12,
+  "samples": 60,
+  "states": {
+    "normal": {
+      "count": 12,
+      "foreground": [
+        "rgb(255, 255, 255)"
+      ],
+      "background": [
+        "rgb(8, 127, 156)"
+      ],
+      "minRatio": 4.639721692849931,
+      "maxRatio": 4.639721692849931,
+      "fontSize": [
+        "14px"
+      ],
+      "fontWeight": [
+        "600"
+      ]
+    },
+    "hover": {
+      "count": 12,
+      "foreground": [
+        "rgb(255, 255, 255)"
+      ],
+      "background": [
+        "rgb(6, 107, 132)"
+      ],
+      "minRatio": 6.0975428627647466,
+      "maxRatio": 6.0975428627647466,
+      "fontSize": [
+        "14px"
+      ],
+      "fontWeight": [
+        "600"
+      ]
+    },
+    "keyboard-focus": {
+      "count": 12,
+      "foreground": [
+        "rgb(255, 255, 255)"
+      ],
+      "background": [
+        "rgb(8, 127, 156)"
+      ],
+      "minRatio": 4.639721692849931,
+      "maxRatio": 4.639721692849931,
+      "fontSize": [
+        "14px"
+      ],
+      "fontWeight": [
+        "600"
+      ]
+    },
+    "hover-active": {
+      "count": 12,
+      "foreground": [
+        "rgb(255, 255, 255)"
+      ],
+      "background": [
+        "rgb(0, 90, 117)"
+      ],
+      "minRatio": 7.722471658763958,
+      "maxRatio": 7.722471658763958,
+      "fontSize": [
+        "14px"
+      ],
+      "fontWeight": [
+        "600"
+      ]
+    },
+    "active-without-hover": {
+      "count": 12,
+      "foreground": [
+        "rgb(255, 255, 255)"
+      ],
+      "background": [
+        "rgb(0, 90, 117)"
+      ],
+      "minRatio": 7.722471658763958,
+      "maxRatio": 7.722471658763958,
+      "fontSize": [
+        "14px"
+      ],
+      "fontWeight": [
+        "600"
+      ]
+    }
+  }
+}

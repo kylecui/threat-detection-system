@@ -14,6 +14,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnTransformer;
 
 import java.time.Instant;
 
@@ -36,7 +37,13 @@ public class ThreatIndicator {
     @Column(name = "ioc_type", nullable = false, length = 20)
     private IocType iocType;
 
+    /**
+     * Keep the Java representation as text so CIDR prefixes are preserved.
+     * PostgreSQL validates and stores the value as its native INET type; the
+     * explicit cast prevents Hibernate from binding this String as VARCHAR.
+     */
     @Column(name = "ioc_inet", columnDefinition = "inet")
+    @ColumnTransformer(write = "CAST(? AS inet)")
     private String iocInet;
 
     @Builder.Default

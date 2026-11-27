@@ -1,0 +1,22 @@
+# Optional dedicated Mosquitto control connection. Load after docker-compose.yml.
+# The existing EMQX data listener, Kafka and analysis configuration is unchanged.
+services:
+  api-gateway:
+    environment:
+      JZ_CONTROL_ENABLED: "true"
+      JZ_CONTROL_INITIALIZE_SCHEMA: ${JZ_CONTROL_INITIALIZE_SCHEMA:-true}
+      JZ_CONTROL_BROKER_URL: ${JZ_CONTROL_BROKER_URL:?ssl control Broker URL is required}
+      JZ_CONTROL_CONTROLLER_ID: ${JZ_CONTROL_CONTROLLER_ID:?controller ID is required}
+      JZ_CONTROL_PLATFORM_ID: ${JZ_CONTROL_PLATFORM_ID:?platform ID is required}
+      JZ_CONTROL_USERNAME: ${JZ_CONTROL_USERNAME:?dedicated control account is required}
+      JZ_CONTROL_PASSWORD: ${JZ_CONTROL_PASSWORD:?dedicated control password is required}
+      JZ_CONTROL_SIGNING_SECRET: ${JZ_CONTROL_SIGNING_SECRET:?dedicated signing secret is required}
+      JZ_CONTROL_KEY_STORE: ${JZ_CONTROL_KEY_STORE:-/run/jz-control/client.p12}
+      JZ_CONTROL_KEY_STORE_PASSWORD: ${JZ_CONTROL_KEY_STORE_PASSWORD:?client key store password is required}
+      JZ_CONTROL_TRUST_STORE: ${JZ_CONTROL_TRUST_STORE:-/run/jz-control/trust.p12}
+      JZ_CONTROL_TRUST_STORE_PASSWORD: ${JZ_CONTROL_TRUST_STORE_PASSWORD:?trust store password is required}
+    volumes:
+      - type: bind
+        source: ${JZ_CONTROL_TLS_DIR:?owner-only TLS directory is required}
+        target: /run/jz-control
+        read_only: true

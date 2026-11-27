@@ -1,9 +1,10 @@
 -- =============================================================
 -- RBAC (Role-Based Access Control) Tables
 -- =============================================================
--- Roles: SUPER_ADMIN, TENANT_ADMIN, CUSTOMER_USER
+-- Roles: SUPER_ADMIN, TENANT_ADMIN, CUSTOMER_ADMIN, CUSTOMER_USER
 -- SUPER_ADMIN    - Full system access (all customers, all operations)
 -- TENANT_ADMIN   - Manage assigned customers (CRUD, config, alerts)
+-- CUSTOMER_ADMIN - Manage users and configuration inside one customer
 -- CUSTOMER_USER  - Read-only access to assigned customer data
 -- =============================================================
 
@@ -40,27 +41,9 @@ CREATE INDEX IF NOT EXISTS idx_auth_user_roles_user ON auth_user_roles(user_id);
 INSERT INTO auth_roles (name, description) VALUES
     ('SUPER_ADMIN',   'Full system access - all customers, all operations'),
     ('TENANT_ADMIN',  'Manage assigned customers - CRUD, config, alerts'),
+    ('CUSTOMER_ADMIN','Manage users and configuration inside one customer'),
     ('CUSTOMER_USER', 'Read-only access to assigned customer data')
 ON CONFLICT (name) DO NOTHING;
 
--- Seed super-admin user (password: admin123 — bcrypt hash)
--- $2a$10$FBnTBCfCguv9TKTt4xoHi.KFNXmxNl1mJ7k0qIi7o0gYcVWIzDNB2 = admin123
-INSERT INTO auth_users (username, password_hash, display_name, email, customer_id, enabled)
-VALUES ('admin', '$2a$10$FBnTBCfCguv9TKTt4xoHi.KFNXmxNl1mJ7k0qIi7o0gYcVWIzDNB2', 'System Administrator', 'admin@threat-detection.local', NULL, TRUE)
-ON CONFLICT (username) DO NOTHING;
-
--- Assign SUPER_ADMIN role to admin user
-INSERT INTO auth_user_roles (user_id, role_id)
-SELECT u.id, r.id FROM auth_users u, auth_roles r
-WHERE u.username = 'admin' AND r.name = 'SUPER_ADMIN'
-ON CONFLICT DO NOTHING;
-
--- Seed a demo tenant-admin user for demo-customer
-INSERT INTO auth_users (username, password_hash, display_name, email, customer_id, enabled)
-VALUES ('demo_admin', '$2a$10$FBnTBCfCguv9TKTt4xoHi.KFNXmxNl1mJ7k0qIi7o0gYcVWIzDNB2', 'Demo Tenant Admin', 'demo@threat-detection.local', 'demo-customer', TRUE)
-ON CONFLICT (username) DO NOTHING;
-
-INSERT INTO auth_user_roles (user_id, role_id)
-SELECT u.id, r.id FROM auth_users u, auth_roles r
-WHERE u.username = 'demo_admin' AND r.name = 'TENANT_ADMIN'
-ON CONFLICT DO NOTHING;
+-- No default password or demo user is shipped. The first SUPER_ADMIN is
+-- created once through POST /api/v1/auth/bootstrap while auth_users is empty.

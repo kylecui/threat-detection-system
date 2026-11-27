@@ -57,8 +57,11 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     /**
      * 查找可以重试的通知
      */
-    @Query("SELECT n FROM Notification n WHERE n.status = 'FAILED' AND n.retryCount < n.maxRetries")
-    List<Notification> findNotificationsForRetry();
+    @Query("SELECT n FROM Notification n " +
+            "WHERE n.status = 'RETRYING' AND n.retryCount < n.maxRetries " +
+            "AND (n.nextRetryAt IS NULL OR n.nextRetryAt <= :now) " +
+            "ORDER BY n.nextRetryAt ASC, n.id ASC")
+    List<Notification> findNotificationsForRetry(@Param("now") LocalDateTime now);
 
     /**
      * 统计通知数量按状态分组

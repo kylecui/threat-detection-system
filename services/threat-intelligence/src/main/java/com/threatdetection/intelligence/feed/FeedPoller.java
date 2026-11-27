@@ -25,6 +25,15 @@ public abstract class FeedPoller {
 
     public abstract String getFeedName();
 
+    /**
+     * Maximum number of indicators returned by one upstream request, when the
+     * provider contract has a fixed cap. A null value means the poller does not
+     * expose a fixed per-request limit.
+     */
+    public Integer getPollBatchLimit() {
+        return null;
+    }
+
     protected abstract HttpRequest buildRequest(ThreatIntelFeed feed, String apiKey);
 
     protected abstract List<CreateIndicatorRequest> parseResponse(String responseBody) throws Exception;

@@ -5,12 +5,15 @@ import com.threatdetection.assessment.repository.DeviceCustomerMappingRepository
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.env.Environment;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -26,13 +29,18 @@ public class DeviceSerialToCustomerMappingService {
 
     private final DeviceCustomerMappingRepository repository;
     private final Environment environment;
+    private final JdbcTemplate jdbcTemplate;
 
     // Cache for performance (devSerial -> customerId for current time)
     private volatile Map<String, String> devSerialToCustomerCache;
 
-    public DeviceSerialToCustomerMappingService(DeviceCustomerMappingRepository repository, Environment environment) {
+    public DeviceSerialToCustomerMappingService(
+            DeviceCustomerMappingRepository repository,
+            Environment environment,
+            JdbcTemplate jdbcTemplate) {
         this.repository = repository;
         this.environment = environment;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @PostConstruct
@@ -91,8 +99,9 @@ public class DeviceSerialToCustomerMappingService {
         }
 
         // Try cache first for performance (only for current time queries)
-        if (timestamp.equals(Instant.now().minusSeconds(60))) { // Allow 1 minute tolerance for "current"
-            String customerId = devSerialToCustomerCache.get(devSerial.toUpperCase());
+        Instant now = Instant.now();
+        if (!timestamp.isBefore(now.minusSeconds(60)) && !timestamp.isAfter(now.plusSeconds(1))) {
+            String customerId = devSerialToCustomerCache.get(devSerial.toUpperCase(Locale.ROOT));
             if (customerId != null) {
                 logger.debug("Resolved devSerial {} to customerId {} (from cache)", devSerial, customerId);
                 return customerId;
@@ -168,8 +177,11 @@ public class DeviceSerialToCustomerMappingService {
      * @param bindTime 绑定时间（默认为当前时间）
      * @return 创建的映射记录
      */
+    @Transactional
     public DeviceCustomerMapping bindDeviceToCustomer(String devSerial, String customerId,
                                                      String bindReason, Instant bindTime) {
+        devSerial = normalizeSerial(devSerial);
+        acquireDeviceLock(devSerial);
         if (bindTime == null) {
             bindTime = Instant.now();
         }
@@ -179,12 +191,15 @@ public class DeviceSerialToCustomerMappingService {
 
         // 检查是否已有当前有效的绑定，如果有则先解绑
         List<DeviceCustomerMapping> currentMappings = repository.findActiveMappingsAtTime(devSerial.toUpperCase(), bindTime);
+        if (!currentMappings.isEmpty() && currentMappings.get(0).getCustomerId().equals(customerId)) {
+            return currentMappings.get(0);
+        }
         if (!currentMappings.isEmpty()) {
             unbindDevice(currentMappings.get(0), bindTime, "自动解绑-重新分配给" + customerId);
         }
 
         DeviceCustomerMapping newMapping = new DeviceCustomerMapping(devSerial, customerId, bindTime, bindReason);
-        DeviceCustomerMapping saved = repository.save(newMapping);
+        DeviceCustomerMapping saved = repository.saveAndFlush(newMapping);
 
         // 刷新缓存
         refreshCache();
@@ -221,7 +236,10 @@ public class DeviceSerialToCustomerMappingService {
      * @param unbindTime 解绑时间
      * @return 被解绑的映射记录，如果没有找到则返回null
      */
+    @Transactional
     public DeviceCustomerMapping unbindDevice(String devSerial, String unbindReason, Instant unbindTime) {
+        devSerial = normalizeSerial(devSerial);
+        acquireDeviceLock(devSerial);
         if (unbindTime == null) {
             unbindTime = Instant.now();
         }
@@ -261,8 +279,11 @@ public class DeviceSerialToCustomerMappingService {
      * @param transferTime 转移时间
      * @return 之前的映射记录
      */
+    @Transactional
     public DeviceCustomerMapping transferDevice(String devSerial, String newCustomerId,
                                                String transferReason, Instant transferTime) {
+        devSerial = normalizeSerial(devSerial);
+        acquireDeviceLock(devSerial);
         if (transferTime == null) {
             transferTime = Instant.now();
         }
@@ -298,5 +319,18 @@ public class DeviceSerialToCustomerMappingService {
             bindDeviceToCustomer(devSerial, newCustomerId, transferReason, transferTime);
             return null;
         }
+    }
+
+    private String normalizeSerial(String devSerial) {
+        if (devSerial == null || devSerial.isBlank()) {
+            throw new IllegalArgumentException("Device serial cannot be blank");
+        }
+        return devSerial.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void acquireDeviceLock(String devSerial) {
+        jdbcTemplate.queryForList(
+                "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+                "device:" + devSerial);
     }
 }

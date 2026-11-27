@@ -1,0 +1,576 @@
+{
+  "browser": "147.0.7727.15",
+  "viewport": {
+    "width": 390,
+    "height": 600
+  },
+  "groups": [
+    {
+      "field": "password",
+      "key": "Space",
+      "baseY": 217,
+      "states": [
+        {
+          "stage": "initial-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "repeat-0-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "repeat-1-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "repeat-2-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "released-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "initial-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "repeat-0-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "repeat-1-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "repeat-2-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "released-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        }
+      ]
+    },
+    {
+      "field": "password",
+      "key": "Enter",
+      "baseY": 217,
+      "states": [
+        {
+          "stage": "initial-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "repeat-0-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "repeat-1-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "repeat-2-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "released-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "initial-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "repeat-0-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "repeat-1-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "repeat-2-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        },
+        {
+          "stage": "released-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 217,
+          "top": 453.1875
+        }
+      ]
+    },
+    {
+      "field": "confirmPassword",
+      "key": "Space",
+      "baseY": 230,
+      "states": [
+        {
+          "stage": "initial-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "repeat-0-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "repeat-1-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "repeat-2-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "released-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "initial-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "repeat-0-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "repeat-1-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "repeat-2-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "released-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        }
+      ]
+    },
+    {
+      "field": "confirmPassword",
+      "key": "Enter",
+      "baseY": 230,
+      "states": [
+        {
+          "stage": "initial-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "repeat-0-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "repeat-1-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "repeat-2-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "released-true",
+          "type": "text",
+          "valueLength": 9,
+          "pressed": "true",
+          "name": "隐藏密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "initial-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "repeat-0-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "repeat-1-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "repeat-2-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        },
+        {
+          "stage": "released-false",
+          "type": "password",
+          "valueLength": 9,
+          "pressed": "false",
+          "name": "显示密码",
+          "focused": true,
+          "scrollY": 230,
+          "top": 556.1875
+        }
+      ]
+    }
+  ],
+  "posts": {
+    "bootstrap": 0,
+    "login": 0
+  },
+  "errors": [],
+  "events": [
+    {
+      "key": " ",
+      "repeat": false
+    },
+    {
+      "key": " ",
+      "repeat": true
+    },
+    {
+      "key": " ",
+      "repeat": true
+    },
+    {
+      "key": " ",
+      "repeat": true
+    },
+    {
+      "key": " ",
+      "repeat": false
+    },
+    {
+      "key": " ",
+      "repeat": true
+    },
+    {
+      "key": " ",
+      "repeat": true
+    },
+    {
+      "key": " ",
+      "repeat": true
+    },
+    {
+      "key": "Enter",
+      "repeat": false
+    },
+    {
+      "key": "Enter",
+      "repeat": true
+    },
+    {
+      "key": "Enter",
+      "repeat": true
+    },
+    {
+      "key": "Enter",
+      "repeat": true
+    },
+    {
+      "key": "Enter",
+      "repeat": false
+    },
+    {
+      "key": "Enter",
+      "repeat": true
+    },
+    {
+      "key": "Enter",
+      "repeat": true
+    },
+    {
+      "key": "Enter",
+      "repeat": true
+    },
+    {
+      "key": " ",
+      "repeat": false
+    },
+    {
+      "key": " ",
+      "repeat": true
+    },
+    {
+      "key": " ",
+      "repeat": true
+    },
+    {
+      "key": " ",
+      "repeat": true
+    },
+    {
+      "key": " ",
+      "repeat": false
+    },
+    {
+      "key": " ",
+      "repeat": true
+    },
+    {
+      "key": " ",
+      "repeat": true
+    },
+    {
+      "key": " ",
+      "repeat": true
+    },
+    {
+      "key": "Enter",
+      "repeat": false
+    },
+    {
+      "key": "Enter",
+      "repeat": true
+    },
+    {
+      "key": "Enter",
+      "repeat": true
+    },
+    {
+      "key": "Enter",
+      "repeat": true
+    },
+    {
+      "key": "Enter",
+      "repeat": false
+    },
+    {
+      "key": "Enter",
+      "repeat": true
+    },
+    {
+      "key": "Enter",
+      "repeat": true
+    },
+    {
+      "key": "Enter",
+      "repeat": true
+    }
+  ],
+  "horizontal": {
+    "scrollWidth": 390,
+    "clientWidth": 390
+  }
+}

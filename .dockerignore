@@ -6,3 +6,16 @@ target/
 **/*.iml
 **/.DS_Store
 *.log
+AI_PROJECT/
+docs/
+k8s/
+outputs/
+**/node_modules/
+**/dist/
+**/playwright-report/
+**/test-results/
+**/__pycache__/
+**/.pytest_cache/
+**/.env
+**/*.pem
+**/*.key

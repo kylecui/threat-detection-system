@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-30",
+  "host": "192.168.100.9",
+  "fixture": "real published archives in isolated temporary directories",
+  "archive_sha256": {
+    "3.1.32": "af89be1e122b67a47703875009bf145ad13353e6ee628daf4bddee76079baaef",
+    "3.1.39": "a9a2629a1893bce6a86108d2e058e6278fac73404bd1f07be68a2478b44aa36d"
+  },
+  "default_upgrade": {
+    "source_version": "3.1.39",
+    "installed_VERSION": "3.1.32",
+    "installed_marker": "3.1.39",
+    "runtime_release_version": "3.1.39",
+    "manifest": {
+      "exit_code": 1,
+      "failed_files": [
+        "VERSION",
+        "pom.xml"
+      ]
+    },
+    "preserved_test_credentials": true
+  },
+  "checksum_candidate_upgrade": {
+    "installed_VERSION": "3.1.39",
+    "manifest": {
+      "exit_code": 0,
+      "failed_files": []
+    }
+  },
+  "default_rollback_after_checksum_candidate": {
+    "installed_VERSION": "3.1.39",
+    "old_manifest": {
+      "exit_code": 1,
+      "failed_files": [
+        "VERSION",
+        "pom.xml"
+      ]
+    }
+  },
+  "checksum_candidate_rollback_matches_actual_snapshot": true,
+  "scope": "no production install.sh, Docker, systemd or /opt operations; fake generated credentials were not printed; temporary fixture removed"
+}

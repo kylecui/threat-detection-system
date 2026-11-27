@@ -14,5 +14,5 @@ public class CreateUserRequest {
     private String email;
     private String customerId;     // which customer this user belongs to
     private Long tenantId;         // which tenant (resolved from JWT for TENANT_ADMIN)
-    private String role;           // TENANT_ADMIN or CUSTOMER_USER
+    private String role;           // SUPER_ADMIN, TENANT_ADMIN, CUSTOMER_ADMIN or CUSTOMER_USER
 }

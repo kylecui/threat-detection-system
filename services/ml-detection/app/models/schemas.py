@@ -126,3 +126,5 @@ class TrainingStatusResponse(BaseModel):
     elapsedSeconds: Optional[float] = None
     results: Optional[Dict[int, Dict[str, object]]] = None
     error: Optional[str] = None
+    currentTier: Optional[int] = None
+    completedTiers: int = 0

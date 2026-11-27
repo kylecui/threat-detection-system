@@ -16,5 +16,6 @@ public class FeedPollerResult {
     private int indicatorsNew;
     private int indicatorsUpdated;
     private long durationMs;
+    private String errorCode;
     private String errorMessage;
 }

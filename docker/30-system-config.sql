@@ -42,6 +42,6 @@ ON CONFLICT (config_key) DO NOTHING;
 -- Seed: TIRE General Settings
 -- ============================================================
 INSERT INTO system_config (config_key, config_value, category, description, is_secret) VALUES
-    ('TIRE_ADMIN_PASSWORD', 'tire-admin-2026', 'tire_general', 'TIRE admin panel password', true),
+    ('TIRE_ADMIN_PASSWORD', '', 'tire_general', 'TIRE admin panel password (must be configured before use)', true),
     ('TIRE_CACHE_TTL_HOURS', '24', 'tire_general', 'TIRE cache TTL in hours', false)
 ON CONFLICT (config_key) DO NOTHING;

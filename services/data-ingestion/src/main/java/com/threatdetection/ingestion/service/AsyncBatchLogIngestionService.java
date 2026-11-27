@@ -6,13 +6,15 @@ import com.threatdetection.ingestion.model.IngestionResult;
 import com.threatdetection.ingestion.model.StatusEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Phase 1A: 异步批量日志处理服务
@@ -26,20 +28,22 @@ public class AsyncBatchLogIngestionService {
     private final LogParserService logParserService;
     private final KafkaProducerService kafkaProducerService;
     private final MetricsService metricsService;
+    private final Executor ingestionExecutor;
 
     public AsyncBatchLogIngestionService(LogParserService logParserService,
                                        KafkaProducerService kafkaProducerService,
-                                       MetricsService metricsService) {
+                                       MetricsService metricsService,
+                                       @Qualifier("ingestionExecutor") Executor ingestionExecutor) {
         this.logParserService = logParserService;
         this.kafkaProducerService = kafkaProducerService;
         this.metricsService = metricsService;
+        this.ingestionExecutor = ingestionExecutor;
     }
 
     /**
      * Phase 1A: 异步处理单个日志
      * 返回CompletableFuture以支持异步处理
      */
-    @Async
     public CompletableFuture<IngestionResult> processLogAsync(String rawLog, int index) {
         return CompletableFuture.supplyAsync(() -> {
             long startTime = System.nanoTime();
@@ -53,7 +57,7 @@ public class AsyncBatchLogIngestionService {
                     String eventId = generateEventId(event, index);
 
                     if (event instanceof AttackEvent) {
-                        kafkaProducerService.sendAttackEvent((AttackEvent) event);
+                        kafkaProducerService.sendAttackEvent((AttackEvent) event).get(10, TimeUnit.SECONDS);
                         IngestionResult result = IngestionResult.success(eventId);
                         result.setEventType("ATTACK");
                         // Phase 1A: 记录成功指标
@@ -61,7 +65,7 @@ public class AsyncBatchLogIngestionService {
                         metricsService.recordAttackEvent();
                         return result;
                     } else if (event instanceof StatusEvent) {
-                        kafkaProducerService.sendStatusEvent((StatusEvent) event);
+                        kafkaProducerService.sendStatusEvent((StatusEvent) event).get(10, TimeUnit.SECONDS);
                         IngestionResult result = IngestionResult.success(eventId);
                         result.setEventType("STATUS");
                         // Phase 1A: 记录成功指标
@@ -89,7 +93,7 @@ public class AsyncBatchLogIngestionService {
                 metricsService.recordSingleLogProcessingTime(durationMs);
                 logger.debug("Log {} processed in {} ms", index, durationMs);
             }
-        });
+        }, ingestionExecutor);
     }
 
     /**
@@ -117,8 +121,9 @@ public class AsyncBatchLogIngestionService {
                 futures.toArray(new CompletableFuture[0])
             );
 
-            // 阻塞等待完成 (在实际生产环境中可能需要超时控制)
-            allOf.get();
+            // Keep one oversized or degraded Kafka request from occupying an
+            // HTTP worker indefinitely.
+            allOf.get(45, TimeUnit.SECONDS);
 
             // 收集结果
             List<IngestionResult> results = new ArrayList<>();
@@ -149,13 +154,14 @@ public class AsyncBatchLogIngestionService {
 
         } catch (Exception e) {
             logger.error("Batch processing failed: {}", e.getMessage(), e);
+            futures.forEach(future -> future.cancel(true));
             long processingTime = System.currentTimeMillis() - startTime;
 
             return new BatchLogResponse(
                 totalCount,
                 0,
                 totalCount,
-                createErrorResults(totalCount, "Batch processing failed: " + e.getMessage()),
+                createErrorResults(totalCount, "Batch processing failed or timed out"),
                 processingTime
             );
         }

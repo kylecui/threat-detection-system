@@ -59,7 +59,7 @@ public class StatusEventPersistenceService {
 
             repository.save(entity);
 
-            log.info("Persisted V1 heartbeat: devSerial={}, customerId={}, realHostCount={}, sentryCount={}",
+            log.debug("Persisted V1 heartbeat: devSerial={}, customerId={}, realHostCount={}, sentryCount={}",
                 devSerial, customerId, realHostCount, sentryCount);
 
         } catch (Exception e) {

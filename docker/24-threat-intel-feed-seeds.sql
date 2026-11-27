@@ -8,6 +8,6 @@ INSERT INTO threat_intel_feeds (feed_name, feed_url, feed_type, enabled, poll_in
 VALUES
     ('abuseipdb', 'https://api.abuseipdb.com/api/v2/blacklist', 'REST_API', false, 6, 'ABUSEIPDB_API_KEY', 0.85),
     ('alienvault_otx', 'https://otx.alienvault.com/api/v1/indicators/export', 'REST_API', false, 4, 'OTX_API_KEY', 0.75),
-    ('virustotal', 'https://www.virustotal.com/api/v3/ip_addresses', 'REST_API', false, 12, 'VIRUSTOTAL_API_KEY', 0.80),
+    ('virustotal', 'https://www.virustotal.com/api/v3/ip_addresses', 'REST_API', false, 12, 'VT_API_KEY', 0.80),
     ('greynoise', 'https://api.greynoise.io/v3/community', 'REST_API', false, 8, 'GREYNOISE_API_KEY', 0.70)
 ON CONFLICT (feed_name) DO NOTHING;

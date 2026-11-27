@@ -1,44 +1,39 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Card,
-  Row,
-  Col,
-  Statistic,
-  Tag,
-  Button,
-  Space,
-  Descriptions,
-  Table,
   Alert,
-  Spin,
-  message,
+  Button,
+  Grid,
+  Popconfirm,
   Progress,
+  Skeleton,
+  Table,
+  message,
 } from 'antd';
+import type { TableColumnsType } from 'antd';
 import {
-  CheckCircleOutlined,
-  CloseCircleOutlined,
   ReloadOutlined,
-  ExperimentOutlined,
-  DatabaseOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
+import SemanticStatusTag from '@/components/SemanticStatusTag';
+import TableCellText from '@/components/TableCellText';
+import mlService from '@/services/ml';
+import { formatDateTime } from '@/utils/formatDateTime';
 import type {
+  MlBufferStats,
+  MlDataReadiness,
+  MlDriftStatus,
   MlHealthStatus,
   MlModelInfo,
-  MlBufferStats,
-  MlDriftStatus,
   MlShadowStats,
   MlTrainingStatus,
-  MlDataReadiness,
 } from '@/types';
-import { useTranslation } from 'react-i18next';
-import mlService from '@/services/ml';
+import '../operations.css';
 
-/**
- * ML检测监控页面
- */
 const MlDetection = () => {
   const { t } = useTranslation();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const [loading, setLoading] = useState(true);
   const [health, setHealth] = useState<MlHealthStatus | null>(null);
   const [models, setModels] = useState<MlModelInfo[]>([]);
@@ -47,54 +42,107 @@ const MlDetection = () => {
   const [shadowStats, setShadowStats] = useState<MlShadowStats | null>(null);
   const [reloading, setReloading] = useState(false);
   const [training, setTraining] = useState(false);
-  const [trainingStatus, setTrainingStatus] = useState<MlTrainingStatus | null>(null);
-  const [dataReadiness, setDataReadiness] = useState<MlDataReadiness | null>(null);
+  const [trainingStatus, setTrainingStatus] = useState<MlTrainingStatus | null>(
+    null,
+  );
+  const [dataReadiness, setDataReadiness] = useState<MlDataReadiness | null>(
+    null,
+  );
+  const [readinessLoading, setReadinessLoading] = useState(true);
+  const mountedRef = useRef(true);
+  const refreshInFlightRef = useRef(false);
+  const trainingPollTimerRef = useRef<number | undefined>(undefined);
 
-  const loadAll = async () => {
-    setLoading(true);
+  const loadPrimary = useCallback(async (showPageLoading: boolean) => {
+    if (showPageLoading) setLoading(true);
     try {
-      const [h, m, b, d, s, ts, dr] = await Promise.all([
+      const [nextHealth, nextModels] = await Promise.all([
         mlService.getHealth().catch(() => null),
         mlService.getModels().catch(() => []),
+      ]);
+      if (!mountedRef.current) return;
+      setHealth(nextHealth);
+      setModels(nextModels);
+    } finally {
+      if (mountedRef.current && showPageLoading) setLoading(false);
+    }
+  }, []);
+
+  const loadSecondary = useCallback(async () => {
+    if (mountedRef.current) setReadinessLoading(true);
+    const [buffer, drift, shadow, nextTraining, readiness] =
+      await Promise.all([
         mlService.getBufferStats().catch(() => null),
         mlService.getDriftStatus().catch(() => null),
         mlService.getShadowStats().catch(() => null),
         mlService.getTrainingStatus().catch(() => null),
         mlService.getDataReadiness().catch(() => null),
       ]);
-      setHealth(h);
-      setModels(m);
-      setBufferStats(b);
-      setDriftStatus(d);
-      setShadowStats(s);
-      setTrainingStatus(ts);
-      setDataReadiness(dr);
-      if (ts?.training) {
-        setTraining(true);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadAll();
-    const interval = setInterval(loadAll, 30000);
-    return () => clearInterval(interval);
+    if (!mountedRef.current) return;
+    setBufferStats(buffer);
+    setDriftStatus(drift);
+    setShadowStats(shadow);
+    setTrainingStatus(nextTraining);
+    setDataReadiness(readiness);
+    if (nextTraining) setTraining(nextTraining.training);
+    setReadinessLoading(false);
   }, []);
 
-  /** 训练状态轮询 */
+  const refreshAll = useCallback(
+    async (showPageLoading = false) => {
+      if (refreshInFlightRef.current) return;
+      refreshInFlightRef.current = true;
+      try {
+        await Promise.allSettled([
+          loadPrimary(showPageLoading),
+          loadSecondary(),
+        ]);
+      } finally {
+        refreshInFlightRef.current = false;
+      }
+    },
+    [loadPrimary, loadSecondary],
+  );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    let timer: number | undefined;
+    let firstLoad = true;
+
+    const poll = async () => {
+      if (document.visibilityState !== 'hidden') {
+        await refreshAll(firstLoad);
+        firstLoad = false;
+      }
+      if (mountedRef.current) {
+        timer = window.setTimeout(poll, 30_000);
+      }
+    };
+
+    void poll();
+    return () => {
+      mountedRef.current = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+      if (trainingPollTimerRef.current !== undefined) {
+        window.clearTimeout(trainingPollTimerRef.current);
+      }
+    };
+  }, [refreshAll]);
+
   const pollTrainingStatus = useCallback(async () => {
     try {
       const status = await mlService.getTrainingStatus();
+      if (!mountedRef.current) return false;
       setTrainingStatus(status);
       if (!status.training) {
         setTraining(false);
         if (status.error) {
-          message.error(t('mlDetection.trainingFailed', { error: status.error }));
+          message.error(
+            t('mlDetection.trainingFailed', { error: status.error }),
+          );
         } else {
           message.success(t('mlDetection.trainingComplete'));
-          loadAll();
+          void refreshAll(false);
         }
         return false;
       }
@@ -102,50 +150,66 @@ const MlDetection = () => {
     } catch {
       return false;
     }
-  }, []);
+  }, [refreshAll, t]);
 
-  /** 触发训练 */
   const handleTrain = async () => {
     setTraining(true);
     try {
       const result = await mlService.triggerTraining();
+      if (!mountedRef.current) return;
       if (result.status === 'already_running') {
         message.warning(t('mlDetection.trainingAlreadyRunning'));
       } else if (result.status === 'training_started') {
-        message.success(t('mlDetection.trainingStarted', { tiers: result.tiers.join(', ') }));
+        message.success(
+          t('mlDetection.trainingStarted', { tiers: result.tiers.join(', ') }),
+        );
       } else {
-        message.error(t('mlDetection.trainingStartFailed', { status: result.status }));
+        message.error(
+          t('mlDetection.trainingStartFailed', { status: result.status }),
+        );
         setTraining(false);
         return;
       }
+
       const poll = async () => {
         const shouldContinue = await pollTrainingStatus();
-        if (shouldContinue) {
-          setTimeout(poll, 4000);
+        if (shouldContinue && mountedRef.current) {
+          trainingPollTimerRef.current = window.setTimeout(poll, 4_000);
         }
       };
-      setTimeout(poll, 4000);
+      if (trainingPollTimerRef.current !== undefined) {
+        window.clearTimeout(trainingPollTimerRef.current);
+      }
+      trainingPollTimerRef.current = window.setTimeout(poll, 4_000);
     } catch {
+      if (!mountedRef.current) return;
       message.error(t('mlDetection.trainingRequestFailed'));
       setTraining(false);
     }
   };
 
-  /** 重载模型 */
   const handleReload = async () => {
     setReloading(true);
     try {
       const result = await mlService.reloadModels();
       if (result.status === 'ok') {
-        const loadedCount = Object.values(result.modelsLoaded || {}).filter(Boolean).length;
+        const loadedCount = Object.values(result.modelsLoaded || {}).filter(
+          Boolean,
+        ).length;
         if (loadedCount > 0) {
-          message.success(t('mlDetection.reloadSuccess', { count: loadedCount }));
+          message.success(
+            t('mlDetection.reloadSuccess', { count: loadedCount }),
+          );
         } else {
           message.warning(t('mlDetection.reloadNoModelFound'));
         }
-        loadAll();
+        void refreshAll(false);
       } else {
-        message.error(t('mlDetection.reloadFailed', { error: result.error || t('common.unknownError') }));
+        message.error(
+          t('mlDetection.reloadFailed', {
+            error: result.error || t('common.unknownError'),
+          }),
+        );
       }
     } catch {
       message.error(t('mlDetection.reloadRequestFailed'));
@@ -154,302 +218,578 @@ const MlDetection = () => {
     }
   };
 
-  const statusIcon = (ok: boolean) =>
-    ok ? (
-      <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 18 }} />
-    ) : (
-      <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: 18 }} />
-    );
+  const driftKnownKeys = new Set(['enabled', 'state', 'score', 'lastCheck']);
+  const driftDiagnostics = driftStatus
+    ? Object.entries(driftStatus).filter(([key]) => !driftKnownKeys.has(key))
+    : [];
+  const driftState = driftStatus?.state;
+  const driftScore = driftStatus?.score;
+  const driftLastCheck = driftStatus?.lastCheck;
 
-  const modelColumns = [
+  const availabilityTag = (available: boolean | undefined) => {
+    if (available === undefined) {
+      return <span className="tds-operate-missing">—</span>;
+    }
+    return (
+      <SemanticStatusTag tone={available ? 'success' : 'danger'}>
+        {available ? t('common.yes') : t('common.no')}
+      </SemanticStatusTag>
+    );
+  };
+
+  const modelColumns: TableColumnsType<MlModelInfo> = [
     {
       title: 'Tier',
       dataIndex: 'tier',
       key: 'tier',
-      width: 60,
-      render: (tier: number) => <Tag color="blue">Tier {tier}</Tag>,
+      width: 88,
+      render: (tier: number) => (
+        <SemanticStatusTag tone="info">Tier {tier}</SemanticStatusTag>
+      ),
     },
     {
       title: t('mlDetection.autoencoder'),
       dataIndex: 'available',
       key: 'available',
-      width: 100,
-      render: (val: boolean) => statusIcon(val),
+      width: 128,
+      render: availabilityTag,
     },
     {
       title: 'BiGRU',
       dataIndex: 'bigruAvailable',
       key: 'bigruAvailable',
-      width: 100,
-      render: (val: boolean | undefined) => val !== undefined ? statusIcon(val) : '-',
+      width: 112,
+      render: availabilityTag,
     },
     {
       title: t('mlDetection.threshold'),
       dataIndex: 'threshold',
       key: 'threshold',
-      width: 100,
-      render: (val: number) => val?.toFixed(4),
+      width: 112,
+      align: 'center',
+      render: (value: number) => (
+        <span className="tds-operate-number">{value?.toFixed(4) ?? '—'}</span>
+      ),
     },
     {
       title: t('mlDetection.optimalAlpha'),
       dataIndex: 'optimalAlpha',
       key: 'optimalAlpha',
-      width: 100,
-      render: (val: number | undefined) => val?.toFixed(2) || '-',
+      width: 120,
+      align: 'center',
+      render: (value: number | undefined) => (
+        <span className="tds-operate-number">
+          {value === undefined ? '—' : value.toFixed(2)}
+        </span>
+      ),
     },
     {
       title: t('mlDetection.modelPath'),
       dataIndex: 'modelPath',
       key: 'modelPath',
-      ellipsis: true,
+      width: 320,
+      render: (path: string) => (
+        <TableCellText
+          value={path}
+          fallback="—"
+          className="tds-operate-code"
+        />
+      ),
     },
   ];
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: 100 }}>
-        <Spin size="large" tip={t('mlDetection.loadingStatus')} />
+      <div
+        className="tds-operate-page tds-ml-page"
+        aria-busy="true"
+        aria-label={t('mlDetection.loadingStatus')}
+      >
+        <div className="tds-ml-command-grid">
+          <div className="tds-operate-metric-strip tds-ml-status-strip">
+            {[1, 2, 3].map((item) => (
+              <div className="tds-operate-metric" key={item}>
+                <Skeleton.Input active size="small" />
+                <Skeleton.Input active />
+              </div>
+            ))}
+          </div>
+          <div className="tds-ml-actions">
+            <Skeleton.Button active />
+            <Skeleton.Button active />
+          </div>
+        </div>
+        <section className="tds-operate-panel tds-operate-loading-panel">
+          <Skeleton active paragraph={{ rows: 6 }} />
+        </section>
       </div>
     );
   }
 
-  return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      {/* 服务状态 */}
-      <Row gutter={16}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title={t('mlDetection.serviceStatus')}
-              value={health?.status === 'ok' ? t('mlDetection.normal') : t('mlDetection.abnormal')}
-              valueStyle={{
-                color: health?.status === 'ok' ? '#3f8600' : '#cf1322',
-              }}
-              prefix={statusIcon(health?.status === 'ok')}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title={t('mlDetection.modelLoaded')}
-              value={health?.modelLoaded ? t('mlDetection.loaded') : t('mlDetection.notLoaded')}
-              valueStyle={{
-                color: health?.modelLoaded ? '#3f8600' : '#cf1322',
-              }}
-              prefix={<ExperimentOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title={t('mlDetection.kafkaConnection')}
-              value={health?.kafkaConnected ? t('mlDetection.connected') : t('mlDetection.notConnected')}
-              valueStyle={{
-                color: health?.kafkaConnected ? '#3f8600' : '#cf1322',
-              }}
-              prefix={<DatabaseOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Space>
-              <Button
-                type="primary"
-                icon={<ThunderboltOutlined />}
-                loading={training}
-                onClick={handleTrain}
-              >
-                {t('mlDetection.trainModel')}
-              </Button>
-              <Button
-                icon={<ReloadOutlined />}
-                loading={reloading}
-                onClick={handleReload}
-              >
-                {t('mlDetection.reloadModel')}
-              </Button>
-              <Button icon={<ReloadOutlined />} onClick={loadAll}>
-                {t('common.refresh')}
-              </Button>
-            </Space>
-          </Card>
-        </Col>
-      </Row>
+  const healthOk = health?.status === 'ok';
 
-      {!health?.modelLoaded && !training && (
+  return (
+    <div className="tds-operate-page tds-ml-page">
+      <div className="tds-ml-command-grid">
+        <section
+          className="tds-operate-metric-strip tds-ml-status-strip"
+          aria-label={t('mlDetection.serviceStatus')}
+        >
+          <div className="tds-operate-metric" data-tone={healthOk ? 'success' : 'danger'}>
+            <span>{t('mlDetection.serviceStatus')}</span>
+            <strong>
+              {healthOk
+                ? t('mlDetection.normal')
+                : t('mlDetection.abnormal')}
+            </strong>
+          </div>
+          <div
+            className="tds-operate-metric"
+            data-tone={health?.modelLoaded ? 'success' : 'danger'}
+          >
+            <span>{t('mlDetection.modelLoaded')}</span>
+            <strong>
+              {health?.modelLoaded
+                ? t('mlDetection.loaded')
+                : t('mlDetection.notLoaded')}
+            </strong>
+          </div>
+          <div
+            className="tds-operate-metric"
+            data-tone={health?.kafkaConnected ? 'success' : 'danger'}
+          >
+            <span>{t('mlDetection.kafkaConnection')}</span>
+            <strong>
+              {health?.kafkaConnected
+                ? t('mlDetection.connected')
+                : t('mlDetection.notConnected')}
+            </strong>
+          </div>
+        </section>
+
+        <div className="tds-ml-actions">
+          <Popconfirm
+            title={t('mlDetection.confirmTrainTitle')}
+            description={t('mlDetection.confirmTrainDescription')}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
+            onConfirm={() => void handleTrain()}
+            disabled={training}
+          >
+            <Button
+              type="primary"
+              icon={<ThunderboltOutlined />}
+              loading={training}
+            >
+              {t('mlDetection.trainModel')}
+            </Button>
+          </Popconfirm>
+          <Popconfirm
+            title={t('mlDetection.confirmReloadTitle')}
+            description={t('mlDetection.confirmReloadDescription')}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
+            onConfirm={() => void handleReload()}
+            disabled={reloading}
+          >
+            <Button icon={<ReloadOutlined />} loading={reloading}>
+              {t('mlDetection.reloadModel')}
+            </Button>
+          </Popconfirm>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => void refreshAll(false)}
+          >
+            {t('common.refresh')}
+          </Button>
+        </div>
+      </div>
+
+      {!health ? (
         <Alert
+          className="tds-operate-inline-state"
+          type="warning"
+          message={t('mlDetection.serviceUnavailable')}
+          description={t('mlDetection.serviceUnavailableDesc')}
+          showIcon
+          action={
+            <Button size="small" onClick={() => void refreshAll(false)}>
+              {t('common.refresh')}
+            </Button>
+          }
+        />
+      ) : null}
+
+      {!health?.modelLoaded && !training ? (
+        <Alert
+          className="tds-operate-inline-state"
           type="info"
           message={t('mlDetection.noTrainedModelFound')}
           description={t('mlDetection.trainPrompt')}
           showIcon
         />
-      )}
+      ) : null}
 
-      {trainingStatus?.training && (
-        <Card title={t('mlDetection.trainingProgress')} bordered={false}>
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Progress percent={99} status="active" format={() => t('mlDetection.training')} />
-            <Descriptions column={2} size="small">
-              <Descriptions.Item label={t('mlDetection.trainingTiers')}>
-                {trainingStatus.tiers.map((t) => (
-                  <Tag key={t} color="processing">Tier {t}</Tag>
-                ))}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('mlDetection.startedAt')}>
-                {trainingStatus.startedAt || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('mlDetection.elapsed')}>
-                {trainingStatus.elapsedSeconds != null
-                  ? `${Math.round(trainingStatus.elapsedSeconds)}s`
-                  : '-'}
-              </Descriptions.Item>
-            </Descriptions>
-          </Space>
-        </Card>
-      )}
-
-      {trainingStatus && !trainingStatus.training && trainingStatus.completedAt && (
-        <Card title={t('mlDetection.lastTrainingResult')} bordered={false}>
-          <Descriptions column={2} size="small">
-            <Descriptions.Item label={t('common.status')}>
-              {trainingStatus.error ? (
-                <Tag color="error">{t('common.failed')}</Tag>
-              ) : (
-                <Tag color="success">{t('common.success')}</Tag>
+      {trainingStatus?.training ? (
+        <section className="tds-operate-panel">
+          <div className="tds-operate-panel__header">
+            <h2>{t('mlDetection.trainingProgress')}</h2>
+            <SemanticStatusTag tone="info">
+              {t('mlDetection.training')}
+            </SemanticStatusTag>
+          </div>
+          <div className="tds-operate-panel__body tds-ml-training-progress">
+            <Progress
+              percent={Math.min(
+                95,
+                Math.round(
+                  (((trainingStatus.completedTiers || 0) +
+                    (trainingStatus.currentTier ? 0.5 : 0)) /
+                    Math.max(1, trainingStatus.tiers.length)) *
+                    100,
+                ),
               )}
-            </Descriptions.Item>
-            <Descriptions.Item label={t('mlDetection.completedAt')}>
-              {trainingStatus.completedAt}
-            </Descriptions.Item>
-            <Descriptions.Item label={t('mlDetection.elapsed')}>
-              {trainingStatus.elapsedSeconds != null
-                ? `${Math.round(trainingStatus.elapsedSeconds)}s`
-                : '-'}
-            </Descriptions.Item>
-            {trainingStatus.error && (
-              <Descriptions.Item label={t('common.error')} span={2}>
-                <Tag color="error">{trainingStatus.error}</Tag>
-              </Descriptions.Item>
-            )}
-          </Descriptions>
-        </Card>
-      )}
-
-      {dataReadiness && (
-        <Card title={t('mlDetection.trainingDataReadiness')} bordered={false} size="small">
-          <Descriptions column={3} size="small">
-            {dataReadiness.sampleCounts &&
-              Object.entries(dataReadiness.sampleCounts).map(([tier, count]) => (
-                <Descriptions.Item key={tier} label={t('mlDetection.tierSampleCount', { tier })}>
-                  <Tag color={count >= (dataReadiness.minimumRequired?.bigru ?? 20) ? 'green' : 'orange'}>
-                    {count}
-                  </Tag>
-                </Descriptions.Item>
-              ))}
-            <Descriptions.Item label={t('mlDetection.minRequiredAutoencoder')}>
-              {dataReadiness.minimumRequired?.autoencoder ?? '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label={t('mlDetection.minRequiredBigru')}>
-              {dataReadiness.minimumRequired?.bigru ?? '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label={t('mlDetection.dataReady')}>
-              {dataReadiness.ready ? (
-                <Tag color="green">{t('mlDetection.ready')}</Tag>
-              ) : (
-                <Tag color="orange">{t('mlDetection.insufficient')}</Tag>
-              )}
-            </Descriptions.Item>
-          </Descriptions>
-        </Card>
-      )}
-
-      {/* 模型列表 */}
-      <Card title={t('mlDetection.modelStatus')} bordered={false}>
-        <Table
-          columns={modelColumns}
-          dataSource={models}
-          rowKey="tier"
-          pagination={false}
-          size="small"
-        />
-      </Card>
-
-      {/* 运行时统计 */}
-      <Row gutter={16}>
-        {/* 序列缓冲区 */}
-        <Col span={8}>
-          <Card title={t('mlDetection.sequenceBuffer')} bordered={false}>
-            <Descriptions column={1} size="small">
-              <Descriptions.Item label={t('common.enabled')}>
-                {bufferStats?.enabled ? <Tag color="green">{t('common.yes')}</Tag> : <Tag>{t('common.no')}</Tag>}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('mlDetection.totalKeys')}>
-                {bufferStats?.totalKeys ?? '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('mlDetection.totalWindows')}>
-                {bufferStats?.totalWindows ?? '-'}
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
-        </Col>
-
-        {/* 漂移检测 */}
-        <Col span={8}>
-          <Card title={t('mlDetection.driftDetection')} bordered={false}>
-            <Descriptions column={1} size="small">
-              <Descriptions.Item label={t('common.enabled')}>
-                {driftStatus?.enabled ? <Tag color="green">{t('common.yes')}</Tag> : <Tag>{t('common.no')}</Tag>}
-              </Descriptions.Item>
-              {driftStatus?.enabled &&
-                Object.entries(driftStatus)
-                  .filter(([k]) => k !== 'enabled')
-                  .slice(0, 6)
-                  .map(([k, v]) => (
-                    <Descriptions.Item key={k} label={k}>
-                      {typeof v === 'object' ? JSON.stringify(v) : String(v)}
-                    </Descriptions.Item>
+              status="active"
+              format={(percent) => `${percent}%`}
+            />
+            <dl className="tds-operate-definition-grid">
+              <div>
+                <dt>{t('mlDetection.trainingTiers')}</dt>
+                <dd>
+                  {trainingStatus.tiers.map((tier) => (
+                    <SemanticStatusTag key={tier} tone="info">
+                      Tier {tier}
+                    </SemanticStatusTag>
                   ))}
-            </Descriptions>
-          </Card>
-        </Col>
+                </dd>
+              </div>
+              <div>
+                <dt>{t('mlDetection.startedAt')}</dt>
+                <dd>{trainingStatus.startedAt || '—'}</dd>
+              </div>
+              <div>
+                <dt>{t('mlDetection.elapsed')}</dt>
+                <dd>
+                  {trainingStatus.elapsedSeconds == null
+                    ? '—'
+                    : `${Math.round(trainingStatus.elapsedSeconds)}s`}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+      ) : null}
 
-        {/* 影子评分 */}
-        <Col span={8}>
-          <Card title={t('mlDetection.shadowScoring')} bordered={false}>
-            <Descriptions column={1} size="small">
-              <Descriptions.Item label={t('common.enabled')}>
-                {shadowStats?.enabled ? <Tag color="green">{t('common.yes')}</Tag> : <Tag>{t('common.no')}</Tag>}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('mlDetection.challengerLoaded')}>
-                {shadowStats?.challengerLoaded ? (
-                  <Tag color="green">{t('common.yes')}</Tag>
-                ) : (
-                  <Tag>{t('common.no')}</Tag>
-                )}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('mlDetection.totalComparisons')}>
-                {shadowStats?.totalComparisons ?? 0}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('mlDetection.challengerDir')}>
-                {shadowStats?.challengerDir || '-'}
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
-        </Col>
-      </Row>
+      {trainingStatus &&
+      !trainingStatus.training &&
+      trainingStatus.completedAt ? (
+        <section className="tds-operate-panel">
+          <div className="tds-operate-panel__header">
+            <h2>{t('mlDetection.lastTrainingResult')}</h2>
+            <SemanticStatusTag
+              tone={trainingStatus.error ? 'danger' : 'success'}
+            >
+              {trainingStatus.error
+                ? t('common.failed')
+                : t('common.success')}
+            </SemanticStatusTag>
+          </div>
+          <div className="tds-operate-panel__body">
+            <dl className="tds-operate-definition-grid">
+              <div>
+                <dt>{t('mlDetection.completedAt')}</dt>
+                <dd>{trainingStatus.completedAt}</dd>
+              </div>
+              <div>
+                <dt>{t('mlDetection.elapsed')}</dt>
+                <dd>
+                  {trainingStatus.elapsedSeconds == null
+                    ? '—'
+                    : `${Math.round(trainingStatus.elapsedSeconds)}s`}
+                </dd>
+              </div>
+              {trainingStatus.error ? (
+                <div className="tds-operate-definition-grid__wide">
+                  <dt>{t('common.error')}</dt>
+                  <dd className="tds-operate-value--danger">
+                    {trainingStatus.error}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          </div>
+        </section>
+      ) : null}
 
-      {!health && (
-        <Alert
-          type="warning"
-          message={t('mlDetection.serviceUnavailable')}
-          description={t('mlDetection.serviceUnavailableDesc')}
-          showIcon
-        />
-      )}
-    </Space>
+      {dataReadiness || readinessLoading ? (
+        <section className="tds-operate-panel">
+          <div className="tds-operate-panel__header">
+            <h2>{t('mlDetection.trainingDataReadiness')}</h2>
+            {dataReadiness ? (
+              <SemanticStatusTag
+                tone={dataReadiness.ready ? 'success' : 'warning'}
+              >
+                {dataReadiness.ready
+                  ? t('mlDetection.ready')
+                  : t('mlDetection.insufficient')}
+              </SemanticStatusTag>
+            ) : null}
+          </div>
+          <div className="tds-operate-panel__body">
+            {readinessLoading && !dataReadiness ? (
+              <Skeleton active paragraph={{ rows: 2 }} />
+            ) : null}
+            {dataReadiness ? (
+              <>
+                {dataReadiness.error ? (
+                  <Alert
+                    className="tds-operate-inline-state"
+                    type="warning"
+                    showIcon
+                    message={dataReadiness.error}
+                  />
+                ) : null}
+                <div className="tds-ml-readiness-grid">
+                  {Object.entries(dataReadiness.sampleCounts || {}).map(
+                    ([tier, count]) => {
+                      const enough =
+                        count >= (dataReadiness.minimumRequired?.bigru ?? 20);
+                      return (
+                        <div
+                          className="tds-ml-readiness-item"
+                          data-ready={enough}
+                          key={tier}
+                        >
+                          <span>
+                            {t('mlDetection.tierSampleCount', { tier })}
+                          </span>
+                          <strong>{count.toLocaleString()}</strong>
+                        </div>
+                      );
+                    },
+                  )}
+                  <div className="tds-ml-readiness-item">
+                    <span>{t('mlDetection.minRequiredAutoencoder')}</span>
+                    <strong>
+                      {dataReadiness.minimumRequired?.autoencoder?.toLocaleString() ??
+                        '—'}
+                    </strong>
+                  </div>
+                  <div className="tds-ml-readiness-item">
+                    <span>{t('mlDetection.minRequiredBigru')}</span>
+                    <strong>
+                      {dataReadiness.minimumRequired?.bigru?.toLocaleString() ??
+                        '—'}
+                    </strong>
+                  </div>
+                  <div
+                    className="tds-ml-readiness-item"
+                    data-ready={dataReadiness.ready}
+                  >
+                    <span>{t('mlDetection.dataReady')}</span>
+                    <strong>
+                      {dataReadiness.ready
+                        ? t('mlDetection.ready')
+                        : t('mlDetection.insufficient')}
+                    </strong>
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="tds-operate-panel tds-operate-panel--table">
+        <div className="tds-operate-panel__header">
+          <h2>{t('mlDetection.modelStatus')}</h2>
+          <span>{models.length}</span>
+        </div>
+        {isMobile ? (
+          <div className="tds-operate-mobile-records">
+            {models.map((model) => (
+              <article className="tds-operate-mobile-record" key={model.tier}>
+                <div className="tds-operate-mobile-record__lead">
+                  <strong>Tier {model.tier}</strong>
+                  {availabilityTag(model.available)}
+                </div>
+                <dl>
+                  <div>
+                    <dt>{t('mlDetection.autoencoder')}</dt>
+                    <dd>{model.available ? t('common.yes') : t('common.no')}</dd>
+                  </div>
+                  <div>
+                    <dt>BiGRU</dt>
+                    <dd>
+                      {model.bigruAvailable === undefined
+                        ? '—'
+                        : model.bigruAvailable
+                          ? t('common.yes')
+                          : t('common.no')}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{t('mlDetection.threshold')}</dt>
+                    <dd>{model.threshold?.toFixed(4) ?? '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('mlDetection.optimalAlpha')}</dt>
+                    <dd>{model.optimalAlpha?.toFixed(2) ?? '—'}</dd>
+                  </div>
+                  <div className="tds-operate-mobile-record__wide">
+                    <dt>{t('mlDetection.modelPath')}</dt>
+                    <dd>
+                      <code className="tds-operate-code">
+                        {model.modelPath || '—'}
+                      </code>
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <Table<MlModelInfo>
+            className="tds-operate-table"
+            columns={modelColumns}
+            dataSource={models}
+            rowKey="tier"
+            pagination={false}
+            size="small"
+            tableLayout="fixed"
+            scroll={{ x: 880 }}
+          />
+        )}
+      </section>
+
+      <div className="tds-ml-runtime-grid">
+        <section className="tds-operate-panel">
+          <div className="tds-operate-panel__header">
+            <h2>{t('mlDetection.sequenceBuffer')}</h2>
+            <SemanticStatusTag
+              tone={bufferStats?.enabled ? 'success' : 'neutral'}
+            >
+              {bufferStats?.enabled ? t('common.enabled') : t('common.disabled')}
+            </SemanticStatusTag>
+          </div>
+          <div className="tds-operate-panel__body">
+            <dl className="tds-operate-definition-list">
+              <div>
+                <dt>{t('mlDetection.totalKeys')}</dt>
+                <dd>{bufferStats?.totalKeys ?? '—'}</dd>
+              </div>
+              <div>
+                <dt>{t('mlDetection.totalWindows')}</dt>
+                <dd>{bufferStats?.totalWindows ?? '—'}</dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+
+        <section className="tds-operate-panel">
+          <div className="tds-operate-panel__header">
+            <h2>{t('mlDetection.driftDetection')}</h2>
+            <SemanticStatusTag
+              tone={driftStatus?.enabled ? 'success' : 'neutral'}
+            >
+              {driftStatus?.enabled ? t('common.enabled') : t('common.disabled')}
+            </SemanticStatusTag>
+          </div>
+          <div className="tds-operate-panel__body">
+            <dl className="tds-operate-definition-list">
+              {driftStatus?.enabled && driftState !== undefined ? (
+                <div>
+                  <dt>{t('mlDetection.driftState')}</dt>
+                  <dd>
+                    {typeof driftState === 'string'
+                      ? t(`mlDetection.driftStates.${driftState}`, {
+                          defaultValue: driftState,
+                        })
+                      : String(driftState)}
+                  </dd>
+                </div>
+              ) : null}
+              {driftStatus?.enabled && driftScore !== undefined ? (
+                <div>
+                  <dt>{t('mlDetection.driftScore')}</dt>
+                  <dd>
+                    {typeof driftScore === 'number'
+                      ? `${(driftScore * 100).toFixed(1)}%`
+                      : String(driftScore)}
+                  </dd>
+                </div>
+              ) : null}
+              {driftStatus?.enabled && driftLastCheck !== undefined ? (
+                <div>
+                  <dt>{t('mlDetection.driftLastCheck')}</dt>
+                  <dd>
+                    {typeof driftLastCheck === 'string'
+                      ? formatDateTime(driftLastCheck)
+                      : String(driftLastCheck)}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+            {driftStatus?.enabled && driftDiagnostics.length > 0 ? (
+              <details className="tds-ml-diagnostics">
+                <summary>
+                  {t('mlDetection.additionalDiagnostics', {
+                    count: driftDiagnostics.length,
+                  })}
+                </summary>
+                <dl className="tds-operate-definition-list">
+                  {driftDiagnostics.map(([key, value]) => (
+                    <div key={key}>
+                      <dt>{key}</dt>
+                      <dd>
+                        {typeof value === 'object'
+                          ? JSON.stringify(value)
+                          : String(value)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </details>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="tds-operate-panel">
+          <div className="tds-operate-panel__header">
+            <h2>{t('mlDetection.shadowScoring')}</h2>
+            <SemanticStatusTag
+              tone={shadowStats?.enabled ? 'success' : 'neutral'}
+            >
+              {shadowStats?.enabled ? t('common.enabled') : t('common.disabled')}
+            </SemanticStatusTag>
+          </div>
+          <div className="tds-operate-panel__body">
+            <dl className="tds-operate-definition-list">
+              <div>
+                <dt>{t('mlDetection.challengerLoaded')}</dt>
+                <dd>
+                  {shadowStats?.challengerLoaded
+                    ? t('common.yes')
+                    : t('common.no')}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('mlDetection.totalComparisons')}</dt>
+                <dd>{shadowStats?.totalComparisons ?? 0}</dd>
+              </div>
+              <div>
+                <dt>{t('mlDetection.challengerDir')}</dt>
+                <dd>
+                  <code className="tds-operate-code">
+                    {shadowStats?.challengerDir || '—'}
+                  </code>
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </section>
+      </div>
+    </div>
   );
 };
 

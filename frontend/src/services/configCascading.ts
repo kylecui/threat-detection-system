@@ -51,7 +51,11 @@ export async function setLockMode(
   configType: string,
   lockMode: ConfigInheritanceItem['lockMode'],
 ): Promise<ConfigInheritanceItem> {
-  const resp = await apiClient.put<ConfigInheritanceItem>(`/api/v1/config-inheritance/${entityType}/${entityId}/${configType}`, { lockMode });
+  const resp = await apiClient.put<ConfigInheritanceItem>(
+    `/api/v1/config-inheritance/${entityType}/${entityId}/${configType}`,
+    { lockMode },
+    { suppressGlobalError: true },
+  );
   return resp.data;
 }
 
@@ -74,7 +78,11 @@ export async function createEntityGroup(data: {
   description?: string | null;
   tenantId?: number | null;
 }): Promise<EntityGroup> {
-  const resp = await apiClient.post<EntityGroup>('/api/v1/entity-groups', data);
+  const resp = await apiClient.post<EntityGroup>(
+    '/api/v1/entity-groups',
+    data,
+    { suppressGlobalError: true },
+  );
   return resp.data;
 }
 
@@ -87,7 +95,11 @@ export async function updateEntityGroup(
     tenantId?: number | null;
   },
 ): Promise<EntityGroup> {
-  const resp = await apiClient.put<EntityGroup>(`/api/v1/entity-groups/${groupId}`, data);
+  const resp = await apiClient.put<EntityGroup>(
+    `/api/v1/entity-groups/${groupId}`,
+    data,
+    { suppressGlobalError: true },
+  );
   return resp.data;
 }
 
@@ -105,10 +117,11 @@ export async function addGroupMember(
   entityId: number,
   entityType: EntityGroupMember['entityType'],
 ): Promise<EntityGroupMember> {
-  const resp = await apiClient.post<EntityGroupMember>(`/api/v1/entity-groups/${groupId}/members`, {
-    entityId,
-    entityType,
-  });
+  const resp = await apiClient.post<EntityGroupMember>(
+    `/api/v1/entity-groups/${groupId}/members`,
+    { entityId, entityType },
+    { suppressGlobalError: true },
+  );
   return resp.data;
 }
 
@@ -127,8 +140,9 @@ export async function batchAssignLockMode(
   configType: string,
   lockMode: ConfigInheritanceItem['lockMode'],
 ): Promise<void> {
-  await apiClient.post(`/api/v1/entity-groups/${groupId}/batch-assign`, {
-    configType,
-    lockMode,
-  });
+  await apiClient.post(
+    `/api/v1/entity-groups/${groupId}/batch-assign`,
+    { configType, lockMode },
+    { suppressGlobalError: true },
+  );
 }

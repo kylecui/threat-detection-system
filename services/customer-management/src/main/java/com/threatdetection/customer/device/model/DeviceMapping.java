@@ -27,7 +27,7 @@ public class DeviceMapping {
     /**
      * 设备序列号 (唯一)
      */
-    @Column(name = "dev_serial", nullable = false, unique = true, length = 50)
+    @Column(name = "dev_serial", nullable = false, length = 50)
     private String devSerial;
 
     /**
@@ -42,6 +42,16 @@ public class DeviceMapping {
     @Column(name = "is_active")
     @Builder.Default
     private Boolean isActive = true;
+
+    /** Current rows have no unbind time; historical rows retain both times. */
+    @Column(name = "bind_time", nullable = false)
+    private Instant bindTime;
+
+    @Column(name = "unbind_time")
+    private Instant unbindTime;
+
+    @Column(name = "bind_reason", length = 100)
+    private String bindReason;
 
     /**
      * 描述信息
@@ -68,6 +78,9 @@ public class DeviceMapping {
     protected void onCreate() {
         createdAt = Instant.now();
         updatedAt = Instant.now();
+        if (bindTime == null) {
+            bindTime = createdAt;
+        }
         if (isActive == null) {
             isActive = true;
         }

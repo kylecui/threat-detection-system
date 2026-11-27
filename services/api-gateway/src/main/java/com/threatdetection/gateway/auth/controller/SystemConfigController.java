@@ -3,22 +3,21 @@ package com.threatdetection.gateway.auth.controller;
 import com.threatdetection.gateway.auth.entity.SystemConfig;
 import com.threatdetection.gateway.auth.repository.SystemConfigRepository;
 import com.threatdetection.gateway.auth.service.JwtTokenProvider;
+import com.threatdetection.gateway.auth.service.LlmValidationService;
+import com.threatdetection.gateway.auth.service.SecretEncryptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * System Configuration REST controller
@@ -42,6 +41,8 @@ public class SystemConfigController {
 
     private final SystemConfigRepository configRepository;
     private final JwtTokenProvider jwtTokenProvider;
+    private final SecretEncryptionService encryptionService;
+    private final LlmValidationService llmValidationService;
 
     /**
      * Get all configs by category.
@@ -52,7 +53,7 @@ public class SystemConfigController {
             @PathVariable String category,
             ServerWebExchange exchange) {
         return requireSuperAdmin(exchange)
-                .flatMap(ok -> configRepository.findByCategory(category)
+                .flatMap(ok -> configRepository.findByCategoryOrdered(category)
                         .map(this::toResponseMap)
                         .collectList()
                         .map(ResponseEntity::ok))
@@ -97,13 +98,15 @@ public class SystemConfigController {
                     return reactor.core.publisher.Flux.fromIterable(configs.entrySet())
                             .flatMap(entry -> configRepository.findByConfigKey(entry.getKey())
                                     .flatMap(existing -> {
-                                        existing.setConfigValue(entry.getValue());
+                                        existing.setConfigValue(valueForStorage(
+                                                existing.getConfigKey(), existing.getIsSecret(), entry.getValue()));
                                         existing.setUpdatedAt(LocalDateTime.now());
                                         return configRepository.save(existing);
                                     })
                                     .switchIfEmpty(configRepository.save(SystemConfig.builder()
                                             .configKey(entry.getKey())
-                                            .configValue(entry.getValue())
+                                            .configValue(valueForStorage(
+                                                    entry.getKey(), false, entry.getValue()))
                                             .category("custom")
                                             .isSecret(false)
                                             .createdAt(LocalDateTime.now())
@@ -140,7 +143,8 @@ public class SystemConfigController {
                     }
                     return configRepository.findByConfigKey(key)
                             .flatMap(existing -> {
-                                existing.setConfigValue(value);
+                                existing.setConfigValue(valueForStorage(
+                                        existing.getConfigKey(), existing.getIsSecret(), value));
                                 existing.setUpdatedAt(LocalDateTime.now());
                                 return configRepository.save(existing);
                             })
@@ -158,8 +162,9 @@ public class SystemConfigController {
     }
 
     /**
-     * Validate LLM connection by listing available models from the provider.
-     * Body: { "api_key": "sk-...", "base_url": "https://api.openai.com/v1" }
+     * Validate LLM connection with a real minimal chat completion, then list models.
+     * Body: { "api_key": "sk-...", "base_url": "https://api.openai.com/v1",
+     *         "model": "gpt-4o-mini" }
      * Returns: { "ok": true/false, "models": [...], "error": null/string }
      */
     @PostMapping("/llm/validate")
@@ -168,49 +173,35 @@ public class SystemConfigController {
             ServerWebExchange exchange) {
         return requireSuperAdmin(exchange)
                 .flatMap(ok -> {
-                    String apiKey = body.get("api_key");
-                    String baseUrl = body.get("base_url");
-                    if (apiKey == null || apiKey.isBlank() || baseUrl == null || baseUrl.isBlank()) {
-                        Map<String, Object> err = new HashMap<>();
-                        err.put("ok", false);
-                        err.put("models", List.of());
-                        err.put("error", "api_key and base_url are required");
-                        return Mono.just(ResponseEntity.badRequest().body(err));
-                    }
-
-                    String effectiveBase = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
-
-                    return WebClient.create()
-                            .get()
-                            .uri(effectiveBase + "/models")
-                            .header("Authorization", "Bearer " + apiKey)
-                            .retrieve()
-                            .bodyToMono(Map.class)
-                            .timeout(Duration.ofSeconds(15))
-                            .map(data -> {
-                                @SuppressWarnings("unchecked")
-                                List<Map<String, Object>> modelList = (List<Map<String, Object>>) data.get("data");
-                                List<String> models = modelList == null ? List.of() :
-                                        modelList.stream()
-                                                .map(m -> (String) m.get("id"))
-                                                .filter(id -> id != null)
-                                                .sorted()
-                                                .collect(Collectors.toList());
-
-                                Map<String, Object> result = new HashMap<>();
-                                result.put("ok", true);
-                                result.put("models", models);
-                                result.put("error", null);
-                                log.info("LLM connection validated: {} models found at {}", models.size(), effectiveBase);
-                                return ResponseEntity.ok(result);
-                            })
-                            .onErrorResume(e -> {
-                                Map<String, Object> errResult = new HashMap<>();
-                                errResult.put("ok", false);
-                                errResult.put("models", List.of());
-                                errResult.put("error", e.getMessage());
-                                log.warn("LLM connection validation failed for {}: {}", effectiveBase, e.getMessage());
-                                return Mono.just(ResponseEntity.ok(errResult));
+                    return Mono.zip(
+                                    suppliedOrStored(body.get("api_key"), "LLM_API_KEY", true),
+                                    suppliedOrStored(body.get("base_url"), "LLM_BASE_URL", false),
+                                    suppliedOrStored(body.get("model"), "LLM_MODEL", false))
+                            .flatMap(values -> {
+                                String apiKey = values.getT1();
+                                String baseUrl = values.getT2();
+                                String model = values.getT3();
+                                if (apiKey.isBlank() || baseUrl.isBlank() || model.isBlank()) {
+                                    Map<String, Object> err = new HashMap<>();
+                                    err.put("ok", false);
+                                    err.put("models", List.of());
+                                    err.put("error", "A saved or newly entered API key, base URL and model are required");
+                                    return Mono.just(ResponseEntity.badRequest().body(err));
+                                }
+                                return llmValidationService.validate(apiKey, baseUrl, model)
+                                        .map(result -> {
+                                            log.info("LLM generation probe succeeded for model {}", model);
+                                            return ResponseEntity.ok(result);
+                                        })
+                                        .onErrorResume(e -> {
+                                            Map<String, Object> errResult = new HashMap<>();
+                                            errResult.put("ok", false);
+                                            errResult.put("models", List.of());
+                                            errResult.put("error", "The selected model could not complete a test request");
+                                            log.warn("LLM generation probe failed for model {} at {}: {}",
+                                                    model, baseUrl, e.getClass().getSimpleName());
+                                            return Mono.just(ResponseEntity.ok(errResult));
+                                        });
                             });
                 })
                 .onErrorResume(SecurityException.class, e ->
@@ -261,5 +252,23 @@ public class SystemConfigController {
         }
 
         return map;
+    }
+
+    private String valueForStorage(String key, Boolean isSecret, String value) {
+        if ("LLM_API_KEY".equals(key)) {
+            return encryptionService.encrypt(value);
+        }
+        return value;
+    }
+
+    private Mono<String> suppliedOrStored(String supplied, String configKey, boolean secret) {
+        if (supplied != null && !supplied.isBlank()) {
+            return Mono.just(supplied.trim());
+        }
+        return configRepository.findByConfigKey(configKey)
+                .map(SystemConfig::getConfigValue)
+                .map(value -> secret ? encryptionService.decrypt(value) : value)
+                .map(value -> value == null ? "" : value.trim())
+                .defaultIfEmpty("");
     }
 }

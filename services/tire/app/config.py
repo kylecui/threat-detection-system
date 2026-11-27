@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o"
     llm_base_url: str = "https://api.openai.com/v1"
 
+    # Dynamic platform configuration. The protected endpoint is preferred over
+    # local settings; environment variables remain the compatibility fallback.
+    llm_runtime_config_url: Optional[str] = None
+    llm_runtime_service_token: Optional[str] = None
+    llm_runtime_cache_ttl_seconds: int = 45
+    llm_runtime_stale_ttl_seconds: int = 3600
+
     # Admin portal session secret
     session_secret_key: str = "change-me-in-production"
 

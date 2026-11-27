@@ -37,6 +37,14 @@ server:
   port: ${SERVER_PORT:8084}
   shutdown: graceful
 
+# V1 Syslog defaults: 30-minute heartbeat, 5-minute grace, one missed heartbeat tolerated.
+device:
+  telemetry:
+    expected-heartbeat-interval-seconds: ${DEVICE_EXPECTED_HEARTBEAT_INTERVAL_SECONDS:1800}
+    heartbeat-delayed-after-seconds: ${DEVICE_HEARTBEAT_DELAYED_AFTER_SECONDS:2100}
+    heartbeat-offline-after-seconds: ${DEVICE_HEARTBEAT_OFFLINE_AFTER_SECONDS:3900}
+    data-active-window-seconds: ${DEVICE_DATA_ACTIVE_WINDOW_SECONDS:2100}
+
 # Management & Actuator
 management:
   endpoints:

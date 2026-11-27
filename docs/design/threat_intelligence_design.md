@@ -351,7 +351,7 @@ feed:
     initial-delay-ms: 60000
 
 # Env vars for API keys:
-# ABUSEIPDB_API_KEY, OTX_API_KEY, VIRUSTOTAL_API_KEY, GREYNOISE_API_KEY
+# ABUSEIPDB_API_KEY, OTX_API_KEY, VT_API_KEY, GREYNOISE_API_KEY
 ```
 
 ### Schema Upgrades (Migration 25)

@@ -71,6 +71,8 @@ vi.mock('antd', () => ({
 }));
 
 import apiClient, { getCustomerId } from '@/services/api';
+import i18n from '@/i18n';
+import { resetSessionRedirectGuardForTests } from '@/services/session';
 
 function buildConfig(url: string): InternalAxiosRequestConfig {
   return {
@@ -81,8 +83,10 @@ function buildConfig(url: string): InternalAxiosRequestConfig {
 }
 
 describe('api service', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
+    resetSessionRedirectGuardForTests();
+    await i18n.changeLanguage('zh-CN');
     hoisted.messageErrorMock.mockReset();
     vi.restoreAllMocks();
   });
@@ -91,7 +95,7 @@ describe('api service', () => {
     expect(apiClient).toBeDefined();
     expect(hoisted.createMock).toHaveBeenCalledWith({
       baseURL: '/api',
-      timeout: 30000,
+      timeout: 12000,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -131,6 +135,23 @@ describe('api service', () => {
   test('getCustomerId falls back to user payload when scope and legacy keys are absent', () => {
     localStorage.setItem('user', JSON.stringify({ customerId: 'customer-from-user' }));
     expect(getCustomerId()).toBe('customer-from-user');
+  });
+
+  test('administrator all-customer scope never falls back to a stale legacy customer', () => {
+    localStorage.setItem('customer_id', 'stale-customer');
+    localStorage.setItem('user', JSON.stringify({ roles: ['TENANT_ADMIN'] }));
+    expect(getCustomerId()).toBeUndefined();
+  });
+
+  test('skipScope omits both tenant and customer scope headers', async () => {
+    localStorage.setItem('scope_tenant_id', '5');
+    localStorage.setItem('scope_customer_id', 'cust-5');
+    const config = buildConfig('/api/v1/tenants');
+    config.skipScope = true;
+    const output = await hoisted.getRequestFulfilled()!(config);
+    expect(output.headers['X-Tenant-Id']).toBeUndefined();
+    expect(output.headers['X-Customer-Id']).toBeUndefined();
+    expect(output.params).toBeUndefined();
   });
 
   test('response success handler converts snake_case keys recursively', async () => {
@@ -181,5 +202,50 @@ describe('api service', () => {
     await expect(errorHandler!(error)).rejects.toBe(error);
     expect(hoisted.messageErrorMock).toHaveBeenCalledWith('未授权，请重新登录');
     expect(localStorage.getItem('token')).toBeNull();
+  });
+
+  test('suppressed requests still terminate an expired session and clear scope state', async () => {
+    for (const key of [
+      'token', 'refreshToken', 'user', 'customer_id', 'tenant_id',
+      'scope_tenant_id', 'scope_customer_id',
+    ]) {
+      localStorage.setItem(key, 'value');
+    }
+    const config = buildConfig('/api/v1/tenants/search');
+    config.suppressGlobalError = true;
+    const response: AxiosResponse = {
+      status: 401,
+      statusText: 'Unauthorized',
+      headers: {},
+      config,
+      data: { code: 'TOKEN_EXPIRED', message: 'Token has expired' },
+    };
+    const error = new AxiosError('Unauthorized', '401', config, {}, response);
+
+    await expect(hoisted.getResponseRejected()!(error)).rejects.toBe(error);
+
+    expect(localStorage.getItem('token')).toBeNull();
+    expect(localStorage.getItem('refreshToken')).toBeNull();
+    expect(localStorage.getItem('scope_tenant_id')).toBeNull();
+    expect(localStorage.getItem('scope_customer_id')).toBeNull();
+    expect(hoisted.messageErrorMock).not.toHaveBeenCalled();
+  });
+
+  test('ordinary 403 permission errors do not terminate the session', async () => {
+    localStorage.setItem('token', 'valid-token');
+    const config = buildConfig('/api/v1/users');
+    const response: AxiosResponse = {
+      status: 403,
+      statusText: 'Forbidden',
+      headers: {},
+      config,
+      data: { code: 'ACCESS_DENIED', message: 'Insufficient role' },
+    };
+    const error = new AxiosError('Forbidden', '403', config, {}, response);
+
+    await expect(hoisted.getResponseRejected()!(error)).rejects.toBe(error);
+
+    expect(localStorage.getItem('token')).toBe('valid-token');
+    expect(hoisted.messageErrorMock).toHaveBeenCalledWith('没有权限访问该资源');
   });
 });

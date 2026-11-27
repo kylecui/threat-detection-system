@@ -33,7 +33,7 @@ public interface DeviceCustomerMappingRepository extends JpaRepository<DeviceCus
     /**
      * 查找当前所有有效映射（unbind_time为NULL）
      */
-    @Query("SELECT m FROM DeviceCustomerMapping m WHERE m.unbindTime IS NULL")
+    @Query("SELECT m FROM DeviceCustomerMapping m WHERE m.isActive = TRUE AND m.unbindTime IS NULL")
     List<DeviceCustomerMapping> findAllCurrentlyActive();
 
     /**
@@ -44,7 +44,8 @@ public interface DeviceCustomerMappingRepository extends JpaRepository<DeviceCus
     /**
      * 查找设备当前有效映射（向后兼容）
      */
-    @Query("SELECT m.customerId FROM DeviceCustomerMapping m WHERE UPPER(m.devSerial) = UPPER(:devSerial) AND m.unbindTime IS NULL")
+    @Query("SELECT m.customerId FROM DeviceCustomerMapping m WHERE UPPER(m.devSerial) = UPPER(:devSerial) " +
+           "AND m.isActive = TRUE AND m.unbindTime IS NULL")
     Optional<String> findCustomerIdByDevSerial(@Param("devSerial") String devSerial);
 
     // ========== 向后兼容的方法 ==========
