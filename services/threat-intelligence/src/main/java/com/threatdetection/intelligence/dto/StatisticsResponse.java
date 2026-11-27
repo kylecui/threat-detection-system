@@ -14,6 +14,8 @@ import java.util.Map;
 public class StatisticsResponse {
     private long totalIndicators;
     private long activeIndicators;
+    private long totalFeeds;
+    private long activeFeeds;
     private Map<String, Long> bySource;
     private Map<String, Long> bySeverity;
 }

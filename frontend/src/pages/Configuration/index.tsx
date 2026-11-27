@@ -11,8 +11,8 @@ import PluginConfig from './PluginConfig';
 
 const Configuration = () => {
   const { t } = useTranslation();
-  const { isSuperAdmin, isTenantAdmin, isCustomerUser, isAdminRole: isAdmin } = usePermission();
-  const canAccessLlmTab = isSuperAdmin || isTenantAdmin || isCustomerUser;
+  const { isSuperAdmin, isTenantAdmin, isCustomerAdmin, isCustomerUser, isAdminRole: isAdmin } = usePermission();
+  const canAccessLlmTab = isSuperAdmin || isTenantAdmin || isCustomerAdmin || isCustomerUser;
 
   const tabItems = [
     {

@@ -1,349 +1,283 @@
-# 🚀 威胁检测系统 (Threat Detection System)
+# 威胁检测系统
 
-一个现代化的、可扩展的云原生蜜罐威胁检测平台，基于微服务架构构建。
+当前版本：`3.1.39`
 
----
+包内更新说明见 `RELEASE_NOTES.md`；归档校验文件 `SHA256SUMS` 随安装包一同提供。完整研发验证记录位于源码仓库 `AI_PROJECT/records/tests/2026-10-30-release-3.1.39.md`（研发资料不随生产包分发）。
 
-## 📚 文档导航指南
+威胁检测系统是 JZ 三端联调体系之外的数据分析平台。客户端在“数据服务器”中填写本平台地址后，可向平台上传攻击日志与心跳；平台负责接入、消息缓冲、流式分析、威胁评估、持久化、告警和可视化。
 
-**请按照标准三步流程使用文档系统：**
+> 本项目内置的 EMQX 用于攻击日志/心跳数据接入，不替代 `jz-cloud-mqtt-server`。后者仍负责客户端与配置平台之间的配置、命令、状态和 ACK 控制链路。
 
-1. **📋 第一步**: 阅读本 README.md 了解项目概况
-2. **🔍 第二步**: 查看 [📚 文档索引](docs/DOCUMENTATION_INDEX.md) 快速定位所需文档
-3. **📂 第三步**: 进入相应子目录获取详细信息
-   - API文档 → `docs/api/`
-   - 设计规范 → `docs/design/`
-   - 测试指南 → `docs/testing/`
-   - 构建部署 → `docs/build/` (含部署指南)
-   - RBAC文档 → `docs/rbac/`
-   - ML文档 → `docs/ml/`
-   - TIRE文档 → `docs/tire/`
-
-📄 **快速导航**: [DOCS_NAVIGATION.md](./DOCS_NAVIGATION.md)
-
----
-
-## 🏗️ 系统架构
-
-本系统由以下微服务组成：
-
-| 服务 | 状态 | 端口 | 说明 |
-|------|------|------|------|
-| **数据摄取服务** (Data Ingestion) | ✅ 完成 | 8080 | 接收rsyslog/logstash日志并发布到Kafka，支持V1 syslog KV + V2 MQTT JSON，批量处理，心跳持久化 |
-| **流处理服务** (Stream Processing) | ✅ 完成 | 8081 (Flink UI) | Apache Flink实时威胁检测，3级时间窗口 (30s/5min/15min)，多维度评分算法 |
-| **告警管理服务** (Alert Management) | ✅ 完成 | 8082 | 多通道通知 (Email/SMS/Webhook/Slack/Teams)，智能去重和升级 |
-| **威胁评估服务** (Threat Assessment) | ✅ 完成 | 8083 | 威胁评分和风险评估，历史趋势分析，设备管理，白名单 |
-| **客户管理服务** (Customer Management) | ✅ 完成 | 8084 | 客户CRUD、设备绑定、多租户层级、通知配置 |
-| **威胁情报服务** (Threat Intelligence) | ✅ 完成 | 8085 | 威胁情报指标管理、IP信誉查询、多源IOC聚合 |
-| **API网关** (API Gateway) | ✅ 完成 | 8888 / 30080 | 统一入口，JWT RBAC鉴权，Spring Cloud Gateway (WebFlux)，系统配置管理，TIRE插件配置，LLM验证 |
-| **配置服务器** (Config Server) | ✅ 完成 | 8899 | Spring Cloud Config Server (native backend)，统一配置中心 |
-| **ML检测服务** (ML Detection) | ✅ 完成 | 8086 | PyTorch自编码器+BiGRU异常检测，ONNX Runtime推理，3级模型，Kafka异步集成 |
-| **TIRE服务** (TIRE) | ✅ 完成 | 5000 | 威胁情报信誉引擎 (Threat Intelligence Reputation Engine)，11款插件集成，LLM支持 |
-| **前端界面** (Frontend) | ✅ 完成 | 3000 / 30080 | React SPA 仪表板，包含分析、告警、客户、ML检测、情报及系统设置 |
-
-## 🛠️ 技术栈
-
-| 组件 | 技术 | 版本 |
-|------|------|------|
-| 后端 | Spring Boot | 3.1.5 (OpenJDK 21 LTS) |
-| 前端 | React | 18 |
-| 事件流 | Apache Kafka | 3.4+ |
-| 流处理 | Apache Flink | 1.17+ |
-| 容器化 | Docker + Docker Compose | — |
-| 编排 | Kubernetes (K3s) | 1.25+ |
-| 构建工具 | Maven | 3.8.7 |
-| 数据库 | PostgreSQL | 15 |
-| 缓存 | Redis | 可选 |
-| MQTT Broker | EMQX | 5.5.1 |
-| ML推理 | PyTorch + ONNX Runtime | 2.2+ |
-| TIRE后端 | Python (FastAPI) | 3.11+ |
-
-## 🚀 快速启动
-
-### 开发环境 (Docker)
-
-```bash
-# 克隆仓库
-git clone <repository-url>
-cd threat-detection-system
-
-# 启动所有服务
-cd docker && docker-compose up -d
-
-# 等待服务启动 (约60秒)
-sleep 60
-
-# 验证服务状态
-curl http://localhost:8080/actuator/health          # 数据摄取服务
-curl http://localhost:8081/overview                  # Flink Web UI
-curl http://localhost:8082/actuator/health          # 告警管理服务
-curl http://localhost:8083/api/v1/assessment/health  # 威胁评估服务
-curl http://localhost:8084/actuator/health          # 客户管理服务
-curl http://localhost:8085/actuator/health          # 威胁情报服务
-curl http://localhost:8086/health                    # ML检测服务
-curl http://localhost:8888/actuator/health          # API网关
-
-# 查看日志
-docker-compose logs -f
-```
-
-### 生产环境 (Kubernetes)
-
-```bash
-kubectl apply -k k8s/overlays/development   # 开发环境
-kubectl apply -k k8s/overlays/production    # 生产环境
-kubectl get pods -n threat-detection-dev    # 检查部署状态
-```
-
-## 📊 数据流
-
-```
-V1哨兵 (syslog KV) → rsyslog:9080 → Data Ingestion → Kafka (attack-events)
-V2哨兵 (MQTT JSON) → EMQX:1883  ↗                        ↓
-                                                    Flink Stream Processing
-                                                          ↓
-                                                    Kafka (threat-alerts)
-                                                      ↓         ↓
-                                   Threat Assessment ← → PostgreSQL
-                                          ↓           ↓         ↓
-                                   TIRE Enrichment ← → ML Detection (PyTorch/ONNX)
-                                          ↓                     ↓
-                                   Alert Management ← Kafka (ml-threat-detections)
-                                          ↓
-                                   Email/SMS/Slack/Webhook/Teams
-```
-
-1. **日志摄取 (V1)**: rsyslog:9080 → 数据摄取服务，支持单条和批量处理 (syslog KV格式)
-2. **日志摄取 (V2)**: EMQX MQTT Broker → 数据摄取服务，支持JSON事件 (attack/sniffer/threat/heartbeat等7类)
-3. **事件发布**: 结构化事件发布到Kafka主题 (`attack-events`, `status-events`)
-4. **实时处理**: Apache Flink多维度威胁评分 (30s/5min/15min 三级时间窗口)
-5. **威胁评估**: 风险等级评估 + 历史趋势分析 → PostgreSQL持久化
-6. **ML检测**: PyTorch自编码器+BiGRU异常检测 → ONNX Runtime推理 → mlWeight建议性评分倍率 (0.5-3.0)
-7. **TIRE增强**: 11款插件情报聚合 + LLM验证，为告警提供深度上下文
-8. **告警通知**: 多通道通知 + 智能去重 + 升级策略
-
-## 🛡️ 核心特性
-
-### 🔐 RBAC & 多租户架构
-- **层级管理**: SuperAdmin (系统管理) → TenantAdmin (分销商/大客户) → CustomerUser (普通用户)
-- **鉴权机制**: 统一 JWT 认证，支持 `POST /api/v1/auth/login` 登录
-- **权限控制**: 基于角色的菜单可见性与 API 访问控制 (RBAC)
-
-### 🔍 TIRE 威胁情报引擎
-- **多源聚合**: 集成 AbuseIPDB, VirusTotal, OTX, GreyNoise, Shodan, RDAP, Reverse DNS, Honeynet, Internal Flow, ThreatBook, 天际友盟等 11 款插件
-- **智能集成**: 支持 LLM 连接验证，插件启用/优先级/超时管理
-
-### 🤖 ML 检测流水线
-- **三级模型**: 
-  - Tier 1: 30s 窗口，专注勒索软件检测
-  - Tier 2: 5min 窗口，主要威胁检测
-  - Tier 3: 15min 窗口，APT 长期行为分析
-- **技术架构**: BiGRU 序列模型 + 自编码器，ONNX Runtime 高性能推理
-- **闭环流程**: `threat-alerts` → `ml-detection` → `ml-threat-detections` → DB
-
-### 🖥️ Web 管理仪表板
-- **React SPA**: 包含 Dashboard (概览), Analytics (分析), Alerts (告警), Customers (客户), ML Detection (机器学习), Threat Intel (情报), Logs (日志), Settings (设置), Login (登录) 等 9 大核心页面
-- **系统配置**: 支持 TIRE 插件管理、LLM 配置、RBAC 权限分配
-
-### 🌐 多区域支持
-- **高可用部署**: 支持 K8s Overlays 环境定制
-- **数据同步**: 集成 MirrorMaker2 与 PostgreSQL 复制配置，支持跨地域部署
-
-## 🧮 威胁评分算法
-
-```
-threatScore = (attackCount × uniqueIps × uniquePorts) × timeWeight × ipWeight × portWeight × deviceWeight × netWeight × intelWeight × mlWeight
-```
-
-| 因子 | 说明 | 范围 |
-|------|------|------|
-| `attackCount` | 攻击尝试频率 | — |
-| `uniqueIps` | 访问的诱饵IP数量 (横向移动范围) | — |
-| `uniquePorts` | 尝试的端口种类 (攻击意图多样性) | — |
-| `timeWeight` | 时间衰减因子 (深夜1.2, 工作时间1.0) | 0.8–1.2 |
-| `ipWeight` | IP多样性放大 | 1.0–2.0 |
-| `portWeight` | 端口多样性权重 | 1.0–2.0 |
-| `deviceWeight` | 多设备覆盖奖励 | 1.0–1.5 |
-| `netWeight` | 网段权重 (按客户+CIDR配置) | 0.01–10.0 |
-| `intelWeight` | 威胁情报权重 (IOC置信度+严重性) | 1.0–4.5 |
-| `mlWeight` | ML异常检测建议性倍率 (自编码器异常分数→乘数，特征开关控制) | 0.5–3.0 |
-
-**威胁等级**: INFO (<10) · LOW (10–50) · MEDIUM (50–100) · HIGH (100–200) · CRITICAL (>200)
-
-## 📁 项目结构
-
-```
-threat-detection-system/
-├── docker/                 # Docker开发环境
-│   ├── docker-compose.yml  # 服务编排配置 (含EMQX MQTT Broker)
-│   ├── *.sql              # 数据库初始化脚本 (01-23)
-│   └── README.md
-├── k8s/                   # Kubernetes部署配置
-│   ├── base/              # 基础配置
-│   └── overlays/          # 环境覆盖 (development, production)
-├── services/              # 微服务源码
-│   ├── data-ingestion/    # ✅ 数据摄取服务 (V1 syslog + V2 MQTT/JSON)
-│   ├── stream-processing/ # ✅ Flink流处理服务 (增强威胁评分、网段权重)
-│   ├── threat-assessment/ # ✅ 威胁评估服务 (风险评估、趋势分析)
-│   ├── alert-management/  # ✅ 告警管理服务 (多通道通知、智能去重)
-│   ├── customer-management/ # ✅ 客户管理服务 (CRUD、设备绑定、网段权重)
-│   ├── threat-intelligence/ # ✅ 威胁情报服务 (IOC管理、IP信誉、情报聚合)
-│   ├── api-gateway/       # ✅ API网关 (路由、熔断、测试、K8s)
-│   ├── config-server/     # ✅ 配置服务器 (native backend, 含单元测试)
-│   └── ml-detection/      # ✅ ML检测服务 (PyTorch自编码器、ONNX Runtime、FastAPI)
-├── scripts/               # 工具脚本
-│   ├── test/              # 测试脚本
-│   ├── tools/             # 生产工具 (full_restart.sh, bulk_ingest_logs.py)
-│   └── utils/             # 辅助工具
-├── docs/                  # 文档
-│   ├── api/               # REST API文档
-│   ├── design/            # 架构设计文档
-│   ├── fixes/             # 问题修复记录
-│   └── progress/          # 进度报告
-└── infrastructure/        # 基础设施配置
-```
-
-## 配置
-
-### 环境变量
-
-| 变量 | 描述 | 默认值 |
-|------|------|--------|
-| `KAFKA_BOOTSTRAP_SERVERS` | Kafka代理地址 | `localhost:9092` |
-| `SPRING_PROFILES_ACTIVE` | Spring激活配置文件 | `development` |
-| `FLINK_JOBMANAGER_RPC_ADDRESS` | Flink JobManager地址 | `stream-processing` |
-| `SMS_PROVIDER` | SMS服务提供商 | `twilio` |
-| `SLACK_WEBHOOK_URL` | Slack webhook URL | — |
-| `TEAMS_WEBHOOK_URL` | Microsoft Teams webhook URL | — |
-| `ENCRYPT_KEY` | 配置服务器加密密钥 | — |
-| `GIT_CONFIG_URI` | 配置Git仓库URI | — |
-| `MQTT_ENABLED` | 启用V2哨兵MQTT摄取 | `false` |
-| `MQTT_BROKER_URL` | EMQX MQTT Broker地址 | `tcp://emqx:1883` |
-| `NET_WEIGHT_SERVICE_URL` | 网段权重服务地址 | `http://customer-management:8084` |
-| `THREAT_INTEL_SERVICE_URL` | 威胁情报服务地址 | `http://threat-intelligence:8085` |
-| **⭐ `TIER1_WINDOW_SECONDS`** | Tier 1 时间窗口 — 勒索软件检测 | `30` (推荐 10–300) |
-| **⭐ `TIER2_WINDOW_SECONDS`** | Tier 2 时间窗口 — 主要威胁检测 | `300` (推荐 60–1800) |
-| **⭐ `TIER3_WINDOW_SECONDS`** | Tier 3 时间窗口 — APT检测 | `900` (推荐 300–7200) |
-
-> 📖 时间窗口配置详见 [TIME_WINDOW_CONFIGURATION.md](docs/guides/TIME_WINDOW_CONFIGURATION.md)
-
-## 📚 API文档
-
-服务运行后可访问：
-
-| 服务 | 地址 |
-|------|------|
-| 数据摄取 API | `http://localhost:8080/swagger-ui.html` |
-| 告警管理 API | `http://localhost:8082/swagger-ui.html` |
-| 威胁评估 API | `http://localhost:8083/swagger-ui.html` |
-| 客户管理 API | `http://localhost:8084/swagger-ui.html` |
-| 威胁情报 API | `http://localhost:8085/swagger-ui.html` |
-| ML检测 API | `http://localhost:8086/docs` |
-| Flink Web UI | `http://localhost:8081` |
-| API 网关 | `http://localhost:8888` |
-
-## 📚 文档中心
-
-### 🎯 核心文档 (按使用频率排序)
-- **[📚 文档索引](docs/DOCUMENTATION_INDEX.md)** ⭐ 导航起点
-- **[下一步研发工作计划](docs/NEXT_DEVELOPMENT_PLAN.md)** ⭐ 最新
-- **[调试与测试指南](docs/debugging_and_testing_guide.md)** ⭐ 必读
-- **[快速参考卡片](docs/QUICK_REFERENCE.md)**
-- **[使用指南](USAGE_GUIDE.md)**
-- **[开发规范](.github/copilot-instructions.md)**
-
-### 快速工具脚本
-```bash
-./scripts/tools/full_restart.sh          # 完整重启 (代码修改后必做)
-./scripts/tools/check_persistence.sh     # 检查数据持久化状态
-./scripts/tools/tail_logs.sh             # 实时查看多服务日志
-python3 scripts/test/e2e_mvp_test.py     # 运行E2E测试
-```
-
-## 🛠️ 开发
+## 正式安装
 
 ### 环境要求
 
-- Ubuntu 24.04.3 LTS (或WSL2) · OpenJDK 21 LTS · Maven 3.8.7
-- Docker Engine 20.10+ · kubectl 1.25+ (K8s部署)
+- Ubuntu 24.04 x86_64
+- 建议至少 8 核 CPU、16 GB 内存、40 GB 可用磁盘
+- 能访问 APT、Docker Hub、Maven 和 npm 依赖源
+- 安装账户具有 `sudo` 权限
+- 默认发布端口未被占用：`3000`、`5432`、`6379`、`8080`、`8081`、`8083`、`8085`、`8086`、`8888`、`8899`、`9080`、`9081`、`9092`、`9600`、`1883`、`8883`、`18083`、`18084`。Alert Management `8082` 和 Customer Management `8084` 仅在 Compose 内网暴露，Web/API 客户端统一访问 `8888` 网关。
 
-### 构建与测试
+生产环境只支持 `outputs/v3.1.39/` 中通过发布验证的安装包，不从源码目录直接安装。
 
-```bash
-mvn clean install                    # 构建所有服务
-mvn test                             # 运行所有测试
-mvn verify                           # 运行集成测试
-mvn test jacoco:report               # 覆盖率报告
-```
+### 自动安装
 
-## Troubleshooting
-
-### ⚠️ 重要提醒
-
-**代码修改后必须重新构建Docker镜像!** 容器不会自动加载新代码。
+上传归档和 `SHA256SUMS` 到目标机同一目录后执行：
 
 ```bash
-# 推荐使用自动化脚本
-./scripts/tools/full_restart.sh
-
-# 或手动执行
-mvn clean package -DskipTests && \
-cd docker && docker compose build --no-cache && docker compose up -d
+sha256sum -c SHA256SUMS
+tar -xzf threat-detection-system-3.1.39-linux-x86_64.tar.gz
+cd threat-detection-system-3.1.39-linux-x86_64
+sudo ./install.sh
 ```
 
-### 常见问题
+发布包根目录的 `install.sh` 是唯一安装脚本，直接包含校验、依赖、构建、回滚、卸载与 purge 实现。`scripts/` 只保留环境生成、诊断和运行时看门狗等辅助工具。
 
-详细排查请参考 **[调试与测试指南](docs/debugging_and_testing_guide.md)**
+安装器会完成以下操作：
 
-| 问题 | 解决方案 |
-|------|---------|
-| Kafka消费者未启动 | 检查配置文件优先级 (application.properties vs application-docker.yml) |
-| 数据未持久化 | 验证JSONB字段注解 (`@JdbcTypeCode(SqlTypes.JSON)`) |
-| 容器行为未改变 | 使用 `--no-cache` 重新构建镜像 |
-| E2E测试失败 | 确认数据库表名 (threat_alerts vs threat_assessments) |
-| 端口冲突 | 检查端口 8080–8084, 8888 是否被占用 |
-| Connection Reset | `python3 scripts/tools/bulk_ingest_logs.py --count 5 --workers 4 --batch-size 25` |
+1. 验证包内 `MANIFEST.sha256`，失败时不修改系统。
+2. 检查并安装缺失的宿主依赖和 Docker Compose v2；若 Docker 由本次安装器新装，则自动配置国内镜像源。
+3. 自动生成 PostgreSQL 密码和 JWT 密钥，升级时保留已有 `.env`。
+4. 在改动安装状态前校验全部 PostgreSQL 初始化挂载，拒绝缺失、空文件、重复目标或仅含文件名的伪 SQL。
+5. 在改动安装状态前检查 Compose 发布端口无重复且未被其他程序占用；冲突时列出端口与服务并直接退出。
+6. 在改动安装状态前，依次预拉取 15 个基础/运行时镜像；单个镜像失败自动重试。Flink 官方标签拉取失败时，安装器会在同一次运行中自动拉取固定摘要的 DaoCloud 直连镜像、校验内容并重新标记为原标签，无需人工预拉取或再次安装。
+7. 备份旧安装并同步到 `/opt/threat-detection-system`。
+8. 逐个构建 12 个项目镜像，单项失败自动重试，然后启动 Compose、安装 systemd 自启、运行时看门狗和 `tdsdiag`。
+9. 使用数据库迁移账本区分新装与升级：全新数据库由初始化链执行并登记迁移，已有数据卷只执行尚未登记的迁移，不再无条件重放 SQL。
+10. 验证 18 个常驻服务的 Docker/PID/containerd 状态一致，并绕过宿主 docker-proxy 直连 Logstash 容器验证 V1 Syslog `9080/tcp`；随后检查 12 分区 Kafka topic、公开健康接口和前端，预热客户分页业务查询，再等待业务 readiness 与首次管理员接口连续三次成功。
+11. 全新安装额外确认用户、客户、设备、攻击、告警和评估表均为空，并观察容器重启计数 30 秒保持稳定。
+12. 失败时收集 Compose 日志和监听端口后恢复安装前状态；成功后保留可追溯的文件备份。
 
-### Getting Help
+PostgreSQL 的健康状态同时要求数据库可连接且关键业务表已完成初始化，不会把“容器已重启但数据库只初始化了一部分”误报为健康。Kafka 首次启动探针保留真实 topic 查询，并为整套服务并发冷启动提供最长约 8 分钟的有界宽限；超过预算仍会判定失败并触发回滚。
 
-- **📖 查看文档**: [调试与测试指南](docs/debugging_and_testing_guide.md)
-- **📝 查看日志**: `docker-compose logs -f <service-name>`
-- **🔍 检查状态**: `./scripts/tools/check_persistence.sh`
-- **💬 GitHub Issues**: 报告新问题或查看已知问题
+EMQX 采用单节点模式，不强制写死 Erlang 节点名；镜像会依据容器当前地址生成可达节点名。安装器仍通过真实的 `emqx ctl status` 判断 MQTT 服务是否就绪，进程启动但控制节点不可达时不会误报成功。
 
-## Contributing
+无需在安装前复制或编辑 `.env`。`.env.example` 只用于说明字段，真实配置由安装器写入 `/opt/threat-detection-system/.env`，权限为 `0600`。
 
-1. Fork → 2. Feature branch → 3. Changes + Tests → 4. Pull request
+如果 Ubuntu 的 `unattended-upgrade`、APT 或 dpkg 正在运行，安装器会安全等待包管理锁最多 600 秒后继续，不需要删除 lock 文件或强制结束系统更新。超时后会显示占用进程和安全重试命令。
 
-### Development Workflow
+镜像下载默认单个镜像最多尝试 4 次、每次最多等待 600 秒。镜像预拉取发生在旧服务停止和文件同步之前；网络失败时可直接改善 Docker Registry 连通性后重新运行安装器，不会形成半安装状态。对于已知在部分镜像加速器上长期停滞的 `flink:1.18.1-scala_2.12-java17`，每轮官方标签失败后会自动尝试 `docker.m.daocloud.io/library/flink:1.18.1-scala_2.12-java17`，且只有摘要与发布时固定值一致才会复用并重新标记；因此不再需要先手工拉取镜像再运行第二次安装。
 
-1. **Local**: Docker Compose → 2. **Test**: Unit + Integration → 3. **Review**: PR → 4. **Deploy**: K8s
+Docker 镜像源遵循以下边界：
 
-## Roadmap
+- 目标机原先没有 Docker：安装器安装 Docker，并将 `docker.xuanyuan.me`、`docker.1ms.run`、`docker.m.daocloud.io` 写入 `/etc/docker/daemon.json`；若文件原先存在，会先备份并保留其他有效配置项，写入后校验配置和重启 Docker，失败则恢复原文件。
+- 目标机已经有 Docker：正常检查和镜像拉取时不提示、不修改全局 `daemon.json`、也不重启 Docker；仅当基础镜像经过全部重试仍拉取失败时，才输出可直接执行的备份、写入国内镜像、校验、重启和拉取验证命令。
+- `--purge` 保留 Docker、APT 软件包及 Docker 的全局镜像源配置。
 
-- [x] 数据摄取与实时流处理
-- [x] 多维度威胁评分算法
-- [x] 多通道告警通知系统
-- [x] 数据库持久化层
-- [x] 客户管理与多租户隔离
-- [x] API Gateway完善 (JWT RBAC + K8s清单)
-- [x] Config Server实现 (native backend, Docker, K8s)
-- [x] V2哨兵数据支持 (MQTT + JSON，EMQX Broker)
-- [x] 网段权重配置系统 (CRUD API + 评分集成)
-- [x] 网络拓扑与心跳持久化 (设备清单、拓扑快照、主机发现)
-- [x] 高级威胁情报集成 (TIRE 11款插件)
-- [x] 机器学习威胁检测 (PyTorch自编码器 + BiGRU + ONNX Runtime)
-- [x] Web管理仪表板 (React SPA 9大页面)
-- [x] 多区域部署支持 (K8s Overlays + MirrorMaker2)
-- [x] RBAC 权限体系与多租户层级
-- [x] LLM 智能验证与 TIRE 插件管理系统
+### 手动安装的定义
 
-## License
+“手动安装”仅指操作员人工执行发布包校验、解压和根目录 `install.sh`，不再维护另一套逐文件复制或直接执行 `docker compose up` 的生产流程。若只想落盘而暂不构建/启动：
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+```bash
+sudo ./install.sh --no-start
+```
 
----
+之后在安装目录重新执行正式入口即可构建并启动：
 
-*最后更新: 2026-03-30*
-*系统版本: v3.0*
-*部署状态: 全部核心服务 (11/11) 完成并可部署，18+ Pods 运行于 K3s 单节点，支持多区域部署*
+```bash
+cd /opt/threat-detection-system
+sudo ./install.sh
+```
+
+## 安装后使用
+
+安装完成时会输出本机可用地址。常用入口如下，其中 `<server-ip>` 替换为服务器地址：
+
+| 用途 | 地址 |
+|---|---|
+| Web 控制台 | `http://<server-ip>:3000` |
+| API 网关 | `http://<server-ip>:8888` |
+| 单条日志接入 | `POST http://<server-ip>:8080/api/v1/logs/ingest` |
+| 批量日志接入 | `POST http://<server-ip>:8080/api/v1/logs/batch` |
+| V1 Syslog 接入 | `<server-ip>:9080/tcp` |
+| V2 MQTT 接入 | `tcp://<server-ip>:1883` |
+| EMQX 管理页 | `http://<server-ip>:18083` |
+| EMQX WebSocket | `ws://<server-ip>:18084/mqtt` |
+
+宿主机 `8083` 专用于 Threat Assessment HTTP API；EMQX 容器内仍监听 `8083`，但宿主机映射为 `18084`，避免两个服务争用同一端口。
+
+全新安装不再创建默认账号或演示业务数据。首次打开 Web 登录页时，页面会要求创建第一个超级管理员；密码长度为 8–16 位，不要求字母、数字或特殊字符组合。该初始化只能成功执行一次。
+
+客户管理采用“归档后可恢复”模型：普通删除将客户状态改为 `INACTIVE`，记录仍显示在客户列表，可通过编辑状态恢复；客户 ID 不会因归档而释放。创建客户前必须先选择租户；客户 ID 必须以英文字母或数字开头，只能包含英文字母、数字、连字符 `-` 和下划线 `_`，最长 50 位。
+
+创建客户时可选择“同时创建客户管理员账号”。账号固定为 `<客户ID>-admin`，初始密码为独立生成的 16 位安全随机字符串，不再与客户 ID 绑定；客户和账号在同一个数据库事务内创建，任一失败都会整体回滚，不会留下半成品。初始密码只在创建成功后展示一次，请立即保存并在首次登录后修改。该账号绑定为 `CUSTOMER_ADMIN`，只能在所属客户内维护普通用户和客户自助配置，不能跨客户、创建租户或变更客户生命周期；普通 `CUSTOMER_USER` 保持只读。永久删除仅限超级管理员，并且客户仍有关联用户、设备、日志、告警、评估或配置时会被拒绝。
+
+推荐的多租户操作顺序：超级管理员创建并选择租户 → 在“客户与设备”创建客户（可同时生成客户管理员）→ 顶栏选择客户 → 绑定设备并配置客户端数据上报 → 客户管理员登录后仅为本客户创建普通用户。租户、客户的新增、停用和删除会立即刷新顶栏选择器；“全部客户”只代表当前租户范围，不会回退到浏览器中残留的旧客户 ID。
+
+顶栏范围选择器支持按租户标识/名称以及客户 ID/名称/邮箱进行服务端搜索和分页，不需要在长下拉框中逐项滚动。设备绑定后，“客户与设备 → 设备 → 数据状态”会分别显示绑定状态、心跳状态、数据活跃状态、分析链路、最近心跳、最近原始攻击日志、24 小时日志数和最近威胁分析；其中“活跃”只表示绑定有效，客户端“V1 Syslog 已连接”只表示 `9080/tcp` 可达。默认按客户端 30 分钟心跳周期判断：35 分钟后标记延迟，65 分钟后才判离线。
+
+查看自动生成的数据库/JWT配置：
+
+```bash
+sudo grep -E '^(POSTGRES_DB|POSTGRES_USER|POSTGRES_PASSWORD|JWT_SECRET)=' \
+  /opt/threat-detection-system/.env
+```
+
+该命令会显示真实秘密，只应在受控终端执行，不要把输出粘贴到工单、聊天或诊断包。
+
+## 运维
+
+```bash
+# 总体状态与开机自启
+sudo systemctl status threat-detection-compose.service
+sudo systemctl is-enabled threat-detection-compose.service
+
+# Docker/containerd 状态失同步的定向恢复定时器
+sudo systemctl status threat-detection-runtime-watchdog.timer
+sudo /opt/threat-detection-system/scripts/runtime-watchdog.sh --check
+
+# Compose 服务状态
+cd /opt/threat-detection-system
+sudo docker compose --env-file .env -f docker/docker-compose.yml ps
+
+# 一键只读诊断；诊断包权限为 0600
+sudo tdsdiag
+
+# 快速自检
+sudo tdsdiag --self-test
+```
+
+诊断包不会读取 `.env` 值、私钥、数据库业务行或应用负载日志。
+
+### 升级
+
+上传新版本发布包，校验、解压后执行新包根目录 `sudo ./install.sh`。安装器会读取 `/opt/threat-detection-system/.installed_version`（旧安装缺失时回退读取 `VERSION`），识别到旧版本后直接进入覆盖升级，无需先卸载或二次确认。覆盖仅替换应用文件，现有 `.env` 和 Docker 数据卷保持不变；升级前自动备份旧文件，升级失败会恢复旧文件和旧服务。
+
+升级时不要执行 `--purge --yes`；该参数仅用于明确需要永久删除配置、凭据、数据卷和备份的全量清理。正常升级始终只需在新发布包目录运行：
+
+```bash
+sudo ./install.sh
+```
+
+### 卸载与完整清除
+
+```bash
+# 停止并删除程序容器与 unit，保留配置和数据卷
+sudo /opt/threat-detection-system/install.sh --uninstall
+
+# 先预览完整清除范围
+sudo /opt/threat-detection-system/install.sh --purge --dry-run
+
+# 完整清除：容器、项目镜像、卷、数据库、.env、凭据、安装文件和备份
+sudo /opt/threat-detection-system/install.sh --purge
+
+# 无人值守完整清除
+sudo /opt/threat-detection-system/install.sh --purge --yes
+```
+
+APT 软件包、Docker 本身、操作员上传的 tar.gz 和解压目录不会被 purge 删除。
+
+## 架构与数据流
+
+```text
+客户端攻击日志/心跳
+  ├─ V1 Syslog :9080 -> Logstash ┐
+  ├─ V2 MQTT :1883 -> EMQX       ├-> Data Ingestion -> Kafka
+  └─ HTTP :8080 ------------------┘       ├-> attack-events
+                                          └-> status-events
+                                                  |
+                                  Flink Stream Processing
+                                                  |
+                          Threat Assessment / ML / Intelligence
+                                                  |
+                         PostgreSQL -> Alert Management -> Web/API
+```
+
+主要常驻组件：PostgreSQL、Redis、ZooKeeper、Kafka、Logstash、EMQX、Data Ingestion、Flink JobManager/TaskManager、Threat Assessment、Alert Management、Customer Management、Threat Intelligence、TIRE 情报运行时、API Gateway、Config Server、ML Detection 和 Frontend。
+
+## 性能与高可用边界
+
+- 单机 Compose 版是可重部署、可回滚的生产基础形态，但一台主机、单 PostgreSQL、单 Kafka、单 Redis 和单 EMQX 仍存在单点，不能宣称主机级高可用。
+- 3.1.16 将 Kafka 主题默认扩展为 12 分区，接入线程池和队列有明确上限，Kafka 生产启用批量、zstd、幂等和 `acks=all`，Flink 并行写库并启用持久 checkpoint，防止突发流量直接拖死 Web 控制面。
+- 3.1.17 将客户服务熔断预算从默认约 1 秒调整为 5 秒并增加业务预热；ML 就绪统计使用单次聚合、超时与缓存，ML 页面先展示核心状态，再独立加载训练数据和漂移指标。
+- 3.1.18 增加 Docker/PID/containerd 运行时一致性检查和定向自愈；V1 Syslog `9080/tcp` 纳入安装与诊断关键验收。创建/编辑客户弹窗调整为桌面双列响应式布局。
+- 3.1.19 修复客户归档后列表不可见却又无法复用 ID、重复提交产生连续 409、租户/客户越权与生命周期未贯穿认证和数据接入的问题；客户管理员改为在用户管理页显式设置强密码。
+- 3.1.20 修复认证过滤器把成功的 `Mono<Void>` 响应误判为空账户、在 `200 OK` 后再次写入 `401` 并中断连接的问题；网关所有直接错误响应和全局异常处理均增加已提交响应保护。
+- 3.1.21 修复未选择租户时客户创建的 400 被包装为 500、前端仍允许无租户提交的问题；恢复可选的客户范围账号自动创建，账号和随机强密码均与客户 ID 关联，并与客户记录同事务提交或回滚。
+- 3.1.22 统一全站租户/客户作用域，新增真正的 `CUSTOMER_ADMIN` 权限层级和依赖式用户表单；租户/客户变更即时刷新顶栏，后端强制租户状态、客户归属与客户数量上限，并统一表格时间展示。
+- 3.1.23 增加可搜索分页的租户/客户范围选择器和设备数据链路可观测性；总览由五组并发请求收敛为单个一致快照并直接按租户聚合，网关冷启动预算覆盖威胁/告警服务，Flink 稀疏分区启用空闲检测。
+- 3.1.24 修正客户端 V1 Syslog 每 30 分钟心跳与平台固定 5 分钟离线判定的冲突：35 分钟后标记心跳延迟，65 分钟后才判定离线；设备页分别展示绑定、心跳、数据活跃和分析链路，避免把“9080 端口可达”“收到攻击日志”和“收到心跳”混为同一状态。
+- 3.1.25 修复设备绑定按钮可重复提交、同一序列号并发生成多条当前绑定、重复记录导致解绑失败，以及批量接口失败被误报为成功的问题。升级会保留最新当前绑定、将旧重复项转为历史，并建立大小写不敏感的“每个序列号仅一条当前绑定”数据库约束；客户、租户、用户、告警、AI、插件和配置级联等写入弹窗也统一增加同步提交锁。
+- 3.1.26 增加数据库迁移账本。全新空卷初始化时登记 43–45 号迁移，安装器不再立即重复执行；从旧版本升级时只补执行未登记迁移，并收敛幂等 DDL 的预期 NOTICE，真实 SQL 错误仍会中止并触发回滚。
+- 3.1.26 同时调整设备管理抽屉：扩大桌面宽度，为设备、状态、时间和操作列设置稳定列宽，表头与时间保持单行；窄屏通过横向滚动查看，不再把中文逐字换行。
+- 3.1.26 修复设备管理使用旧列表快照的问题：设备抽屉打开期间每 15 秒静默刷新全部设备状态并提供手动刷新；数据状态弹窗并行刷新设备汇总与原始攻击日志，日志结果会即时校正顶部链路状态并回写列表，不再需要退出后重新进入。
+- 3.1.26 重做威胁总览端口分布：使用可复用的 Recharts 响应式渐变面积图替代拥挤柱状图，端口标签保持横向，Tooltip 展示端口和攻击次数，并通过 CSS 变量适配明暗主题。
+- 3.1.27 修复威胁列表响应把数据库中的真实攻击者 IP 强制覆盖为 `N/A` 的问题；详情列表、分组展开、租户列表、总览最近威胁和导出现在统一返回已持久化的 `attack_ip`。
+- 3.1.28 将端口 Top 15 改为按原始攻击日志 `response_port` 计数的横向条形图，非法端口归并为“无有效端口”，百分比按全部原始事件计算；修复翻译键泄露、`0-0` 和未知端口重复命名，并统一总览、威胁列表、告警及设备日志中的 MAC/IP/端口/序列号显示。
+- 3.1.29 修复多容器主机上 Docker/containerd 状态检查因提前关闭 `ctr` 输出管道而返回 `SIGPIPE`（141）、误触发安装回滚的问题；安装器与运行时 watchdog 均完整消费任务列表，并增加 `pipefail` 回归验证。
+- 3.1.39 登录页按客户端参考改为浅色双栏、窄屏上下布局，保留原有登录与首次管理员创建流程；修复主按钮悬停文字对比度、密码显隐长按键重复切换。同步发布版本入口，并排除生产包内的前端同目录测试文件。018/019 独立复查通过，远程完整验证与交付结果见本版本记录。
+- 3.1.38 质量门禁修复，生产功能不变：配置级联测试页拆分组件与启动入口，恢复前端 lint 零 warning；Overview 浏览器用例改为等待快照响应后再断言，4 workers 并发稳定；新增与 Playwright 1.59.1 锁定版本一致的 Ubuntu 离线测试镜像准备与运行脚本（仅测试用途，不进入发布包）。
+- 3.1.37 合并完整前端工作台重构：统一威胁运营、平台运维、资产治理和系统配置页面的信息层级、响应式布局、表格密度、状态反馈与空状态，并新增受保护路由的 404 页面；所有既有 API、权限、路由与业务操作保持不变。
+- 3.1.37 登录页采用与客户端一致的紧凑单卡片体量，桌面最大宽度 400px，并保留首次管理员创建、会话过期、接口重试和原认证流程；未采用待合并分支的双栏登录界面。
+- 3.1.36 修复告警责任人被 ProTable 渲染节点转换为 `[object Object]` 的问题；详情标签列保持单行且为长内容保留可换行的值区域，完成处置和提级处理的字数统计不再与弹窗按钮重叠。
+- 3.1.36 将威胁列表的明细、分组、展开子表、复选框首列、展开按钮列及可排序表头统一居中；同类详情标签规则同步用于客户/设备、威胁情报、威胁详情和基础配置。
+- 3.1.35 将告警状态收敛为“待处置、处理中、已处置、已归档”，责任人从真实启用账号中选择；列表保留核心字段，完整责任人、处置层级/原因、实际处理人、时间与处置结论集中在详情中展示。
+- 3.1.35 将含义模糊的“升级级别/分配给”统一为“处置层级/责任人”和“提级处理”；修复提级信息未持久化、指派后状态不同步，并为操作热区及单行列宽留足稳定空间。
+- 3.1.35 修复威胁情报记录“再次出现”后分页顺序漂移导致当前行消失；指标列表使用稳定排序，筛选参数与后端一致，记录后返回更新后的出现次数和最后发现时间。
+- 3.1.35 AI 密钥保存后继续保持不回显，但连接测试会安全读取已加密保存的密钥，无需再次输入；LLM、情报和插件配置按稳定业务顺序显示，刷新不再交换名称与 URL 位置。
+- 3.1.35 精简会话到期提示，不再显示“已清除上一次会话和数据范围选择”；统一“可疑来源、观察周期、责任人、处置层级、再次出现”等面向用户的术语。
+- 3.1.34 在访问令牌失效、账号停用或认证 401 时统一清理登录与租户/客户作用域并返回登录页；普通权限 403 不再被误判为会话过期。
+- 3.1.34 告警中心默认只接收 LOW 及以上评估，新告警使用“检测窗口 · MAC · 次数”标题，历史告警按事件元数据即时兼容显示；通知继续交由客户配置的严重级别策略判断。
+- 3.1.34 明确订阅源能力：`internal` 是本地写入源且不可拉取，外部源显示单次拉取上限；重复刷新不再累计指标数或目击数，停用外部源后其指标不再参与有效查询。
+- 3.1.34 平衡总览、威胁列表、告警中心和设备表格的 MAC、数值、时间与操作列；统一状态标签、40px 操作热区和 Tooltip 偏移，并补充检测窗口、无端口协议和情报统计说明。
+- 3.1.33 修复外部情报源写入 PostgreSQL `inet` 字段时按字符串绑定导致的拉取失败；IP、CIDR 创建、更新和批量导入统一使用原生类型转换，订阅源固定按“内部源优先、其余按 ID”排序。
+- 3.1.33 打通平台 AI 配置与 TIRE：报告生成时通过受服务令牌保护的内部接口动态解析用户、客户、租户或系统级有效配置，支持短缓存与限时旧值回退，不再依赖重启同步环境变量。
+- 3.1.33 通知链路按保存的最低严重级别和严重级别清单执行，支持静默时段、每小时频率限制、失败重试与真实通道测试；短信按 `SMS_PROVIDER` 选择 Twilio 或阿里云，SMTP 停用后不再被当作可用配置。
+- 3.1.33 新写入及历史迁移后的 LLM API Key、SMTP 密码均使用安装器生成并在升级中保留的 AES-256-GCM 数据密钥加密；新增 49 号迁移补齐通知重试字段和索引。
+- 3.1.32 合并重复安装入口：完整安装实现上移到发布包根 `install.sh`，删除 `scripts/install.sh`，发布包和源码均只保留一个安装脚本。
+- 3.1.32 安装器增加旧版本识别和自动覆盖升级；升级新包只需执行 `sudo ./install.sh`，不再把 `--purge --yes` 作为前置步骤，并继续保留环境配置、数据卷、升级前备份和失败回滚。
+- 3.1.32 统一首次初始化、用户管理和客户管理员创建的密码规则为 8–16 位，不再要求字符组合；客户管理员初始密码改为独立生成的 16 位安全随机字符串。
+- 3.1.32 将页面滚动收敛到主内容区域，弹窗/抽屉锁定 `body` 时侧边栏、顶部栏、在线状态和折叠按钮保持固定；补充滚动后打开弹窗的浏览器回归验证。
+- 3.1.32 为 Flink 运行时镜像增加同轮直连回退：官方标签拉取失败时自动下载并校验固定摘要的 DaoCloud 镜像，再标记回 Compose 使用的原标签，避免首次安装因镜像加速器卡住而必须执行两次。
+- 3.1.32 修复设备管理抽屉内的数据状态、绑定和编辑弹窗被抽屉覆盖的问题；设备主表取消强制横向滚动，在保持抽屉尺寸不变的前提下收敛核心列、统一操作按钮，并把完整描述、已发现主机数和创建时间集中到“数据状态”查看。
+- 3.1.32 新增共享语义状态标签，统一客户、租户、用户和设备生命周期状态的明暗主题颜色与对比度，修复客户管理列表状态显示过暗的问题。
+- 3.1.32 修复威胁情报订阅源前后端字段契约不一致导致名称、URL 和拉取时间空白的问题；统计、IP 查询与轮询结果改为真实字段，外部订阅源启用提示不再被 `internal` 源误判，VirusTotal 密钥统一为 `VT_API_KEY`。
+- 3.1.32 补齐威胁列表单条和批量删除后端端点及客户/租户范围校验；横向查询表单标签恢复垂直居中，按钮触发器取消缩放并为订阅源、目击、同步和取消升级等操作增加重复提交保护。
+- 3.1.31 修复租户总览无端口协议聚合 SQL 被 Hibernate 错误解析导致 24 小时、7 天和 30 天总览均返回 HTTP 500；查询改用标准 `CAST`，并将空端口事件纳入 ARP、ICMP 等协议分类。
+- 3.1.30 修复总览 7 天请求超时、30 天趋势同日期多点形成竖线/错误闭合线、重复请求以及单一 MAC 占满“最新威胁”的问题；长周期按日聚合并补齐空桶，查询增加索引、短缓存和同请求合并，最近威胁按 MAC 去重。
+- 3.1.30 贯通 30 秒、5 分钟、15 分钟分析窗口并按窗口幂等落库；端口图只展示 1–65535 的有效 TCP/UDP 端口，ARP、ICMP、ICMPv6、GRE、ESP、AH 和端口异常单独统计。仅 MAC 使用蓝色圆角等宽标签，IP、端口、序列号和服务标识恢复普通文字。
+- 3.1.30 将 TIRE 威胁情报运行时正式纳入 Compose、安装验收和管道健康；情报密钥用于真实 feed 拉取，缺少密钥时页面明确提示。ML 训练修复单分组数据集失败并展示真实层级进度，通知配置接入邮件、短信、Slack 和 Webhook 分发。
+- 威胁列表必须先选择客户；空客户环境显示引导信息而不是发送缺少 `customer_id` 的请求。SMTP 尚未配置属于正常初始状态，页面允许直接创建默认配置。
+- 高频攻击事件使用批量 JDBC 写入、组合索引、BRIN 时间索引和更积极的 autovacuum；首页威胁统计由九次聚合查询合并为一次数据库扫描。
+- 前端页面按路由拆包，GET 遇到短暂的 502/503/504 时有限重试；单个首页数据源失败只降级对应卡片，不再让整页空白。
+- `k8s/overlays/production` 提供无状态服务多副本、PDB 与 HPA 基础。正式高可用部署还必须使用三节点以上 Kafka、具备自动故障转移的 PostgreSQL、Redis/EMQX 集群、共享持久 checkpoint 和至少三台故障域独立的节点；这些不能由单机安装包替代。
+- 每天数百万条并长期保留时，应按实测容量设置保留期，并将冷数据归档到对象存储/分析库。当前 PostgreSQL 表已具备高容量索引基础，但尚未自动删除业务数据。
+
+## 安全边界
+
+- `.env`、数据库卷、证书、私钥、日志和诊断包不得提交到仓库或放入发布包。
+- 本版沿用现有 EMQX 匿名 `1883` 接入兼容模式；对非隔离网络开放前，应完成认证、ACL 和 TLS `8883` 的生产加固。
+- 不提供默认 Web 管理员；首个超级管理员只能通过空库 bootstrap 流程创建。
+- 数据接入平台与控制面 MQTT Broker 是两个不同角色，不能混用端口、凭据和证书。
+
+## 源码开发与发布
+
+以下命令只在源码仓库执行；正式发布包不包含打包器和测试。源码仓库包含开发文档、测试和 K3s 资料，生产归档仅包含 Compose 构建和运行必需文件。
+
+```bash
+# 必须先通过 RELEASE_PROCESS.md 中全部前端门禁；以下测试会生成候选 outputs/v3.1.39/
+python3 -m unittest tests/test_release_contract.py tests/test_performance_and_bootstrap.py tests/test_control_plane_resilience.py
+
+# 构建机上用独立空卷执行全部 PostgreSQL 初始化 SQL
+TDS_RUN_POSTGRES_INIT_TEST=1 python3 -m unittest tests/test_postgres_init.py
+
+# 构建机上验证发布包内 EMQX 节点和真实健康探针
+TDS_RUN_EMQX_HEALTH_TEST=1 python3 -m unittest tests/test_emqx_health.py
+
+# 仅生成发布包
+python3 scripts/pack_release.py
+```
+
+标准输出结构：
+
+```text
+outputs/v3.1.39/
+├── threat-detection-system-3.1.39-linux-x86_64.tar.gz
+├── SHA256SUMS
+├── PACKAGE_CONTENTS.txt
+└── RELEASE_NOTES.md
+```
+
+归档内只有一个顶层目录，包含根 `install.sh`、`VERSION`、`.env.example`、包内 `MANIFEST.sha256`、Compose、初始化 SQL、服务/前端构建源码、systemd unit 和诊断脚本；不包含 `AI_PROJECT/`、`outputs/`、`docs/`、`k8s/`、测试、缓存或秘密。
+
+协作资料入口见 `AI_PROJECT/INDEX.md`，历史业务/API资料保留在 `docs/`。

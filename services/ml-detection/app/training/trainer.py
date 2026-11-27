@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 import numpy as np
 import psycopg2
@@ -12,6 +12,45 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from app.config import settings
 from app.models.autoencoder import ThreatAutoencoder
+
+
+def count_training_samples(
+    database_url: str,
+    customer_id: Optional[str] = None,
+    statement_timeout_ms: int = 5000,
+) -> Dict[int, int]:
+    """Count available samples with one bounded aggregate query.
+
+    This path is used by the control-plane readiness page. It must not load or
+    convert feature vectors, because doing so blocks the FastAPI event loop and
+    grows linearly with the training dataset.
+    """
+    counts: Dict[int, int] = {1: 0, 2: 0, 3: 0}
+    timeout_ms = max(1000, int(statement_timeout_ms))
+    with psycopg2.connect(
+        database_url,
+        connect_timeout=3,
+        options=f"-c statement_timeout={timeout_ms}",
+    ) as conn:
+        with conn.cursor() as cursor:
+            params: list[object] = []
+            customer_filter = ""
+            if customer_id is not None:
+                customer_filter = "AND customer_id = %s"
+                params.append(customer_id)
+            cursor.execute(
+                f"""
+                SELECT detection_tier, COUNT(*)::bigint
+                FROM threat_assessments
+                WHERE detection_tier IN (1, 2, 3)
+                  {customer_filter}
+                GROUP BY detection_tier
+                """,
+                tuple(params),
+            )
+            for tier, count in cursor.fetchall():
+                counts[int(tier)] = int(count)
+    return counts
 
 
 def load_from_csv(path: str) -> np.ndarray:

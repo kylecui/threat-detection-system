@@ -1,0 +1,2766 @@
+[
+  {
+    "mode": {
+      "name": "ordinary",
+      "bootstrap": false,
+      "language": "en-US",
+      "mobile": false
+    },
+    "key": "Space",
+    "events": [
+      {
+        "type": "keyup",
+        "key": "Tab",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      }
+    ],
+    "snapshots": [
+      {
+        "stage": "password:Space:initial-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:repeat-1-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:repeat-2-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:repeat-3-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:released-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:initial-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:repeat-1-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:repeat-2-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:repeat-3-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:released-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:independent-press-1",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:independent-press-2",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:pointer-click-1",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:pointer-click-2",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      }
+    ],
+    "posts": {
+      "bootstrap": 0,
+      "login": 0
+    }
+  },
+  {
+    "mode": {
+      "name": "ordinary",
+      "bootstrap": false,
+      "language": "en-US",
+      "mobile": false
+    },
+    "key": "Enter",
+    "events": [
+      {
+        "type": "keyup",
+        "key": "Tab",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      }
+    ],
+    "snapshots": [
+      {
+        "stage": "password:Enter:initial-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:repeat-1-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:repeat-2-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:repeat-3-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:released-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:initial-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:repeat-1-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:repeat-2-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:repeat-3-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:released-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:independent-press-1",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:independent-press-2",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:pointer-click-1",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "Hide password",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:pointer-click-2",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "Show password",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      }
+    ],
+    "posts": {
+      "bootstrap": 0,
+      "login": 0
+    }
+  },
+  {
+    "mode": {
+      "name": "bootstrap",
+      "bootstrap": true,
+      "language": "zh-CN",
+      "mobile": true
+    },
+    "key": "Space",
+    "events": [
+      {
+        "type": "keyup",
+        "key": "Tab",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": " ",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": "Tab",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keyup",
+        "key": " ",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": true,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keyup",
+        "key": " ",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keyup",
+        "key": " ",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": " ",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keyup",
+        "key": " ",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      }
+    ],
+    "snapshots": [
+      {
+        "stage": "password:Space:initial-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:repeat-1-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:repeat-2-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:repeat-3-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:released-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:initial-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:repeat-1-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:repeat-2-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:repeat-3-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:released-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:independent-press-1",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Space:independent-press-2",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:pointer-click-1",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:pointer-click-2",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Space:initial-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Space:repeat-1-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Space:repeat-2-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Space:repeat-3-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Space:released-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Space:initial-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Space:repeat-1-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Space:repeat-2-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Space:repeat-3-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Space:released-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Space:independent-press-1",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Space:independent-press-2",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:pointer-click-1",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:pointer-click-2",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      }
+    ],
+    "posts": {
+      "bootstrap": 0,
+      "login": 0
+    }
+  },
+  {
+    "mode": {
+      "name": "bootstrap",
+      "bootstrap": true,
+      "language": "zh-CN",
+      "mobile": true
+    },
+    "key": "Enter",
+    "events": [
+      {
+        "type": "keyup",
+        "key": "Tab",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_password"
+      },
+      {
+        "type": "keyup",
+        "key": "Tab",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keyup",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": true,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keyup",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keyup",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      },
+      {
+        "type": "keyup",
+        "key": "Enter",
+        "repeat": false,
+        "field": "login_confirmPassword"
+      }
+    ],
+    "snapshots": [
+      {
+        "stage": "password:Enter:initial-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:repeat-1-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:repeat-2-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:repeat-3-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:released-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:initial-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:repeat-1-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:repeat-2-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:repeat-3-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:released-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:independent-press-1",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:Enter:independent-press-2",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:pointer-click-1",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "password:pointer-click-2",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Enter:initial-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Enter:repeat-1-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Enter:repeat-2-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Enter:repeat-3-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Enter:released-true",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Enter:initial-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Enter:repeat-1-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Enter:repeat-2-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Enter:repeat-3-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Enter:released-false",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Enter:independent-press-1",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:Enter:independent-press-2",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": true,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:pointer-click-1",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "text",
+            "value": "Valid 019",
+            "pressed": "true",
+            "name": "隐藏密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      },
+      {
+        "stage": "confirmPassword:pointer-click-2",
+        "fields": [
+          {
+            "id": "login_password",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          },
+          {
+            "id": "login_confirmPassword",
+            "type": "password",
+            "value": "Valid 019",
+            "pressed": "false",
+            "name": "显示密码",
+            "focused": false,
+            "width": 44,
+            "height": 44
+          }
+        ],
+        "posts": {
+          "bootstrap": 0,
+          "login": 0
+        }
+      }
+    ],
+    "posts": {
+      "bootstrap": 0,
+      "login": 0
+    }
+  }
+]

@@ -15,6 +15,8 @@ logging:
   level:
     root: INFO
     com.threatdetection.gateway: INFO
+    org.springframework.cloud.gateway: WARN
+    reactor.netty.http.client: WARN
 
 gateway:
   health-check:
@@ -25,4 +27,9 @@ gateway:
     customer-management-url: ${CUSTOMER_MANAGEMENT_HEALTH_URL:http://customer-management:8084/actuator/health}
     threat-intelligence-url: ${THREAT_INTELLIGENCE_HEALTH_URL:http://threat-intelligence:8085/actuator/health}
     ml-detection-url: ${ML_DETECTION_HEALTH_URL:http://ml-detection:8086/health}
+    tire-url: ${TIRE_HEALTH_URL:http://tire:8000/healthz}
     kafka-bootstrap: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    postgres-host: ${POSTGRES_HOST:postgres}
+    postgres-port: ${POSTGRES_PORT:5432}
+    redis-host: ${REDIS_HOST:redis}
+    redis-port: ${REDIS_PORT:6379}

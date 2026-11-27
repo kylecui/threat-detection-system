@@ -1,0 +1,367 @@
+.tds-content:has(.tds-investigate-page) {
+  background: var(--bg-color);
+}
+
+.tds-investigate-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+  gap: 16px;
+  color: var(--text-color);
+}
+
+.tds-investigate-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  gap: 1px;
+  border: 1px solid var(--line-color); /* taste-skill-ignore: compact metric strip needs a boundary against the app canvas */
+  border-radius: 8px;
+  background: var(--line-color);
+}
+
+.tds-investigate-metric {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  padding: 15px 18px;
+  background: var(--surface-color);
+}
+
+.tds-investigate-metric__label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tds-investigate-metric strong {
+  color: var(--text-color);
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.tds-investigate-metric--positive strong,
+.tds-investigate-metric--positive .tds-investigate-metric__label .anticon {
+  color: #327413;
+}
+
+.tds-investigate-metric--danger strong,
+.tds-investigate-metric--danger .tds-investigate-metric__label .anticon {
+  color: #b42335;
+}
+
+.tds-investigate-metric--accent strong,
+.tds-investigate-metric--accent .tds-investigate-metric__label .anticon {
+  color: #08766f;
+}
+
+html[data-theme='dark'] .tds-investigate-metric--positive strong,
+html[data-theme='dark'] .tds-investigate-metric--positive .tds-investigate-metric__label .anticon {
+  color: #9cdb7a;
+}
+
+html[data-theme='dark'] .tds-investigate-metric--danger strong,
+html[data-theme='dark'] .tds-investigate-metric--danger .tds-investigate-metric__label .anticon {
+  color: #ff9aa7;
+}
+
+html[data-theme='dark'] .tds-investigate-metric--accent strong,
+html[data-theme='dark'] .tds-investigate-metric--accent .tds-investigate-metric__label .anticon {
+  color: #68d8ce;
+}
+
+.tds-investigate-panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-color); /* taste-skill-ignore: investigation work surface needs a clear boundary */
+  border-radius: 8px;
+  background: var(--surface-color);
+}
+
+.tds-investigate-queue {
+  padding: 16px;
+}
+
+.tds-investigate-view-switch {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+}
+
+.tds-investigate-view-switch .ant-segmented {
+  border: 1px solid var(--line-color); /* taste-skill-ignore: the view switch needs a visible shared control boundary */
+  background: var(--surface-muted);
+}
+
+.tds-investigate-table,
+.tds-investigate-table .ant-pro-card,
+.tds-investigate-table .ant-table-wrapper {
+  min-width: 0;
+}
+
+.tds-investigate-queue .ant-pro-card {
+  background: transparent;
+  box-shadow: none; /* taste-skill-ignore: remove the nested ProTable card shadow inside the work surface */
+}
+
+.tds-investigate-queue .ant-pro-card-body {
+  padding-inline: 0;
+}
+
+.tds-investigate-queue .ant-pro-query-filter {
+  margin-bottom: 12px;
+  padding: 14px;
+  border-radius: 6px;
+  background: var(--surface-muted);
+}
+
+.tds-investigate-table .ant-table-content {
+  overscroll-behavior-inline: contain;
+}
+
+.tds-investigate-table--nested {
+  margin: 8px 0;
+}
+
+.tds-threat-list-page > .tds-investigate-view-switch {
+  margin-bottom: -4px;
+}
+
+.tds-threat-list-panel.ant-card > .ant-card-head {
+  min-height: 50px;
+  padding: 0 16px;
+  background: color-mix(in srgb, var(--surface-muted) 54%, transparent);
+}
+
+.tds-threat-list-panel.ant-card > .ant-card-body {
+  padding: 16px;
+}
+
+.tds-investigate-filters.ant-row {
+  margin-inline: 0 !important;
+  padding: 14px 6px;
+  border-radius: 6px;
+  background: var(--surface-muted);
+}
+
+.tds-investigate-toolbar,
+.tds-investigate-page .tds-investigate-toolbar.ant-space {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.tds-investigate-selection.ant-card {
+  border: 0;
+  border-radius: 6px;
+  background: var(--surface-muted);
+  box-shadow: none; /* taste-skill-ignore: selected-row status is a flat contextual band */
+}
+
+.tds-threat-list-table {
+  min-width: 0;
+}
+
+.tds-intel-lookup.ant-card > .ant-card-head {
+  min-height: 50px;
+  padding: 0 16px;
+  background: color-mix(in srgb, var(--surface-muted) 54%, transparent);
+}
+
+.tds-intel-lookup.ant-card > .ant-card-body,
+.tds-intel-feed-panel.ant-card > .ant-card-body {
+  padding: 16px;
+}
+
+.tds-intel-lookup__form .ant-input-affix-wrapper {
+  flex: 1 1 260px;
+  max-width: 420px;
+}
+
+.tds-investigate-tabs > .ant-tabs-nav {
+  margin-bottom: 10px;
+}
+
+.tds-investigate-page .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn,
+.tds-investigate-page .ant-pro-query-filter-collapse-button {
+  color: #08766f;
+  text-shadow: none; /* taste-skill-ignore: Ant adds a text shadow to the active tab; remove it for crisp app typography */
+}
+
+.tds-investigate-page .ant-tabs-ink-bar {
+  background: #08766f;
+}
+
+.tds-investigate-page .ant-btn-link:not(:disabled, .ant-btn-dangerous) {
+  color: #285fa8;
+}
+
+.tds-investigate-page .ant-btn-link:not(:disabled, .ant-btn-dangerous):hover,
+.tds-investigate-page .ant-btn-link:not(:disabled, .ant-btn-dangerous):focus-visible {
+  color: #1f4c88;
+}
+
+.tds-threat-intel-page .ant-tag-orange {
+  color: #9a4800;
+}
+
+.tds-investigate-tabs > .ant-tabs-content-holder,
+.tds-investigate-tabs .ant-tabs-tabpane {
+  min-width: 0;
+}
+
+.tds-threat-intel-tabs .ant-pro-card {
+  min-width: 0;
+  border: 1px solid var(--line-color); /* taste-skill-ignore: intelligence table is a bounded operational surface */
+  border-radius: 8px;
+  background: var(--surface-color);
+  box-shadow: none; /* taste-skill-ignore: keep the operational table flat */
+}
+
+.tds-threat-intel-tabs .ant-pro-query-filter {
+  margin: 14px;
+  margin-bottom: 8px;
+  padding: 14px;
+  border-radius: 6px;
+  background: var(--surface-muted);
+}
+
+.tds-threat-intel-tabs .ant-pro-table-list-toolbar-container {
+  padding-inline: 16px;
+}
+
+.tds-intel-feed-panel .ant-table-wrapper {
+  min-width: 0;
+}
+
+.tds-investigate-page .ant-btn-primary:not(:disabled) {
+  border-color: #172331;
+  color: #ffffff;
+  background: #172331;
+}
+
+.tds-investigate-page .ant-btn-primary:not(:disabled):hover,
+.tds-investigate-page .ant-btn-primary:not(:disabled):focus-visible {
+  border-color: #24394d;
+  color: #ffffff;
+  background: #24394d;
+}
+
+html[data-theme='dark'] .tds-investigate-page .ant-btn-primary:not(:disabled) {
+  border-color: #d9e6ee;
+  color: #101c2c;
+  background: #d9e6ee;
+}
+
+html[data-theme='dark'] .tds-investigate-page .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn,
+html[data-theme='dark'] .tds-investigate-page .ant-pro-query-filter-collapse-button {
+  color: #68d8ce;
+}
+
+html[data-theme='dark'] .tds-investigate-page .ant-tabs-ink-bar {
+  background: #68d8ce;
+}
+
+@media (max-width: 900px) {
+  .tds-investigate-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .tds-investigate-page {
+    gap: 14px;
+  }
+
+  .tds-investigate-metric {
+    min-height: 86px;
+    padding: 13px 14px;
+  }
+
+  .tds-investigate-metric__label {
+    white-space: normal;
+  }
+
+  .tds-investigate-metric strong {
+    font-size: 24px;
+  }
+
+  .tds-investigate-queue {
+    padding: 12px;
+  }
+
+  .tds-investigate-view-switch .ant-segmented {
+    width: 100%;
+  }
+
+  .tds-investigate-view-switch .ant-segmented-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tds-investigate-queue .ant-pro-query-filter {
+    padding: 12px;
+  }
+
+  .tds-threat-list-panel.ant-card > .ant-card-body {
+    padding: 12px;
+  }
+
+  .tds-intel-lookup.ant-card > .ant-card-body,
+  .tds-intel-feed-panel.ant-card > .ant-card-body {
+    padding: 12px;
+  }
+
+  .tds-intel-lookup__form .ant-input-affix-wrapper,
+  .tds-intel-lookup__form .ant-btn {
+    width: 100%;
+    max-width: none;
+  }
+
+  .tds-threat-intel-tabs .ant-pro-query-filter {
+    margin: 10px;
+    padding: 12px;
+  }
+
+  .tds-threat-intel-tabs .ant-pro-table-list-toolbar-container {
+    padding-inline: 12px;
+  }
+
+  .tds-investigate-tabs > .ant-tabs-nav {
+    padding-inline: 6px;
+  }
+
+  .tds-investigate-filters.ant-row {
+    padding: 12px 0;
+  }
+
+  .tds-investigate-toolbar > .ant-space-item:first-child,
+  .tds-investigate-toolbar > .ant-space-item:first-child > .ant-space {
+    width: 100%;
+  }
+
+  .tds-investigate-toolbar > .ant-space-item:first-child .ant-btn {
+    flex: 1;
+  }
+
+  .tds-investigate-selection .ant-card-body > .ant-space {
+    align-items: flex-start;
+  }
+
+  .tds-investigate-table .ant-table-wrapper,
+  .tds-investigate-queue > .ant-table-wrapper {
+    margin-right: -12px;
+    margin-left: -12px;
+  }
+}

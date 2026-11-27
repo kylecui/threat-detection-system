@@ -35,6 +35,8 @@ class Settings(BaseSettings):
 
     # Per-customer model training
     per_customer_min_samples: int = 200
+    data_readiness_cache_seconds: int = 30
+    data_readiness_query_timeout_ms: int = 5000
 
     # Phase 4C: Model hot-reload
     model_watch_enabled: bool = False

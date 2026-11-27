@@ -13,9 +13,12 @@ import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/api/v1/logs")
@@ -42,47 +45,69 @@ public class LogIngestionController {
     }
     
     @PostMapping("/ingest")
-    public ResponseEntity<String> ingestLog(@RequestBody String rawLog) {
+    public CompletableFuture<ResponseEntity<String>> ingestLog(@RequestBody String rawLog) {
         // Phase 1A: 记录接收到的日志
         metricsService.recordLogReceived();
         
         Timer.Sample sample = metricsService.startSingleLogProcessingTimer();
         
         try {
-            logger.info("Received log for ingestion: {}", rawLog);
-            logger.info("Raw log length: {}, starts with '{': {}", rawLog.length(), rawLog.trim().startsWith("{"));
+            logger.debug("Received log for ingestion: bytes={}", rawLog.length());
             
             Optional<Object> parsedEvent = logParserService.parseLog(rawLog);
-            logger.info("Parsed event result: {}", parsedEvent.isPresent() ? "present" : "empty");
+            logger.debug("Parsed event result: {}", parsedEvent.isPresent() ? "present" : "empty");
             
             if (parsedEvent.isPresent()) {
                 Object event = parsedEvent.get();
                 
                 if (event instanceof AttackEvent) {
-                    kafkaProducerService.sendAttackEvent((AttackEvent) event);
-                    metricsService.recordLogProcessed();
-                    metricsService.recordAttackEvent();
-                    return ResponseEntity.ok("Attack event processed successfully");
+                    return completeKafkaSend(
+                            kafkaProducerService.sendAttackEvent((AttackEvent) event), true, sample);
                 } else if (event instanceof StatusEvent) {
-                    kafkaProducerService.sendStatusEvent((StatusEvent) event);
-                    metricsService.recordLogProcessed();
-                    metricsService.recordStatusEvent();
-                    return ResponseEntity.ok("Status event processed successfully");
+                    return completeKafkaSend(
+                            kafkaProducerService.sendStatusEvent((StatusEvent) event), false, sample);
                 }
             }
             
-            logger.warn("Failed to parse or process log: {}", rawLog);
+            logger.warn("Failed to parse or process log: bytes={}", rawLog.length());
             metricsService.recordLogFailed();
-            return ResponseEntity.badRequest().body("Failed to process log");
+            sample.stop(metricsService.singleLogProcessingTimer);
+            return CompletableFuture.completedFuture(
+                    ResponseEntity.badRequest().body("Failed to process log"));
             
         } catch (Exception e) {
-            logger.error("Error processing log ingestion: {} with error: {}", rawLog, e.getMessage(), e);
+            logger.error("Error processing log ingestion: bytes={}, error={}", rawLog.length(), e.getMessage());
             metricsService.recordLogFailed();
-            return ResponseEntity.internalServerError().body("Internal server error: " + e.getMessage());
-        } finally {
-            // Phase 1A: 记录处理时间
             sample.stop(metricsService.singleLogProcessingTimer);
+            return CompletableFuture.completedFuture(
+                    ResponseEntity.internalServerError().body("Internal server error"));
         }
+    }
+
+    private CompletableFuture<ResponseEntity<String>> completeKafkaSend(
+            CompletableFuture<?> sendFuture,
+            boolean attackEvent,
+            Timer.Sample sample) {
+        return sendFuture
+                .orTimeout(10, TimeUnit.SECONDS)
+                .thenApply(result -> {
+                    metricsService.recordLogProcessed();
+                    if (attackEvent) {
+                        metricsService.recordAttackEvent();
+                    } else {
+                        metricsService.recordStatusEvent();
+                    }
+                    return ResponseEntity.status(HttpStatus.ACCEPTED)
+                            .body(attackEvent ? "Attack event accepted" : "Status event accepted");
+                })
+                .exceptionally(error -> {
+                    logger.error("Kafka acknowledgement failed for {} event: {}",
+                            attackEvent ? "attack" : "status", error.getMessage());
+                    metricsService.recordLogFailed();
+                    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                            .body("Event queue temporarily unavailable");
+                })
+                .whenComplete((response, error) -> sample.stop(metricsService.singleLogProcessingTimer));
     }
     
     /**
@@ -128,7 +153,7 @@ public class LogIngestionController {
         } catch (Exception e) {
             logger.error("Error processing batch log ingestion", e);
             return ResponseEntity.internalServerError().body(
-                createErrorResponse(request.getLogs().size(), "Internal server error: " + e.getMessage())
+                createErrorResponse(request.getLogs() == null ? 0 : request.getLogs().size(), "Internal server error")
             );
         } finally {
             sample.stop(metricsService.batchProcessingTimer);

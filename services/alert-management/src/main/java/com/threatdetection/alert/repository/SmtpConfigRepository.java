@@ -17,6 +17,8 @@ public interface SmtpConfigRepository extends JpaRepository<SmtpConfig, Long> {
      * @return 默认SMTP配置
      */
     Optional<SmtpConfig> findByIsDefaultTrue();
+
+    Optional<SmtpConfig> findByIsDefaultTrueAndIsActiveTrue();
     
     /**
      * 根据配置名称查找
@@ -24,6 +26,8 @@ public interface SmtpConfigRepository extends JpaRepository<SmtpConfig, Long> {
      * @return SMTP配置
      */
     Optional<SmtpConfig> findByConfigName(String configName);
+
+    Optional<SmtpConfig> findByConfigNameAndIsActiveTrue(String configName);
     
     /**
      * 查找第一个激活的配置

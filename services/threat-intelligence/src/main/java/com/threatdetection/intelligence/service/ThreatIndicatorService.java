@@ -217,8 +217,18 @@ public class ThreatIndicatorService {
     }
 
     @Transactional(readOnly = true)
-    public Page<IndicatorResponse> listIndicators(Pageable pageable) {
-        return threatIndicatorRepository.findAll(pageable).map(this::toResponse);
+    public Page<IndicatorResponse> listIndicators(IocType iocType, Severity severity, Pageable pageable) {
+        Page<ThreatIndicator> indicators;
+        if (iocType != null && severity != null) {
+            indicators = threatIndicatorRepository.findByIocTypeAndSeverity(iocType, severity, pageable);
+        } else if (iocType != null) {
+            indicators = threatIndicatorRepository.findByIocType(iocType, pageable);
+        } else if (severity != null) {
+            indicators = threatIndicatorRepository.findBySeverity(severity, pageable);
+        } else {
+            indicators = threatIndicatorRepository.findAll(pageable);
+        }
+        return indicators.map(this::toResponse);
     }
 
     @Transactional
@@ -261,7 +271,7 @@ public class ThreatIndicatorService {
     }
 
     @Transactional
-    public void incrementSighting(Long id) {
+    public IndicatorResponse incrementSighting(Long id) {
         ThreatIndicator indicator = threatIndicatorRepository.findById(id)
                 .orElseThrow(() -> new IndicatorNotFoundException("Threat indicator not found: " + id));
 
@@ -274,8 +284,9 @@ public class ThreatIndicatorService {
         }
         indicator.setLastSeenAt(now);
 
-        threatIndicatorRepository.save(indicator);
+        ThreatIndicator saved = threatIndicatorRepository.save(indicator);
         log.debug("Incremented sighting for indicator id={} -> {}", id, indicator.getSightingCount());
+        return toResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -294,6 +305,8 @@ public class ThreatIndicatorService {
         return StatisticsResponse.builder()
                 .totalIndicators(threatIndicatorRepository.count())
                 .activeIndicators(threatIndicatorRepository.countActive(Instant.now()))
+                .totalFeeds(threatIntelFeedRepository.count())
+                .activeFeeds(threatIntelFeedRepository.countEnabledExternalFeeds())
                 .bySource(bySource)
                 .bySeverity(bySeverity)
                 .build();
@@ -301,12 +314,18 @@ public class ThreatIndicatorService {
 
     @Transactional(readOnly = true)
     public List<ThreatIntelFeed> listFeeds() {
-        return threatIntelFeedRepository.findAll();
+        return threatIntelFeedRepository.findAllInDisplayOrder();
     }
 
     @Transactional
     public ThreatIntelFeed saveFeed(ThreatIntelFeed feed) {
         return threatIntelFeedRepository.save(feed);
+    }
+
+    @Transactional(readOnly = true)
+    public int countActiveBySourceName(String sourceName) {
+        long count = threatIndicatorRepository.countActiveBySourceName(sourceName, Instant.now());
+        return count > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) count;
     }
 
     private void applyUpsertUpdate(ThreatIndicator indicator, CreateIndicatorRequest item) {
@@ -338,8 +357,9 @@ public class ThreatIndicatorService {
             indicator.setValidUntil(item.getValidUntil());
         }
 
-        int currentSighting = indicator.getSightingCount() != null ? indicator.getSightingCount() : 0;
-        indicator.setSightingCount(currentSighting + 1);
+        // A remote feed refresh confirms that the source still publishes this
+        // IOC; it is not an operator-recorded sighting. Keep the manual sighting
+        // counter unchanged and only refresh the source's last-seen timestamp.
         indicator.setLastSeenAt(Instant.now());
         if (indicator.getFirstSeenAt() == null) {
             indicator.setFirstSeenAt(Instant.now());

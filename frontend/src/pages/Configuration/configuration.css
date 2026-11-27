@@ -1,0 +1,438 @@
+.tds-content:has(.tds-config-page) {
+  background: var(--bg-color);
+}
+
+.tds-config-page {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 16px;
+  color: var(--text-color);
+}
+
+.tds-config-page.ant-space {
+  display: grid;
+}
+
+.tds-config-page.ant-space > .ant-space-item {
+  width: 100%;
+  min-width: 0;
+}
+
+.tds-config-note.ant-alert,
+.tds-config-inline-state.ant-alert {
+  border-radius: 8px;
+}
+
+.tds-config-note.ant-alert {
+  padding: 12px 16px;
+}
+
+.tds-config-note + .tds-config-general__grid,
+.tds-config-note + .tds-config-form,
+.tds-config-note + .ant-divider,
+.tds-config-note + .tds-config-field-group {
+  margin-top: 20px;
+}
+
+.tds-config-panel,
+.tds-config-page .tds-config-panel.ant-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-color); /* taste-skill-ignore: form surfaces need a clear boundary against the application canvas */
+  border-radius: 8px;
+  background: var(--surface-color);
+}
+
+.tds-config-page .tds-config-panel.ant-card > .ant-card-body,
+.tds-config-panel--form {
+  padding: 20px;
+}
+
+.tds-config-panel__header {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--surface-muted) 54%, transparent);
+}
+
+.tds-config-panel__header h2,
+.tds-config-field-group h2,
+.tds-config-section-title {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+
+.tds-config-general__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.72fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.tds-config-form {
+  width: 100%;
+  max-width: 560px;
+}
+
+.tds-config-form--wide {
+  max-width: 720px;
+}
+
+.tds-config-form--full {
+  max-width: none;
+}
+
+.tds-config-form .ant-input-number {
+  width: 100%;
+}
+
+.tds-config-form .ant-form-item:last-child {
+  margin-bottom: 0;
+}
+
+.tds-config-actions,
+.tds-config-page .tds-config-actions.ant-space {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.tds-config-actions .ant-btn-primary:not(:disabled) {
+  border-color: #172331;
+  color: #ffffff;
+  background: #172331;
+}
+
+.tds-config-actions .ant-btn-primary:not(:disabled):hover,
+.tds-config-actions .ant-btn-primary:not(:disabled):focus-visible {
+  border-color: #24394d;
+  color: #ffffff;
+  background: #24394d;
+}
+
+.tds-config-actions + .ant-table-wrapper {
+  margin-top: 16px;
+}
+
+html[data-theme='dark'] .tds-config-actions .ant-btn-primary:not(:disabled) {
+  border-color: #d9e6ee;
+  color: #101c2c;
+  background: #d9e6ee;
+}
+
+.tds-config-page .ant-switch.ant-switch-checked {
+  background: #6842bd;
+}
+
+.tds-config-page .ant-tag-green {
+  border-color: #83c968;
+  color: #1f641c;
+  background: #f0faea;
+}
+
+.tds-config-page .ant-tag-orange {
+  border-color: #e6a15d;
+  color: #914000;
+  background: #fff5e7;
+}
+
+.tds-config-page .ant-btn-dangerous:not(:disabled) {
+  border-color: #d06a75;
+  color: #ad2433;
+}
+
+.tds-config-page .ant-btn-dangerous:not(:disabled):hover,
+.tds-config-page .ant-btn-dangerous:not(:disabled):focus-visible {
+  border-color: #ad2433;
+  color: #8c1825;
+}
+
+.tds-config-facts {
+  display: grid;
+  margin: 0;
+  padding: 4px 16px 10px;
+}
+
+.tds-config-facts > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.75fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.tds-config-facts > div:last-child {
+  border-bottom: 0;
+}
+
+.tds-config-facts dt,
+.tds-config-facts dd {
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+}
+
+.tds-config-facts dt {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.tds-config-facts dd {
+  color: var(--text-color);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.tds-config-facts code {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  color: inherit;
+  font-family:
+    'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Monaco, monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tds-config-field-group {
+  display: grid;
+  gap: 0;
+  margin-bottom: 24px;
+}
+
+.tds-config-field-group h2 {
+  margin-bottom: 16px;
+}
+
+.tds-config-subpanel.ant-card {
+  margin-bottom: 20px;
+  border-color: var(--line-color);
+  border-radius: 6px;
+}
+
+.tds-config-plugin-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(108px, 1fr) minmax(100px, 1fr) minmax(136px, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.tds-config-plugin-grid--header {
+  margin-bottom: 10px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.tds-config-plugin-record.ant-card {
+  border-color: var(--line-color);
+  border-radius: 6px;
+}
+
+.tds-config-plugin-record .ant-card-body {
+  padding: 12px;
+}
+
+.tds-config-plugin-field {
+  min-width: 0;
+}
+
+.tds-config-plugin-label {
+  display: none;
+}
+
+.tds-config-inline-state.ant-alert {
+  margin-bottom: 16px;
+}
+
+.tds-config-page .ant-divider-horizontal.ant-divider-with-text {
+  margin: 4px 0 16px;
+  color: var(--text-color);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.tds-config-page .ant-table-wrapper {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .tds-config-general__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tds-config-form,
+  .tds-config-form--wide {
+    max-width: none;
+  }
+
+  .tds-config-plugin-grid {
+    grid-template-columns: minmax(156px, 1.6fr) repeat(3, minmax(96px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .tds-config-page {
+    gap: 14px;
+  }
+
+  .tds-config-page .tds-config-panel.ant-card > .ant-card-body,
+  .tds-config-panel--form {
+    padding: 14px;
+  }
+
+  .tds-config-note.ant-alert {
+    padding: 10px 12px;
+  }
+
+  .tds-config-note + .tds-config-general__grid,
+  .tds-config-note + .tds-config-form,
+  .tds-config-note + .ant-divider,
+  .tds-config-note + .tds-config-field-group {
+    margin-top: 16px;
+  }
+
+  .tds-config-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tds-config-actions .ant-btn {
+    width: 100%;
+    min-height: 42px;
+  }
+
+  .tds-config-actions .ant-btn:first-child:nth-last-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .tds-config-facts > div {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .tds-config-facts dd {
+    text-align: left;
+  }
+
+  .tds-config-page .ant-form-item-label > label {
+    height: auto;
+    white-space: normal;
+  }
+
+  .tds-config-plugin-grid--header {
+    display: none;
+  }
+
+  .tds-config-plugin-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 14px 12px;
+  }
+
+  .tds-config-plugin-grid > .ant-typography:first-child {
+    grid-column: 1 / -1;
+    padding-bottom: 4px;
+  }
+
+  .tds-config-plugin-field:first-of-type {
+    grid-column: 1 / -1;
+  }
+
+  .tds-config-plugin-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+
+  .tds-config-plugin-field .ant-input-number {
+    width: 100%;
+  }
+
+  .tds-config-page .ant-table-wrapper {
+    margin-right: -14px;
+    margin-left: -14px;
+  }
+
+  .tds-config-page .ant-table-container {
+    border-inline: 0;
+  }
+}
+
+/*
+ * INTERACTION-007: ConfigCascading lock query. Scoped to the component; the
+ * app shell keeps `.tds-content { overflow-x: hidden }`, so this block must
+ * reflow by itself. DOM order (entity type, entity ID, load, add, remove all)
+ * is also the visual and Tab order at every width.
+ */
+.tds-config-cascading__lock-query.ant-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.tds-config-cascading__lock-query.ant-form .ant-form-item {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+}
+
+.tds-config-cascading__field-control.ant-select,
+.tds-config-cascading__field-control.ant-input {
+  width: 180px;
+}
+
+.tds-config-cascading__lock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 575px) {
+  .tds-config-cascading__lock-query.ant-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tds-config-cascading__lock-query.ant-form .ant-form-item-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tds-config-cascading__lock-query.ant-form .ant-form-item-label {
+    padding-bottom: 4px;
+    text-align: start;
+  }
+
+  .tds-config-cascading__lock-query.ant-form .ant-form-item-control {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .tds-config-cascading__field-control.ant-select,
+  .tds-config-cascading__field-control.ant-input {
+    width: 100%;
+  }
+
+  .tds-config-cascading__lock-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tds-config-cascading__lock-actions .ant-btn {
+    width: 100%;
+    min-height: 44px;
+  }
+}

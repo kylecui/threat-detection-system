@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
+import org.springframework.mock.web.server.MockServerWebExchange;
 
 import com.threatdetection.gateway.controller.FallbackController;
 
@@ -14,7 +16,7 @@ class FallbackControllerTest {
 
     @Test
     void customerManagementFallbackShouldReturnStructured503Response() {
-        var response = fallbackController.customerManagementFallback();
+        var response = fallbackController.customerManagementFallback(exchange());
 
         assertThat(response.getStatusCode().value()).isEqualTo(503);
         assertFallbackBody(response.getBody(), "Customer Management Service");
@@ -22,7 +24,7 @@ class FallbackControllerTest {
 
     @Test
     void dataIngestionFallbackShouldReturnStructured503Response() {
-        var response = fallbackController.dataIngestionFallback();
+        var response = fallbackController.dataIngestionFallback(exchange());
 
         assertThat(response.getStatusCode().value()).isEqualTo(503);
         assertFallbackBody(response.getBody(), "Data Ingestion Service");
@@ -30,7 +32,7 @@ class FallbackControllerTest {
 
     @Test
     void threatAssessmentFallbackShouldReturnStructured503Response() {
-        var response = fallbackController.threatAssessmentFallback();
+        var response = fallbackController.threatAssessmentFallback(exchange());
 
         assertThat(response.getStatusCode().value()).isEqualTo(503);
         assertFallbackBody(response.getBody(), "Threat Assessment Service");
@@ -38,7 +40,7 @@ class FallbackControllerTest {
 
     @Test
     void alertManagementFallbackShouldReturnStructured503Response() {
-        var response = fallbackController.alertManagementFallback();
+        var response = fallbackController.alertManagementFallback(exchange());
 
         assertThat(response.getStatusCode().value()).isEqualTo(503);
         assertFallbackBody(response.getBody(), "Alert Management Service");
@@ -46,11 +48,15 @@ class FallbackControllerTest {
 
     private void assertFallbackBody(Map<String, Object> body, String expectedServiceName) {
         assertThat(body).isNotNull();
-        assertThat(body).containsKeys("timestamp", "status", "error", "message");
+        assertThat(body).containsKeys("timestamp", "status", "error", "message", "requestId");
         assertThat(body.get("status")).isEqualTo(503);
         assertThat(body.get("error")).isEqualTo("Service Unavailable");
         assertThat((String) body.get("message"))
             .contains(expectedServiceName)
             .contains("temporarily unavailable");
+    }
+
+    private MockServerWebExchange exchange() {
+        return MockServerWebExchange.from(MockServerHttpRequest.get("/fallback/test").build());
     }
 }

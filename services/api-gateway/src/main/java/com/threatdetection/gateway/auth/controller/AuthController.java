@@ -2,6 +2,7 @@ package com.threatdetection.gateway.auth.controller;
 
 import com.threatdetection.gateway.auth.dto.LoginRequest;
 import com.threatdetection.gateway.auth.dto.LoginResponse;
+import com.threatdetection.gateway.auth.dto.BootstrapRequest;
 import com.threatdetection.gateway.auth.service.AuthService;
 import com.threatdetection.gateway.auth.service.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,28 @@ public class AuthController {
 
     private final AuthService authService;
     private final JwtTokenProvider jwtTokenProvider;
+
+    @GetMapping("/bootstrap/status")
+    public Mono<ResponseEntity<Map<String, Object>>> bootstrapStatus() {
+        return authService.needsBootstrap()
+                .map(required -> ResponseEntity.ok(Map.of(
+                        "bootstrapRequired", required,
+                        "ready", true)));
+    }
+
+    @PostMapping("/bootstrap")
+    public Mono<ResponseEntity<Map<String, Object>>> bootstrap(@RequestBody BootstrapRequest request) {
+        return authService.bootstrap(request)
+                .map(user -> ResponseEntity.status(HttpStatus.CREATED).body(Map.<String, Object>of(
+                        "created", true,
+                        "username", user.getUsername())))
+                .onErrorResume(IllegalArgumentException.class, error ->
+                        Mono.just(ResponseEntity.badRequest().body(Map.<String, Object>of(
+                                "error", error.getMessage()))))
+                .onErrorResume(AuthService.BootstrapAlreadyCompletedException.class, error ->
+                        Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).body(Map.<String, Object>of(
+                                "error", error.getMessage()))));
+    }
 
     @PostMapping("/login")
     public Mono<ResponseEntity<LoginResponse>> login(@RequestBody LoginRequest request) {

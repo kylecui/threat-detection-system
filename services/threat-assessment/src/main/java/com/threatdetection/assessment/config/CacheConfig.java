@@ -25,6 +25,11 @@ public class CacheConfig {
                 .expireAfterWrite(Duration.ofMinutes(30))
                 .weakKeys()
                 .recordStats());
+        cacheManager.registerCustomCache("overviewSnapshots", Caffeine.newBuilder()
+                .maximumSize(200)
+                .expireAfterWrite(Duration.ofSeconds(15))
+                .recordStats()
+                .build());
         return cacheManager;
     }
 }

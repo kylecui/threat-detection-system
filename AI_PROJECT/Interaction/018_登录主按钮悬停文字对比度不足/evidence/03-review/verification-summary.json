@@ -1,0 +1,514 @@
+{
+  "stats": {
+    "startTime": "2026-10-30T02:23:31.549Z",
+    "duration": 81404.577,
+    "expected": 41,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "workers": 4,
+  "retries": [
+    {
+      "name": "chromium",
+      "retries": 0
+    }
+  ],
+  "colorScenarios": 12,
+  "colorSamples": 60,
+  "states": {
+    "normal": [
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": false
+      }
+    ],
+    "hover": [
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(6, 107, 132)",
+        "ratio": 6.0975428627647466,
+        "hover": true,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(6, 107, 132)",
+        "ratio": 6.0975428627647466,
+        "hover": true,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(6, 107, 132)",
+        "ratio": 6.0975428627647466,
+        "hover": true,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(6, 107, 132)",
+        "ratio": 6.0975428627647466,
+        "hover": true,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(6, 107, 132)",
+        "ratio": 6.0975428627647466,
+        "hover": true,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(6, 107, 132)",
+        "ratio": 6.0975428627647466,
+        "hover": true,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(6, 107, 132)",
+        "ratio": 6.0975428627647466,
+        "hover": true,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(6, 107, 132)",
+        "ratio": 6.0975428627647466,
+        "hover": true,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(6, 107, 132)",
+        "ratio": 6.0975428627647466,
+        "hover": true,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(6, 107, 132)",
+        "ratio": 6.0975428627647466,
+        "hover": true,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(6, 107, 132)",
+        "ratio": 6.0975428627647466,
+        "hover": true,
+        "active": false,
+        "focus": false
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(6, 107, 132)",
+        "ratio": 6.0975428627647466,
+        "hover": true,
+        "active": false,
+        "focus": false
+      }
+    ],
+    "keyboard-focus": [
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(8, 127, 156)",
+        "ratio": 4.639721692849931,
+        "hover": false,
+        "active": false,
+        "focus": true
+      }
+    ],
+    "hover-active": [
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": true,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": true,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": true,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": true,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": true,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": true,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": true,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": true,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": true,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": true,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": true,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": true,
+        "active": true,
+        "focus": true
+      }
+    ],
+    "active-without-hover": [
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": false,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": false,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": false,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": false,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": false,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": false,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": false,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": false,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": false,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": false,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": false,
+        "active": true,
+        "focus": true
+      },
+      {
+        "foreground": "rgb(255, 255, 255)",
+        "background": "rgb(0, 90, 117)",
+        "ratio": 7.722471658763958,
+        "hover": false,
+        "active": true,
+        "focus": true
+      }
+    ]
+  },
+  "keyScenarios": 4,
+  "repeatEvents": 36,
+  "keySnapshots": 84
+}

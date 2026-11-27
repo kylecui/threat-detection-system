@@ -2,6 +2,7 @@ package com.threatdetection.alert.service.notification;
 
 import com.threatdetection.alert.model.SmtpConfig;
 import com.threatdetection.alert.repository.SmtpConfigRepository;
+import com.threatdetection.alert.service.SecretEncryptionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +26,9 @@ public class DynamicMailSenderService {
     
     @Autowired
     private SmtpConfigRepository smtpConfigRepository;
+
+    @Autowired
+    private SecretEncryptionService secretEncryptionService;
     
     /**
      * 缓存的JavaMailSender实例
@@ -68,7 +72,7 @@ public class DynamicMailSenderService {
      * @return JavaMailSender实例
      */
     public JavaMailSender getMailSender(String configName) {
-        Optional<SmtpConfig> configOpt = smtpConfigRepository.findByConfigName(configName);
+        Optional<SmtpConfig> configOpt = smtpConfigRepository.findByConfigNameAndIsActiveTrue(configName);
         
         if (configOpt.isEmpty()) {
             logger.warn("SMTP config '{}' not found, using default", configName);
@@ -147,7 +151,7 @@ public class DynamicMailSenderService {
         mailSender.setHost(config.getHost());
         mailSender.setPort(config.getPort());
         mailSender.setUsername(config.getUsername());
-        mailSender.setPassword(config.getPassword());
+        mailSender.setPassword(secretEncryptionService.decrypt(config.getPassword()));
         mailSender.setDefaultEncoding("UTF-8");
         
         // 设置邮件属性
@@ -193,12 +197,14 @@ public class DynamicMailSenderService {
         long now = System.currentTimeMillis();
         
         // 检查缓存是否有效
-        if (cachedDefaultConfig != null && (now - lastCacheUpdate) < CACHE_VALIDITY_MS) {
+        if (cachedDefaultConfig != null
+                && Boolean.TRUE.equals(cachedDefaultConfig.getIsActive())
+                && (now - lastCacheUpdate) < CACHE_VALIDITY_MS) {
             return cachedDefaultConfig;
         }
         
         // 从数据库加载
-        Optional<SmtpConfig> configOpt = smtpConfigRepository.findByIsDefaultTrue();
+        Optional<SmtpConfig> configOpt = smtpConfigRepository.findByIsDefaultTrueAndIsActiveTrue();
         
         if (configOpt.isEmpty()) {
             // 如果没有默认配置，尝试使用第一个激活的配置
@@ -213,6 +219,8 @@ public class DynamicMailSenderService {
                        cachedDefaultConfig.getHost(), 
                        cachedDefaultConfig.getPort());
         } else {
+            cachedDefaultConfig = null;
+            lastCacheUpdate = 0;
             logger.error("No active SMTP configuration found in database");
         }
         
@@ -233,6 +241,10 @@ public class DynamicMailSenderService {
         }
         
         SmtpConfig config = configOpt.get();
+        if (!Boolean.TRUE.equals(config.getIsActive())) {
+            logger.warn("SMTP connection test rejected because config {} is disabled", configId);
+            return false;
+        }
         JavaMailSenderImpl mailSender = createMailSender(config);
         
         try {

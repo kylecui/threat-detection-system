@@ -27,17 +27,13 @@ spec:
               done
               echo "Kafka is ready. Creating topics..."
 
-              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic attack-events
-              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic status-events
-              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic threat-alerts
-              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic minute-aggregations
-              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic device-health-alerts
-              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic sniffer-events
-              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic threat-detection-events
-              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic policy-events
-              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic bg-traffic-events
-              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic audit-events
-              kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 1 --topic ml-threat-detections
+              for topic in attack-events status-events threat-alerts minute-aggregations device-health-alerts sniffer-events threat-detection-events policy-events bg-traffic-events audit-events ml-threat-detections; do
+                kafka-topics --bootstrap-server kafka:9092 --if-not-exists --create --replication-factor 1 --partitions 12 --topic "$topic"
+                current="$(kafka-topics --bootstrap-server kafka:9092 --describe --topic "$topic" | sed -n 's/.*PartitionCount: \([0-9][0-9]*\).*/\1/p' | head -n1)"
+                if [ -n "$current" ] && [ "$current" -lt 12 ]; then
+                  kafka-topics --bootstrap-server kafka:9092 --alter --topic "$topic" --partitions 12
+                fi
+              done
 
               echo "All Kafka topics initialized successfully."
               kafka-topics --bootstrap-server kafka:9092 --list

@@ -1,17 +1,21 @@
 package com.threatdetection.customer.config;
 
 import com.threatdetection.customer.exception.CustomerAlreadyExistsException;
+import com.threatdetection.customer.exception.CustomerAdminProvisioningException;
 import com.threatdetection.customer.exception.CustomerNotFoundException;
+import com.threatdetection.customer.exception.CustomerOperationConflictException;
 import com.threatdetection.customer.device.exception.DeviceAlreadyBoundException;
 import com.threatdetection.customer.device.exception.DeviceNotFoundException;
 import com.threatdetection.customer.device.exception.DeviceQuotaExceededException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -54,6 +58,54 @@ public class GlobalExceptionHandler {
         error.put("message", ex.getMessage());
         
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex) {
+        log.warn("Database uniqueness or reference conflict: {}", ex.getMostSpecificCause().getMessage());
+        Map<String, Object> error = new HashMap<>();
+        error.put("timestamp", Instant.now());
+        error.put("status", HttpStatus.CONFLICT.value());
+        error.put("error", "Conflict");
+        error.put("message", "The requested record already exists or conflicts with an active relationship");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
+    @ExceptionHandler(CustomerOperationConflictException.class)
+    public ResponseEntity<Map<String, Object>> handleCustomerOperationConflict(
+            CustomerOperationConflictException ex) {
+        log.warn("Customer lifecycle operation rejected: {}", ex.getMessage());
+        Map<String, Object> error = new HashMap<>();
+        error.put("timestamp", Instant.now());
+        error.put("status", HttpStatus.CONFLICT.value());
+        error.put("error", "Conflict");
+        error.put("message", ex.getMessage());
+        error.put("dependencies", ex.getDependencies());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
+    @ExceptionHandler(CustomerAdminProvisioningException.class)
+    public ResponseEntity<Map<String, Object>> handleCustomerAdminProvisioning(
+            CustomerAdminProvisioningException ex) {
+        log.warn("Atomic customer administrator provisioning rejected: {}", ex.getMessage());
+        Map<String, Object> error = new HashMap<>();
+        error.put("timestamp", Instant.now());
+        error.put("status", HttpStatus.CONFLICT.value());
+        error.put("error", "Conflict");
+        error.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, Object>> handleResponseStatus(ResponseStatusException ex) {
+        log.warn("Request rejected with status {}: {}", ex.getStatusCode(), ex.getReason());
+        Map<String, Object> error = new HashMap<>();
+        error.put("timestamp", Instant.now());
+        error.put("status", ex.getStatusCode().value());
+        error.put("error", ex.getStatusCode().toString());
+        error.put("message", ex.getReason() != null ? ex.getReason() : "Request rejected");
+        return ResponseEntity.status(ex.getStatusCode()).body(error);
     }
 
     /**

@@ -79,6 +79,9 @@ class AppState:
 
 state = AppState()
 
+_data_readiness_cache: Dict[str, tuple[float, dict[str, object]]] = {}
+_data_readiness_lock = asyncio.Lock()
+
 
 class _TrainingState:
     def __init__(self) -> None:
@@ -89,6 +92,8 @@ class _TrainingState:
         self.elapsed_seconds: Optional[float] = None
         self.results: Optional[Dict[int, Dict[str, object]]] = None
         self.error: Optional[str] = None
+        self.current_tier: Optional[int] = None
+        self.completed_tiers = 0
 
     def to_response(self) -> TrainingStatusResponse:
         return TrainingStatusResponse(
@@ -99,6 +104,8 @@ class _TrainingState:
             elapsedSeconds=self.elapsed_seconds,
             results=self.results,
             error=self.error,
+            currentTier=self.current_tier,
+            completedTiers=self.completed_tiers,
         )
 
 
@@ -397,11 +404,16 @@ async def buffer_stats() -> dict[str, object]:
 
 @app.get("/api/v1/ml/drift/status")
 async def drift_status() -> dict[str, object]:
-    if state.drift_monitor is None:
+    monitor = state.drift_monitor
+    if monitor is None:
         return {"enabled": False}
-    for tier in (1, 2, 3):
-        state.drift_monitor.compute_drift(tier)
-    return {"enabled": True, **state.drift_monitor.get_status()}
+
+    def compute_status() -> dict[str, object]:
+        for tier in (1, 2, 3):
+            monitor.compute_drift(tier)
+        return {"enabled": True, **monitor.get_status()}
+
+    return await asyncio.to_thread(compute_status)
 
 
 @app.get("/api/v1/ml/shadow/stats")
@@ -427,6 +439,7 @@ def _run_training(
     _training_state.results = {}
     try:
         for tier in tiers:
+            _training_state.current_tier = tier
             pipeline = TrainingPipeline(
                 tier=tier,
                 model_dir=settings.model_dir,
@@ -436,6 +449,7 @@ def _run_training(
                 customer_id=customer_id,
             )
             _training_state.results[tier] = pipeline.run()
+            _training_state.completed_tiers += 1
 
         if state.engine:
             state.engine.reload(customer_id=customer_id)
@@ -456,6 +470,7 @@ def _run_training(
         logger.error("Training failed: %s", exc)
     finally:
         _training_state.training = False
+        _training_state.current_tier = None
 
 
 @app.post("/api/v1/ml/train")
@@ -474,6 +489,8 @@ async def trigger_training(req: TrainRequest = TrainRequest()) -> dict[str, obje
     _training_state.elapsed_seconds = None
     _training_state.results = None
     _training_state.error = None
+    _training_state.current_tier = None
+    _training_state.completed_tiers = 0
 
     import threading
 
@@ -498,28 +515,51 @@ async def training_status() -> TrainingStatusResponse:
 @app.get("/api/v1/ml/train/data-readiness")
 async def data_readiness(customerId: Optional[str] = None) -> dict[str, object]:
     try:
-        from app.training.trainer import load_from_postgres
+        from app.training.trainer import count_training_samples
 
-        counts: Dict[int, int] = {}
-        for tier in (1, 2, 3):
-            features = load_from_postgres(
-                settings.database_url, tier, customer_id=customerId
+        cache_key = customerId or "__global__"
+        now = time.monotonic()
+        cached = _data_readiness_cache.get(cache_key)
+        if cached is not None and now - cached[0] < settings.data_readiness_cache_seconds:
+            return cached[1]
+
+        async with _data_readiness_lock:
+            now = time.monotonic()
+            expired_keys = [
+                key for key, value in _data_readiness_cache.items()
+                if now - value[0] >= settings.data_readiness_cache_seconds
+            ]
+            for key in expired_keys:
+                _data_readiness_cache.pop(key, None)
+            cached = _data_readiness_cache.get(cache_key)
+            if cached is not None and now - cached[0] < settings.data_readiness_cache_seconds:
+                return cached[1]
+
+            counts = await asyncio.wait_for(
+                asyncio.to_thread(
+                    count_training_samples,
+                    settings.database_url,
+                    customerId,
+                    settings.data_readiness_query_timeout_ms,
+                ),
+                timeout=(settings.data_readiness_query_timeout_ms / 1000) + 1,
             )
-            counts[tier] = len(features)
-        result: dict[str, object] = {
-            "ready": any(c > 0 for c in counts.values()),
-            "sampleCounts": counts,
-            "minimumRequired": {
-                "autoencoder": 1,
-                "bigru": 20,
-                "perCustomer": settings.per_customer_min_samples,
-            },
-        }
-        if customerId is not None:
-            result["customerId"] = customerId
-            result["customerEligible"] = all(
-                c >= settings.per_customer_min_samples for c in counts.values()
-            )
-        return result
+            result: dict[str, object] = {
+                "ready": any(c > 0 for c in counts.values()),
+                "sampleCounts": counts,
+                "minimumRequired": {
+                    "autoencoder": 1,
+                    "bigru": 20,
+                    "perCustomer": settings.per_customer_min_samples,
+                },
+            }
+            if customerId is not None:
+                result["customerId"] = customerId
+                result["customerEligible"] = all(
+                    c >= settings.per_customer_min_samples for c in counts.values()
+                )
+            _data_readiness_cache[cache_key] = (time.monotonic(), result)
+            return result
     except Exception as exc:
-        return {"ready": False, "error": str(exc)}
+        logger.warning("ML data readiness query failed: %s", type(exc).__name__)
+        return {"ready": False, "error": "data_readiness_unavailable"}

@@ -1,0 +1,163 @@
+{
+  "browser": "147.0.7727.15",
+  "cases": [
+    {
+      "name": "desktop-zh",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "language": "zh-CN",
+      "bootstrap": false,
+      "expired": false,
+      "idle": {
+        "bg": "rgb(8, 127, 156)",
+        "fg": "rgb(255, 255, 255)",
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "contrast": 4.639721692849931
+      },
+      "hover": {
+        "bg": "rgb(35, 146, 168)",
+        "fg": "rgb(255, 255, 255)",
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "contrast": 3.653159082742227
+      },
+      "geometry": {
+        "card": {
+          "x": 330,
+          "y": 220,
+          "width": 780,
+          "height": 460
+        },
+        "brand": {
+          "x": 331,
+          "y": 221,
+          "width": 412.328125,
+          "height": 458
+        },
+        "panel": {
+          "x": 743.328125,
+          "y": 221,
+          "width": 365.671875,
+          "height": 458
+        },
+        "clientWidth": 1440,
+        "scrollWidth": 1440,
+        "theme": "dark"
+      },
+      "spaceHold": [
+        {
+          "event": "down",
+          "type": "text",
+          "value": "unchanged-123",
+          "focused": true
+        },
+        {
+          "event": "down",
+          "type": "password",
+          "value": "unchanged-123",
+          "focused": true
+        },
+        {
+          "event": "up",
+          "type": "password",
+          "value": "unchanged-123",
+          "focused": true
+        }
+      ],
+      "errors": []
+    },
+    {
+      "name": "bootstrap-en-short",
+      "viewport": {
+        "width": 320,
+        "height": 600
+      },
+      "language": "en-US",
+      "bootstrap": true,
+      "expired": true,
+      "idle": {
+        "bg": "rgb(35, 146, 168)",
+        "fg": "rgb(255, 255, 255)",
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "contrast": 3.653159082742227
+      },
+      "hover": {
+        "bg": "rgb(35, 146, 168)",
+        "fg": "rgb(255, 255, 255)",
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "contrast": 3.653159082742227
+      },
+      "geometry": {
+        "card": {
+          "x": 12,
+          "y": -546,
+          "width": 296,
+          "height": 1175.375
+        },
+        "brand": {
+          "x": 13,
+          "y": -545,
+          "width": 294,
+          "height": 227.78125
+        },
+        "panel": {
+          "x": 13,
+          "y": -317.21875,
+          "width": 294,
+          "height": 945.59375
+        },
+        "clientWidth": 320,
+        "scrollWidth": 320,
+        "theme": "dark"
+      },
+      "spaceHold": [
+        {
+          "event": "down",
+          "type": "text",
+          "value": "unchanged-123",
+          "focused": true
+        },
+        {
+          "event": "down",
+          "type": "password",
+          "value": "unchanged-123",
+          "focused": true
+        },
+        {
+          "event": "up",
+          "type": "password",
+          "value": "unchanged-123",
+          "focused": true
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "requests": [
+    {
+      "case": "desktop-zh",
+      "method": "GET",
+      "url": "http://127.0.0.1:3000/api/api/v1/auth/bootstrap/status"
+    },
+    {
+      "case": "desktop-zh",
+      "method": "GET",
+      "url": "http://127.0.0.1:3000/api/api/v1/auth/bootstrap/status"
+    },
+    {
+      "case": "bootstrap-en-short",
+      "method": "GET",
+      "url": "http://127.0.0.1:3000/api/api/v1/auth/bootstrap/status"
+    },
+    {
+      "case": "bootstrap-en-short",
+      "method": "GET",
+      "url": "http://127.0.0.1:3000/api/api/v1/auth/bootstrap/status"
+    }
+  ]
+}

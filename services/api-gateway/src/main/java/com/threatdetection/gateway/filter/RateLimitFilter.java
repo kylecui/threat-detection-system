@@ -82,6 +82,10 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
      * 返回限流响应
      */
     private Mono<Void> rateLimitResponse(ServerHttpResponse response) {
+        if (response.isCommitted()) {
+            log.warn("Cannot write 429 because the response is already committed");
+            return Mono.empty();
+        }
         response.setStatusCode(HttpStatus.TOO_MANY_REQUESTS);
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
         

@@ -8,6 +8,10 @@ spring:
     username: threat_user
     password: threat_password
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:20}
+      minimum-idle: ${DB_POOL_MIN_IDLE:4}
+      connection-timeout: 3000
   jpa:
     hibernate:
       ddl-auto: validate
@@ -16,6 +20,10 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        jdbc:
+          batch_size: 100
+          order_inserts: true
+          order_updates: true
     database-platform: org.hibernate.dialect.PostgreSQLDialect
 
 # Redis Configuration (Docker network)
@@ -32,7 +40,7 @@ spring:
       bootstrap-servers: kafka:9092  # 明确覆盖consumer设置
       group-id: data-ingestion-persistence
       auto-offset-reset: earliest
-      enable-auto-commit: true
+      enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
     producer:
@@ -40,19 +48,33 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       acks: all
+      compression-type: zstd
+      batch-size: 65536
+      properties:
+        enable.idempotence: true
+        linger.ms: 10
+        delivery.timeout.ms: 30000
+        request.timeout.ms: 10000
     listener:
       ack-mode: record
+      concurrency: ${KAFKA_CONSUMER_CONCURRENCY:4}
 
 # Logging
 logging:
   level:
-    com.threatdetection: DEBUG
-    org.springframework.orm.jpa: DEBUG
-    org.springframework.transaction: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.springframework.kafka: DEBUG
+    com.threatdetection: INFO
+    org.springframework.orm.jpa: WARN
+    org.springframework.transaction: WARN
+    org.hibernate.SQL: WARN
+    org.springframework.kafka: WARN
     org.apache.kafka: WARN
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.hibernate.type.descriptor.sql.BasicBinder: OFF
+
+ingestion:
+  executor:
+    core-size: ${INGEST_EXECUTOR_CORE_SIZE:8}
+    max-size: ${INGEST_EXECUTOR_MAX_SIZE:16}
+    queue-capacity: ${INGEST_EXECUTOR_QUEUE_CAPACITY:2000}
 
 mqtt:
   enabled: true

@@ -43,6 +43,21 @@ server:
   servlet:
     context-path: /
 
+services:
+  alert-management:
+    base-url: ${ALERT_MANAGEMENT_URL:http://localhost:8082}
+
+internal:
+  alert-service-token: ${ALERT_INTERNAL_SERVICE_TOKEN}
+
+# JZ V1 Syslog heartbeat semantics. The client default is one heartbeat every 1800 seconds.
+device:
+  telemetry:
+    expected-heartbeat-interval-seconds: ${DEVICE_EXPECTED_HEARTBEAT_INTERVAL_SECONDS:1800}
+    heartbeat-delayed-after-seconds: ${DEVICE_HEARTBEAT_DELAYED_AFTER_SECONDS:2100}
+    heartbeat-offline-after-seconds: ${DEVICE_HEARTBEAT_OFFLINE_AFTER_SECONDS:3900}
+    data-active-window-seconds: ${DEVICE_DATA_ACTIVE_WINDOW_SECONDS:2100}
+
 # Management & Actuator
 management:
   endpoints:

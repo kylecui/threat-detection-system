@@ -37,9 +37,9 @@ public class Customer {
      * 客户唯一标识符 (用于系统内部引用)
      * 格式: customer_xxx 或自定义字符串
      */
-    @Column(name = "customer_id", nullable = false, unique = true, length = 100)
+    @Column(name = "customer_id", nullable = false, unique = true, length = 50)
     @NotBlank(message = "客户ID不能为空")
-    @Size(max = 100, message = "客户ID长度不能超过100")
+    @Size(max = 50, message = "客户ID长度不能超过50")
     private String customerId;
 
     @Column(name = "tenant_id")

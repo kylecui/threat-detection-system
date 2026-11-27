@@ -44,7 +44,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # 设置生产环境变量
+ARG VITE_APP_VERSION=dev
 ENV NODE_ENV=production
+ENV VITE_APP_VERSION=${VITE_APP_VERSION}
 
 # 构建应用
 RUN npm run build

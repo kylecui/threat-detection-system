@@ -50,7 +50,7 @@ public class DeduplicationService {
             for (Alert recentAlert : recentAlerts) {
                 String recentTier = extractTierFromMetadata(recentAlert.getMetadata());
                 if (newTier != null && newTier.equals(recentTier)) {
-                    logger.info("Found recent alert for MAC {} with same tier {} within {} seconds",
+                    logger.debug("Found recent alert for MAC {} with same tier {} within {} seconds",
                                newAlert.getAttackMac(), newTier, timeWindowSeconds);
                     return true;
                 }
@@ -66,7 +66,7 @@ public class DeduplicationService {
             for (Alert existingAlert : similarAlerts) {
                 double similarity = calculateSimilarity(newAlert.getTitle(), existingAlert.getTitle());
                 if (similarity >= similarityThreshold) {
-                    logger.info("Found similar alert with {}% similarity: {}",
+                    logger.debug("Found similar alert with {}% similarity: {}",
                                (int)(similarity * 100), existingAlert.getTitle());
                     return true;
                 }

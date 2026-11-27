@@ -8,6 +8,8 @@ import com.threatdetection.intelligence.dto.StatisticsResponse;
 import com.threatdetection.intelligence.dto.UpdateIndicatorRequest;
 import com.threatdetection.intelligence.feed.FeedPollerResult;
 import com.threatdetection.intelligence.feed.FeedPollerScheduler;
+import com.threatdetection.intelligence.model.IocType;
+import com.threatdetection.intelligence.model.Severity;
 import com.threatdetection.intelligence.model.ThreatIntelFeed;
 import com.threatdetection.intelligence.service.ThreatIndicatorService;
 import jakarta.validation.Valid;
@@ -16,6 +18,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -53,8 +57,11 @@ public class ThreatIndicatorController {
     }
 
     @GetMapping("/indicators")
-    public ResponseEntity<Page<IndicatorResponse>> listIndicators(Pageable pageable) {
-        return ResponseEntity.ok(threatIndicatorService.listIndicators(pageable));
+    public ResponseEntity<Page<IndicatorResponse>> listIndicators(
+            @RequestParam(required = false) IocType iocType,
+            @RequestParam(required = false) Severity severity,
+            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(threatIndicatorService.listIndicators(iocType, severity, pageable));
     }
 
     @GetMapping("/indicators/{id}")
@@ -89,14 +96,14 @@ public class ThreatIndicatorController {
     }
 
     @PostMapping("/indicators/{id}/sighting")
-    public ResponseEntity<Void> incrementSighting(@PathVariable Long id) {
-        threatIndicatorService.incrementSighting(id);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<IndicatorResponse> incrementSighting(@PathVariable Long id) {
+        return ResponseEntity.ok(threatIndicatorService.incrementSighting(id));
     }
 
     @GetMapping("/feeds")
     public ResponseEntity<List<ThreatIntelFeed>> listFeeds() {
-        return ResponseEntity.ok(threatIndicatorService.listFeeds());
+        return ResponseEntity.ok(feedPollerScheduler.describeCapabilities(
+                threatIndicatorService.listFeeds()));
     }
 
     @GetMapping("/statistics")
@@ -125,7 +132,7 @@ public class ThreatIndicatorController {
         }
 
         ThreatIntelFeed saved = threatIndicatorService.saveFeed(feed);
-        return ResponseEntity.ok(saved);
+        return ResponseEntity.ok(feedPollerScheduler.describeCapability(saved));
     }
 
     @PostMapping("/feeds/{id}/poll")

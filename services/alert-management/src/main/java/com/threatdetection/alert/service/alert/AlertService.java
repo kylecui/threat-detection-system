@@ -36,11 +36,11 @@ public class AlertService {
      */
     @Transactional
     public Alert createAlert(Alert alert) {
-        logger.info("Creating new alert: {}", alert.getTitle());
+        logger.debug("Creating new alert: {}", alert.getTitle());
 
         // 检查是否为重复告警
         if (deduplicationService.isDuplicate(alert)) {
-            logger.info("Alert is duplicate, marking as deduplicated");
+            logger.debug("Alert is duplicate, marking as deduplicated");
             alert.setStatus(AlertStatus.DEDUPLICATED);
         } else {
             alert.setStatus(AlertStatus.NEW);
@@ -54,7 +54,7 @@ public class AlertService {
         }
 
         Alert savedAlert = alertRepository.save(alert);
-        logger.info("Alert created with ID: {}", savedAlert.getId());
+        logger.debug("Alert created with ID: {}", savedAlert.getId());
 
         return savedAlert;
     }
@@ -123,7 +123,7 @@ public class AlertService {
                 .orElseThrow(() -> new IllegalArgumentException("Alert not found: " + id));
 
         logger.info("Resolving alert {} by {}", id, resolvedBy);
-        alert.resolve(resolution, resolvedBy);
+        alert.resolve(resolution.trim(), resolvedBy.trim());
 
         return alertRepository.save(alert);
     }
@@ -137,8 +137,35 @@ public class AlertService {
                 .orElseThrow(() -> new IllegalArgumentException("Alert not found: " + id));
 
         logger.info("Assigning alert {} to {}", id, assignedTo);
-        alert.setAssignedTo(assignedTo);
+        alert.setAssignedTo(assignedTo.trim());
+        if (alert.getStatus() != AlertStatus.RESOLVED && alert.getStatus() != AlertStatus.ARCHIVED) {
+            alert.setStatus(AlertStatus.IN_PROGRESS);
+        }
 
+        return alertRepository.save(alert);
+    }
+
+    /**
+     * Persist the separate handling-escalation marker without overloading the
+     * operator workflow status. An escalated alert may still be waiting for an
+     * owner or already be in progress.
+     */
+    @Transactional
+    public Alert setEscalation(Long id, int level, String reason) {
+        Alert alert = alertRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Alert not found: " + id));
+        alert.setEscalationLevel(Math.max(1, level));
+        alert.setEscalationReason(reason == null ? null : reason.trim());
+        return alertRepository.save(alert);
+    }
+
+    /** Clear the handling-escalation marker while preserving workflow state. */
+    @Transactional
+    public Alert clearEscalation(Long id) {
+        Alert alert = alertRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Alert not found: " + id));
+        alert.setEscalationLevel(0);
+        alert.setEscalationReason(null);
         return alertRepository.save(alert);
     }
 
@@ -181,8 +208,8 @@ public class AlertService {
     /**
      * 查找需要升级的告警
      */
-    public List<Alert> findAlertsNeedingEscalation(int unacknowledgedMinutes) {
-        LocalDateTime thresholdTime = LocalDateTime.now().minusMinutes(unacknowledgedMinutes);
+    public List<Alert> findAlertsNeedingEscalation(int unacknowledgedSeconds) {
+        LocalDateTime thresholdTime = LocalDateTime.now().minusSeconds(unacknowledgedSeconds);
         return alertRepository.findAlertsNeedingEscalation(thresholdTime);
     }
 
@@ -211,6 +238,8 @@ public class AlertService {
         // 其他统计
         stats.setTotalAlerts(alertRepository.count());
         stats.setUnresolvedAlerts(alertRepository.findUnresolvedAlerts().size());
+        stats.setResolvedAlerts(stats.getByStatus().getOrDefault(AlertStatus.RESOLVED, 0L));
+        stats.setEscalatedAlerts(alertRepository.countByEscalationLevelGreaterThan(0));
         stats.setAverageResolutionTime(alertRepository.calculateAverageResolutionTime());
 
         return stats;

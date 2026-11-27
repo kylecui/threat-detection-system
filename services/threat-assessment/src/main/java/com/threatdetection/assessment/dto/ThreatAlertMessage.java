@@ -98,6 +98,14 @@ public class ThreatAlertMessage {
     @JsonAlias({"detection_tier", "detectionTier", "tier"})
     private Integer detectionTier;
 
+    @JsonProperty(value = "windowStart", access = JsonProperty.Access.WRITE_ONLY)
+    @JsonAlias({"window_start", "windowStart"})
+    private String windowStart;
+
+    @JsonProperty(value = "windowEnd", access = JsonProperty.Access.WRITE_ONLY)
+    @JsonAlias({"window_end", "windowEnd"})
+    private String windowEnd;
+
     /**
      * 端口列表 (Flink输出的JSON数组, 如 [80, 443, 3389])
      * V4.0 Phase 3新增字段 - 用于端口攻击分布统计
@@ -133,9 +141,24 @@ public class ThreatAlertMessage {
             .uniquePorts(uniquePorts)
             .uniqueDevices(uniqueDevices)
             .detectionTier(detectionTier)
+            .windowStart(parseNullableTimestamp(windowStart))
+            .windowEnd(parseNullableTimestamp(windowEnd))
+            .timeWindowSeconds(calculateWindowSeconds(windowStart, windowEnd))
             .portList(portList)
             .timestamp(parseTimestamp(timestamp))
             .build();
+    }
+
+    private Integer calculateWindowSeconds(String start, String end) {
+        if (start == null || end == null) {
+            return detectionTier == null ? 300 : detectionTier == 1 ? 30 : detectionTier == 3 ? 900 : 300;
+        }
+        long seconds = java.time.Duration.between(parseTimestamp(start), parseTimestamp(end)).getSeconds();
+        return seconds > 0 && seconds <= Integer.MAX_VALUE ? (int) seconds : 300;
+    }
+
+    private java.time.Instant parseNullableTimestamp(String value) {
+        return value == null || value.isBlank() ? null : parseTimestamp(value);
     }
     
     /**

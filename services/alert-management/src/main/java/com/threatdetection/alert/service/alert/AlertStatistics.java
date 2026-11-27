@@ -13,6 +13,8 @@ public class AlertStatistics {
 
     private long totalAlerts;
     private int unresolvedAlerts;
+    private long resolvedAlerts;
+    private long escalatedAlerts;
     private Double averageResolutionTime;
     private final Map<AlertStatus, Long> byStatus = new HashMap<>();
     private final Map<AlertSeverity, Long> bySeverity = new HashMap<>();
@@ -31,6 +33,22 @@ public class AlertStatistics {
 
     public void setUnresolvedAlerts(int unresolvedAlerts) {
         this.unresolvedAlerts = unresolvedAlerts;
+    }
+
+    public long getResolvedAlerts() {
+        return resolvedAlerts;
+    }
+
+    public void setResolvedAlerts(long resolvedAlerts) {
+        this.resolvedAlerts = resolvedAlerts;
+    }
+
+    public long getEscalatedAlerts() {
+        return escalatedAlerts;
+    }
+
+    public void setEscalatedAlerts(long escalatedAlerts) {
+        this.escalatedAlerts = escalatedAlerts;
     }
 
     public Double getAverageResolutionTime() {

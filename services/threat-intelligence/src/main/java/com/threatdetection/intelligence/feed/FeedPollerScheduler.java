@@ -2,6 +2,7 @@ package com.threatdetection.intelligence.feed;
 
 import com.threatdetection.intelligence.dto.BulkUpsertRequest;
 import com.threatdetection.intelligence.dto.CreateIndicatorRequest;
+import com.threatdetection.intelligence.exception.FeedNotPollableException;
 import com.threatdetection.intelligence.model.ThreatIntelFeed;
 import com.threatdetection.intelligence.repository.ThreatIntelFeedRepository;
 import com.threatdetection.intelligence.service.ThreatIndicatorService;
@@ -9,6 +10,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +29,7 @@ public class FeedPollerScheduler {
     private final ThreatIndicatorService indicatorService;
     private final FeedRateLimiter rateLimiter;
     private final Map<String, FeedPoller> pollerMap;
+    private final JdbcTemplate jdbcTemplate;
 
     @Value("${feed.poller.enabled:true}")
     private boolean pollerEnabled;
@@ -35,11 +38,13 @@ public class FeedPollerScheduler {
             ThreatIntelFeedRepository feedRepository,
             ThreatIndicatorService indicatorService,
             FeedRateLimiter rateLimiter,
+            JdbcTemplate jdbcTemplate,
             List<FeedPoller> pollers
     ) {
         this.feedRepository = feedRepository;
         this.indicatorService = indicatorService;
         this.rateLimiter = rateLimiter;
+        this.jdbcTemplate = jdbcTemplate;
         this.pollerMap = new HashMap<>();
         for (FeedPoller poller : pollers) {
             this.pollerMap.put(poller.getFeedName(), poller);
@@ -103,6 +108,7 @@ public class FeedPollerScheduler {
                         .build();
             }
 
+            int previousCount = indicatorService.countActiveBySourceName(feedName);
             List<CreateIndicatorRequest> indicators = poller.poll(feed, apiKey);
 
             int upserted = 0;
@@ -112,14 +118,18 @@ public class FeedPollerScheduler {
                 upserted = indicatorService.bulkUpsert(bulkRequest);
             }
 
-            updateFeedStatus(feed, "SUCCESS", null, upserted);
+            int currentCount = indicatorService.countActiveBySourceName(feedName);
+            int newCount = Math.max(0, currentCount - previousCount);
+            int updatedCount = Math.max(0, upserted - newCount);
+            updateFeedStatus(feed, "SUCCESS", null, currentCount);
             log.info("Feed {} polled successfully: {} indicators processed", feedName, upserted);
 
             return FeedPollerResult.builder()
                     .feedName(feedName)
                     .success(true)
                     .indicatorsProcessed(indicators.size())
-                    .indicatorsNew(upserted)
+                    .indicatorsNew(newCount)
+                    .indicatorsUpdated(updatedCount)
                     .durationMs(System.currentTimeMillis() - start)
                     .build();
         } catch (Exception e) {
@@ -151,15 +161,43 @@ public class FeedPollerScheduler {
                 .orElseThrow(() -> new RuntimeException("Feed not found: " + feedId));
 
         FeedPoller poller = pollerMap.get(feed.getFeedName());
+        if (isInternal(feed)) {
+            throw new FeedNotPollableException(feed.getFeedName(),
+                    "Internal feed accepts locally written indicators and does not require polling");
+        }
         if (poller == null) {
-            return FeedPollerResult.builder()
-                    .feedName(feed.getFeedName())
-                    .success(false)
-                    .errorMessage("No poller registered for feed: " + feed.getFeedName())
-                    .build();
+            throw new FeedNotPollableException(feed.getFeedName(),
+                    "No poller is registered for this feed type");
         }
 
         return pollSingleFeed(feed, poller);
+    }
+
+    public List<ThreatIntelFeed> describeCapabilities(List<ThreatIntelFeed> feeds) {
+        feeds.forEach(this::describeCapability);
+        return feeds;
+    }
+
+    public ThreatIntelFeed describeCapability(ThreatIntelFeed feed) {
+        FeedPoller poller = pollerMap.get(feed.getFeedName());
+        if (isInternal(feed)) {
+            feed.setPollable(false);
+            feed.setCapability("LOCAL_WRITE");
+            feed.setNonPollableReason("INTERNAL_SOURCE");
+            feed.setPollBatchLimit(null);
+            return feed;
+        }
+
+        boolean pollable = poller != null;
+        feed.setPollable(pollable);
+        feed.setCapability(pollable ? "SCHEDULED_AND_MANUAL_POLL" : "UNSUPPORTED");
+        feed.setNonPollableReason(pollable ? null : "POLLER_NOT_REGISTERED");
+        feed.setPollBatchLimit(pollable ? poller.getPollBatchLimit() : null);
+        return feed;
+    }
+
+    private boolean isInternal(ThreatIntelFeed feed) {
+        return "INTERNAL".equalsIgnoreCase(feed.getFeedType());
     }
 
     private boolean isDue(ThreatIntelFeed feed) {
@@ -171,12 +209,12 @@ public class FeedPollerScheduler {
         return Instant.now().isAfter(nextPoll);
     }
 
-    private void updateFeedStatus(ThreatIntelFeed feed, String status, String error, int count) {
+    private void updateFeedStatus(ThreatIntelFeed feed, String status, String error, int currentCount) {
         feed.setLastPollAt(Instant.now());
         feed.setLastPollStatus(status);
         feed.setLastPollError(error);
         if ("SUCCESS".equals(status)) {
-            feed.setIndicatorCount((feed.getIndicatorCount() != null ? feed.getIndicatorCount() : 0) + count);
+            feed.setIndicatorCount(currentCount);
         }
         feedRepository.save(feed);
     }
@@ -186,7 +224,25 @@ public class FeedPollerScheduler {
         if (envVar == null || envVar.isBlank()) {
             return null;
         }
-        return System.getenv(envVar);
+        try {
+            List<String> values = jdbcTemplate.query(
+                    "SELECT config_value FROM system_config WHERE config_key = ? AND config_value <> '' LIMIT 1",
+                    (rs, rowNum) -> rs.getString(1),
+                    envVar
+            );
+            if (!values.isEmpty() && values.get(0) != null && !values.get(0).isBlank()) {
+                return values.get(0);
+            }
+        } catch (Exception e) {
+            log.warn("Unable to read runtime API key {} from system_config: {}", envVar, e.getMessage());
+        }
+        String environmentValue = System.getenv(envVar);
+        if ((environmentValue == null || environmentValue.isBlank()) && "VT_API_KEY".equals(envVar)) {
+            // Preserve compatibility with installations that used the legacy
+            // pre-3.1.32 variable name before the UI/TIRE contract was aligned.
+            return System.getenv("VIRUSTOTAL_API_KEY");
+        }
+        return environmentValue;
     }
 
     private int getRateLimit(String feedName) {

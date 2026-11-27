@@ -20,6 +20,9 @@ import java.util.List;
 @Component
 public class AbuseIpDbPoller extends FeedPoller {
 
+    /** AbuseIPDB blacklist API allows at most 500 rows in this request mode. */
+    public static final int MAX_INDICATORS_PER_POLL = 500;
+
     public AbuseIpDbPoller(HttpClient httpClient, ObjectMapper objectMapper) {
         super(httpClient, objectMapper);
     }
@@ -30,12 +33,17 @@ public class AbuseIpDbPoller extends FeedPoller {
     }
 
     @Override
+    public Integer getPollBatchLimit() {
+        return MAX_INDICATORS_PER_POLL;
+    }
+
+    @Override
     protected HttpRequest buildRequest(ThreatIntelFeed feed, String apiKey) {
         String url = feed.getFeedUrl() != null ? feed.getFeedUrl()
                 : "https://api.abuseipdb.com/api/v2/blacklist";
 
         return HttpRequest.newBuilder()
-                .uri(URI.create(url + "?confidenceMinimum=90&limit=500"))
+                .uri(URI.create(url + "?confidenceMinimum=90&limit=" + MAX_INDICATORS_PER_POLL))
                 .header("Key", apiKey)
                 .header("Accept", "application/json")
                 .timeout(Duration.ofSeconds(30))

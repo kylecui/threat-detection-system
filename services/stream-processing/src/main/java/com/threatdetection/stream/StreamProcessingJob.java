@@ -80,6 +80,25 @@ public class StreamProcessingJob {
         System.getenv().getOrDefault("AGGREGATION_WINDOW_SECONDS", "30"));
     private static final int THREAT_SCORING_WINDOW_MINUTES = Integer.parseInt(
         System.getenv().getOrDefault("THREAT_SCORING_WINDOW_MINUTES", "2"));
+    private static final int JDBC_SINK_PARALLELISM = positiveIntEnv("JDBC_SINK_PARALLELISM", 2);
+    private static final int APT_SINK_PARALLELISM = positiveIntEnv("APT_SINK_PARALLELISM", 1);
+
+    private static int positiveIntEnv(String name, int defaultValue) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            int parsed = Integer.parseInt(value);
+            if (parsed > 0) {
+                return parsed;
+            }
+        } catch (NumberFormatException ignored) {
+            // Fall through to the production default.
+        }
+        logger.warn("Ignoring invalid {}={}; using {}", name, value, defaultValue);
+        return defaultValue;
+    }
 
     public static void main(String[] args) throws Exception {
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -149,8 +168,12 @@ public class StreamProcessingJob {
         .filter(StreamProcessingJob::isAttackEventValid)
         .name("attack-event-validation")
                 .assignTimestampsAndWatermarks(
-                        WatermarkStrategy.<AttackEvent>forBoundedOutOfOrderness(java.time.Duration.ofMinutes(5))
+                        // A five-minute watermark and non-idle Kafka partitions made sparse
+                        // customer traffic appear stuck indefinitely. Keep a small disorder
+                        // allowance and exclude idle partitions so 30s/5m/15m windows can close.
+                        WatermarkStrategy.<AttackEvent>forBoundedOutOfOrderness(java.time.Duration.ofSeconds(30))
                                 .withTimestampAssigner(new AttackEventTimestampAssigner())
+                                .withIdleness(java.time.Duration.ofSeconds(45))
                 )
                 .name("attack-event-preprocessor");
 
@@ -160,7 +183,7 @@ public class StreamProcessingJob {
             .addSink(AttackEventJdbcSink.createSinkWithEnvConfig())
             .name("attack-events-persistence")
             .uid("attack-events-persistence-sink")  // 用于checkpoint恢复
-            .setParallelism(2);  // 并行度2,提高写入性能
+            .setParallelism(JDBC_SINK_PARALLELISM);
         
         logger.info("PostgreSQL persistence sink configured successfully");
 
@@ -178,6 +201,7 @@ public class StreamProcessingJob {
                 .assignTimestampsAndWatermarks(
                         WatermarkStrategy.<StatusEvent>forMonotonousTimestamps()
                                 .withTimestampAssigner(new StatusEventTimestampAssigner())
+                                .withIdleness(java.time.Duration.ofSeconds(45))
                 );
 
         // Process status events for device health monitoring
@@ -190,17 +214,16 @@ public class StreamProcessingJob {
         // ===== MVP PHASE 0: 3层时间窗口架构 =====
         // 替换单一窗口聚合为3层时间窗口 (30s/5min/15min)
         logger.info("Starting Multi-Tier Window Processing for MVP Phase 0");
-        DataStream<String> threatAlerts = MultiTierWindowProcessor.processMultiTierWindows(
-            attackStream, bootstrapServers);
+        DataStream<com.threatdetection.stream.model.AggregatedAttackData> aggregatedData =
+            MultiTierWindowProcessor.processMultiTierWindowsInternal(attackStream, bootstrapServers);
+        DataStream<String> threatAlerts = MultiTierWindowProcessor.serializeAggregations(aggregatedData);
 
         // ===== 分支2: APT时序累积 (新增功能) =====
         logger.info("Adding APT temporal accumulation sink");
-        DataStream<com.threatdetection.stream.model.AggregatedAttackData> aggregatedData =
-            MultiTierWindowProcessor.processMultiTierWindowsInternal(attackStream, bootstrapServers);
         aggregatedData.addSink(APTTemporalAccumulator.createSinkWithEnvConfig())
             .name("apt-temporal-accumulation")
             .uid("apt-temporal-accumulation-sink")
-            .setParallelism(1); // APT累积使用单并行度保证顺序性
+            .setParallelism(APT_SINK_PARALLELISM);
         logger.info("APT temporal accumulation sink configured successfully");
 
         // 备份: 保留原有逻辑用于比较和验证 - 已注释禁用避免序列化问题
@@ -275,9 +298,9 @@ public class StreamProcessingJob {
         @Override
         public void flatMap(String value, Collector<AttackEvent> out) {
             try {
-                logger.info("Attempting to deserialize attack event: {}", value);
+                logger.debug("Attempting to deserialize attack event");
                 AttackEvent event = objectMapper.readValue(value, AttackEvent.class);
-                logger.info("Successfully deserialized attack event: {}", event.getId());
+                logger.debug("Successfully deserialized attack event: {}", event.getId());
                 out.collect(event);
             } catch (Exception e) {
                 logger.error("Failed to deserialize attack event: {}", value, e);
@@ -289,9 +312,9 @@ public class StreamProcessingJob {
         @Override
         public void flatMap(String value, Collector<StatusEvent> out) {
             try {
-                logger.info("Attempting to deserialize status event: {}", value);
+                logger.debug("Attempting to deserialize status event");
                 StatusEvent event = objectMapper.readValue(value, StatusEvent.class);
-                logger.info("Successfully deserialized status event: {}", event.getDevSerial());
+                logger.debug("Successfully deserialized status event: {}", event.getDevSerial());
                 out.collect(event);
             } catch (Exception e) {
                 logger.error("Failed to deserialize status event: {}", value, e);
@@ -305,7 +328,7 @@ public class StreamProcessingJob {
 
         @Override
         public void process(String key, Context context, Iterable<Tuple5<String, String, Integer, String, String>> elements, Collector<String> out) throws Exception {
-            logger.info("Processing aggregation window for customer:source: {}, window: {} to {}", key, context.window().getStart(), context.window().getEnd());
+            logger.debug("Processing aggregation window for customer:source: {}, window: {} to {}", key, context.window().getStart(), context.window().getEnd());
             Set<String> uniqueIps = new HashSet<>();
             Set<Integer> uniquePorts = new HashSet<>();
             Set<String> uniqueDevSerials = new HashSet<>();
@@ -322,7 +345,7 @@ public class StreamProcessingJob {
                 attackCount++;
             }
 
-            logger.info("Aggregation for customer:source {}: {} unique IPs, {} unique ports, {} unique devices, {} attacks",
+            logger.debug("Aggregation for customer:source {}: {} unique IPs, {} unique ports, {} unique devices, {} attacks",
                 key, uniqueIps.size(), uniquePorts.size(), uniqueDevSerials.size(), attackCount);
 
             // Convert port set to JSON array string for portList field
@@ -377,7 +400,7 @@ public class StreamProcessingJob {
             // Total_Score = (attackCount * uniqueIps * uniquePorts) * timeWeight * ipWeight * portWeight * deviceWeight
             double threatScore = (attackCount * uniqueIps * uniquePorts) * timeWeight * ipWeight * portWeight * deviceWeight;
 
-            logger.info("Calculated threat score for customer:source {}: count={}, ips={}, ports={}, devices={}, timeWeight={}, score={}",
+            logger.debug("Calculated threat score for customer:source {}: count={}, ips={}, ports={}, devices={}, timeWeight={}, score={}",
                 aggregationKey, attackCount, uniqueIps, uniquePorts, uniqueDevices, timeWeight, threatScore);
 
             return Tuple4.of(aggregationKey, customerId, threatScore, timestamp);
@@ -413,7 +436,7 @@ public class StreamProcessingJob {
     public static class ThreatScoreAggregator implements WindowFunction<Tuple4<String, String, Double, Long>, String, String, TimeWindow> {
         @Override
         public void apply(String key, TimeWindow window, Iterable<Tuple4<String, String, Double, Long>> input, Collector<String> out) {
-            logger.info("Processing threat scoring window for customer:source: {}, window: {} to {}", key, window.getStart(), window.getEnd());
+            logger.debug("Processing threat scoring window for customer:source: {}, window: {} to {}", key, window.getStart(), window.getEnd());
             double maxScore = 0.0;
             long latestTimestamp = 0;
             String customerId = null;
@@ -428,7 +451,7 @@ public class StreamProcessingJob {
                 totalAttacks++;
             }
 
-            logger.info("Threat score for customer:source {}: {} (from {} aggregations)", key, maxScore, totalAttacks);
+            logger.debug("Threat score for customer:source {}: {} (from {} aggregations)", key, maxScore, totalAttacks);
 
             // Determine threat level based on score ranges
             String threatLevel = determineThreatLevel(maxScore);

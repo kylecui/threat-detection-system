@@ -1,0 +1,54 @@
+{
+  "issue": "INTERACTION-020",
+  "date": "2026-10-30",
+  "environment": "Windows, existing frontend/node_modules; no npm ci or release packaging",
+  "final_result": "lint/typecheck/typecheck:e2e/build passed; 61 unit tests passed on reduced-worker retry",
+  "initial_failure": "Default forks workers timed out before test execution; original failure retained, retry used --maxWorkers=2 after build completed",
+  "warnings": [
+    "Vite CJS/deprecated plugin options",
+    "Build chunks over 1000 kB",
+    "Expected negative-case React/jsdom stderr in passing tests"
+  ],
+  "checks": [
+    {
+      "command": "npm.cmd run lint",
+      "exit_code": 0,
+      "duration_seconds": 6.321,
+      "log": "F:\\codex\\threat-detection-system\\AI_PROJECT\\Interaction\\020_升级同步误判导致版本与安装文件残留\\evidence\\02-tests\\frontend-lint.log"
+    },
+    {
+      "command": "npx.cmd tsc --noEmit",
+      "exit_code": 0,
+      "duration_seconds": 25.22,
+      "log": "F:\\codex\\threat-detection-system\\AI_PROJECT\\Interaction\\020_升级同步误判导致版本与安装文件残留\\evidence\\02-tests\\frontend-typecheck.log"
+    },
+    {
+      "command": "npm.cmd run typecheck:e2e",
+      "exit_code": 0,
+      "duration_seconds": 12.621,
+      "log": "F:\\codex\\threat-detection-system\\AI_PROJECT\\Interaction\\020_升级同步误判导致版本与安装文件残留\\evidence\\02-tests\\frontend-typecheck-e2e.log"
+    },
+    {
+      "command": "npm.cmd run test",
+      "exit_code": 1,
+      "duration_seconds": 70.088,
+      "log": "F:\\codex\\threat-detection-system\\AI_PROJECT\\Interaction\\020_升级同步误判导致版本与安装文件残留\\evidence\\02-tests\\frontend-test.log",
+      "tests_executed": 0,
+      "worker_initialization_errors": 16
+    },
+    {
+      "command": "npm.cmd run build",
+      "exit_code": 0,
+      "duration_seconds": 104.808,
+      "log": "F:\\codex\\threat-detection-system\\AI_PROJECT\\Interaction\\020_升级同步误判导致版本与安装文件残留\\evidence\\02-tests\\frontend-build.log"
+    },
+    {
+      "command": "npm.cmd run test -- --maxWorkers=2",
+      "exit_code": 0,
+      "duration_seconds": 59.174,
+      "log": "F:\\codex\\threat-detection-system\\AI_PROJECT\\Interaction\\020_升级同步误判导致版本与安装文件残留\\evidence\\02-tests\\frontend-test-retry.log",
+      "test_files_passed": 16,
+      "tests_passed": 61
+    }
+  ]
+}

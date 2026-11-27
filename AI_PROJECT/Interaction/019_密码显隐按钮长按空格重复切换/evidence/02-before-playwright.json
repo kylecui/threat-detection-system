@@ -1,0 +1,163 @@
+{
+  "config": {
+    "configFile": "F:\\codex\\threat-detection-system\\frontend\\playwright.config.ts",
+    "rootDir": "F:/codex/threat-detection-system/frontend/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": "F:\\codex\\threat-detection-system\\frontend\\e2e\\global-setup.ts",
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "F:/codex/threat-detection-system/AI_PROJECT/Interaction/019_密码显隐按钮长按空格重复切换/evidence/before/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "F:/codex/threat-detection-system/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line"
+      ],
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.59.1",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run dev",
+      "url": "http://localhost:3000",
+      "reuseExistingServer": true,
+      "timeout": 30000
+    }
+  },
+  "suites": [
+    {
+      "title": "login-key-repeat.spec.ts",
+      "file": "login-key-repeat.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Password key repeat (ordinary, en-US)",
+          "file": "login-key-repeat.spec.ts",
+          "line": 85,
+          "column": 8,
+          "specs": [
+            {
+              "title": "Space holds toggle once, release safely and do not submit valid forms",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 7170,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveAttribute\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByLabel('Password', { exact: true })\nExpected: \u001b[32m\"text\"\u001b[39m\nReceived: \u001b[31m\"password\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveAttribute\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByLabel('Password', { exact: true })\u001b[22m\n\u001b[2m    2 × locator resolved to <input type=\"password\" value=\"Valid 019\" id=\"login_password\" aria-required=\"true\" aria-label=\"Password\" autocomplete=\"current-password\" placeholder=\"Please enter password\" class=\"ant-input ant-input-lg css-dev-only-do-not-override-i8la2z\"/>\u001b[22m\n\u001b[2m      - unexpected value \"password\"\u001b[22m\n\u001b[2m    7 × locator resolved to <input type=\"password\" id=\"login_password\" aria-required=\"true\" aria-label=\"Password\" autocomplete=\"current-password\" placeholder=\"Please enter password\" class=\"ant-input ant-input-lg css-dev-only-do-not-override-i8la2z\"/>\u001b[22m\n\u001b[2m      - unexpected value \"password\"\u001b[22m\n",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveAttribute\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByLabel('Password', { exact: true })\nExpected: \u001b[32m\"text\"\u001b[39m\nReceived: \u001b[31m\"password\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveAttribute\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByLabel('Password', { exact: true })\u001b[22m\n\u001b[2m    2 × locator resolved to <input type=\"password\" value=\"Valid 019\" id=\"login_password\" aria-required=\"true\" aria-label=\"Password\" autocomplete=\"current-password\" placeholder=\"Please enter password\" class=\"ant-input ant-input-lg css-dev-only-do-not-override-i8la2z\"/>\u001b[22m\n\u001b[2m      - unexpected value \"password\"\u001b[22m\n\u001b[2m    7 × locator resolved to <input type=\"password\" id=\"login_password\" aria-required=\"true\" aria-label=\"Password\" autocomplete=\"current-password\" placeholder=\"Please enter password\" class=\"ant-input ant-input-lg css-dev-only-do-not-override-i8la2z\"/>\u001b[22m\n\u001b[2m      - unexpected value \"password\"\u001b[22m\n\n    at assertState (F:\\codex\\threat-detection-system\\frontend\\e2e\\login-key-repeat.spec.ts:168:35)\n    at F:\\codex\\threat-detection-system\\frontend\\e2e\\login-key-repeat.spec.ts:206:19",
+                        "location": {
+                          "file": "F:\\codex\\threat-detection-system\\frontend\\e2e\\login-key-repeat.spec.ts",
+                          "column": 35,
+                          "line": 168
+                        },
+                        "snippet": "  166 |                 posts: { ...posts },\n  167 |               });\n> 168 |               await expect(input).toHaveAttribute(\n      |                                   ^\n  169 |                 \"type\",\n  170 |                 visible ? \"text\" : \"password\",\n  171 |               );"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "F:\\codex\\threat-detection-system\\frontend\\e2e\\login-key-repeat.spec.ts",
+                            "column": 35,
+                            "line": 168
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveAttribute\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  getByLabel('Password', { exact: true })\nExpected: \u001b[32m\"text\"\u001b[39m\nReceived: \u001b[31m\"password\"\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveAttribute\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByLabel('Password', { exact: true })\u001b[22m\n\u001b[2m    2 × locator resolved to <input type=\"password\" value=\"Valid 019\" id=\"login_password\" aria-required=\"true\" aria-label=\"Password\" autocomplete=\"current-password\" placeholder=\"Please enter password\" class=\"ant-input ant-input-lg css-dev-only-do-not-override-i8la2z\"/>\u001b[22m\n\u001b[2m      - unexpected value \"password\"\u001b[22m\n\u001b[2m    7 × locator resolved to <input type=\"password\" id=\"login_password\" aria-required=\"true\" aria-label=\"Password\" autocomplete=\"current-password\" placeholder=\"Please enter password\" class=\"ant-input ant-input-lg css-dev-only-do-not-override-i8la2z\"/>\u001b[22m\n\u001b[2m      - unexpected value \"password\"\u001b[22m\n\n\n  166 |                 posts: { ...posts },\n  167 |               });\n> 168 |               await expect(input).toHaveAttribute(\n      |                                   ^\n  169 |                 \"type\",\n  170 |                 visible ? \"text\" : \"password\",\n  171 |               );\n    at assertState (F:\\codex\\threat-detection-system\\frontend\\e2e\\login-key-repeat.spec.ts:168:35)\n    at F:\\codex\\threat-detection-system\\frontend\\e2e\\login-key-repeat.spec.ts:206:19"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-30T02:11:07.812Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "password-key-repeat",
+                          "contentType": "application/json",
+                          "body": "ewogICJtb2RlIjogewogICAgIm5hbWUiOiAib3JkaW5hcnkiLAogICAgImJvb3RzdHJhcCI6IGZhbHNlLAogICAgImxhbmd1YWdlIjogImVuLVVTIiwKICAgICJtb2JpbGUiOiBmYWxzZQogIH0sCiAgImtleSI6ICJTcGFjZSIsCiAgImV2ZW50cyI6IFsKICAgIHsKICAgICAgInR5cGUiOiAia2V5dXAiLAogICAgICAia2V5IjogIlRhYiIsCiAgICAgICJyZXBlYXQiOiBmYWxzZSwKICAgICAgImZpZWxkIjogImxvZ2luX3Bhc3N3b3JkIgogICAgfSwKICAgIHsKICAgICAgInR5cGUiOiAia2V5ZG93biIsCiAgICAgICJrZXkiOiAiICIsCiAgICAgICJyZXBlYXQiOiBmYWxzZSwKICAgICAgImZpZWxkIjogImxvZ2luX3Bhc3N3b3JkIgogICAgfSwKICAgIHsKICAgICAgInR5cGUiOiAia2V5ZG93biIsCiAgICAgICJrZXkiOiAiICIsCiAgICAgICJyZXBlYXQiOiB0cnVlLAogICAgICAiZmllbGQiOiAibG9naW5fcGFzc3dvcmQiCiAgICB9LAogICAgewogICAgICAidHlwZSI6ICJrZXl1cCIsCiAgICAgICJrZXkiOiAiICIsCiAgICAgICJyZXBlYXQiOiBmYWxzZSwKICAgICAgImZpZWxkIjogImxvZ2luX3Bhc3N3b3JkIgogICAgfQogIF0sCiAgInNuYXBzaG90cyI6IFsKICAgIHsKICAgICAgInN0YWdlIjogInBhc3N3b3JkOlNwYWNlOmluaXRpYWwtdHJ1ZSIsCiAgICAgICJmaWVsZHMiOiBbCiAgICAgICAgewogICAgICAgICAgImlkIjogImxvZ2luX3Bhc3N3b3JkIiwKICAgICAgICAgICJ0eXBlIjogInRleHQiLAogICAgICAgICAgInZhbHVlIjogIlZhbGlkIDAxOSIsCiAgICAgICAgICAicHJlc3NlZCI6ICJ0cnVlIiwKICAgICAgICAgICJuYW1lIjogIkhpZGUgcGFzc3dvcmQiLAogICAgICAgICAgImZvY3VzZWQiOiB0cnVlLAogICAgICAgICAgIndpZHRoIjogNDQsCiAgICAgICAgICAiaGVpZ2h0IjogNDQKICAgICAgICB9CiAgICAgIF0sCiAgICAgICJwb3N0cyI6IHsKICAgICAgICAiYm9vdHN0cmFwIjogMCwKICAgICAgICAibG9naW4iOiAwCiAgICAgIH0KICAgIH0sCiAgICB7CiAgICAgICJzdGFnZSI6ICJwYXNzd29yZDpTcGFjZTpyZXBlYXQtMS10cnVlIiwKICAgICAgImZpZWxkcyI6IFsKICAgICAgICB7CiAgICAgICAgICAiaWQiOiAibG9naW5fcGFzc3dvcmQiLAogICAgICAgICAgInR5cGUiOiAicGFzc3dvcmQiLAogICAgICAgICAgInZhbHVlIjogIlZhbGlkIDAxOSIsCiAgICAgICAgICAicHJlc3NlZCI6ICJmYWxzZSIsCiAgICAgICAgICAibmFtZSI6ICJTaG93IHBhc3N3b3JkIiwKICAgICAgICAgICJmb2N1c2VkIjogdHJ1ZSwKICAgICAgICAgICJ3aWR0aCI6IDQ0LAogICAgICAgICAgImhlaWdodCI6IDQ0CiAgICAgICAgfQogICAgICBdLAogICAgICAicG9zdHMiOiB7CiAgICAgICAgImJvb3RzdHJhcCI6IDAsCiAgICAgICAgImxvZ2luIjogMAogICAgICB9CiAgICB9CiAgXSwKICAicG9zdHMiOiB7CiAgICAiYm9vdHN0cmFwIjogMCwKICAgICJsb2dpbiI6IDAKICB9Cn0="
+                        },
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "F:\\codex\\threat-detection-system\\AI_PROJECT\\Interaction\\019_密码显隐按钮长按空格重复切换\\evidence\\before\\test-results\\login-key-repeat-Password--abdb6-d-do-not-submit-valid-forms-chromium\\test-failed-1.png"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "F:\\codex\\threat-detection-system\\AI_PROJECT\\Interaction\\019_密码显隐按钮长按空格重复切换\\evidence\\before\\test-results\\login-key-repeat-Password--abdb6-d-do-not-submit-valid-forms-chromium\\error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "F:\\codex\\threat-detection-system\\frontend\\e2e\\login-key-repeat.spec.ts",
+                        "column": 35,
+                        "line": 168
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "903f2a227032283c1ae9-7c45d316138eb8444ec3",
+              "file": "login-key-repeat.spec.ts",
+              "line": 94,
+              "column": 11
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-30T02:11:05.678Z",
+    "duration": 10099.709,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

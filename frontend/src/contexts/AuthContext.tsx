@@ -1,6 +1,11 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import {
+  getJwtExpirationMs,
+  SESSION_CLEARED_EVENT,
+  terminateSession,
+} from '@/services/session';
 
-export type AppRole = 'SUPER_ADMIN' | 'TENANT_ADMIN' | 'CUSTOMER_USER';
+export type AppRole = 'SUPER_ADMIN' | 'TENANT_ADMIN' | 'CUSTOMER_ADMIN' | 'CUSTOMER_USER';
 
 export interface AuthUser {
   id: number;
@@ -24,6 +29,7 @@ interface AuthContextValue extends AuthState {
   hasRole: (role: AppRole) => boolean;
   isSuperAdmin: boolean;
   isTenantAdmin: boolean;
+  isCustomerAdmin: boolean;
   isCustomerUser: boolean;
 }
 
@@ -69,14 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
-    localStorage.removeItem('customer_id');
-    localStorage.removeItem('tenant_id');
     setToken(null);
     setUser(null);
-    window.location.href = '/login';
+    terminateSession();
   }, []);
 
   const hasRole = useCallback((role: AppRole) => {
@@ -85,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isSuperAdmin = user?.roles.includes('SUPER_ADMIN') ?? false;
   const isTenantAdmin = user?.roles.includes('TENANT_ADMIN') ?? false;
+  const isCustomerAdmin = user?.roles.includes('CUSTOMER_ADMIN') ?? false;
   const isCustomerUser = user?.roles.includes('CUSTOMER_USER') ?? false;
 
   useEffect(() => {
@@ -94,9 +96,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       }
     };
+    const handleSessionCleared = () => {
+      setToken(null);
+      setUser(null);
+    };
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener(SESSION_CLEARED_EVENT, handleSessionCleared);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener(SESSION_CLEARED_EVENT, handleSessionCleared);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!token) return undefined;
+
+    const expiresAt = getJwtExpirationMs(token);
+    if (expiresAt === undefined) return undefined;
+
+    let timer: number | undefined;
+    const expireIfNeeded = () => {
+      if (Date.now() >= expiresAt) {
+        setToken(null);
+        setUser(null);
+        terminateSession('session_expired');
+        return true;
+      }
+      return false;
+    };
+    const scheduleExpiry = () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      const remaining = expiresAt - Date.now();
+      if (remaining <= 0) {
+        expireIfNeeded();
+        return;
+      }
+      // Browsers clamp longer timers; reschedule when that boundary is reached.
+      timer = window.setTimeout(scheduleExpiry, Math.min(remaining, 2_147_000_000));
+    };
+    const handleFocus = () => {
+      if (!expireIfNeeded()) scheduleExpiry();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') handleFocus();
+    };
+
+    scheduleExpiry();
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [token]);
 
   return (
     <AuthContext.Provider
@@ -109,6 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         hasRole,
         isSuperAdmin,
         isTenantAdmin,
+        isCustomerAdmin,
         isCustomerUser,
       }}
     >
@@ -117,6 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');

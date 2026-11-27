@@ -1,15 +1,22 @@
 package com.threatdetection.alert.controller;
 
+import com.threatdetection.alert.dto.SmtpConfigRequest;
+import com.threatdetection.alert.dto.SmtpConfigResponse;
 import com.threatdetection.alert.model.SmtpConfig;
 import com.threatdetection.alert.model.CustomerNotificationConfig;
 import com.threatdetection.alert.repository.SmtpConfigRepository;
 import com.threatdetection.alert.repository.CustomerNotificationConfigRepository;
 import com.threatdetection.alert.service.notification.DynamicMailSenderService;
+import com.threatdetection.alert.service.notification.NotificationConfigurationTestService;
+import com.threatdetection.alert.service.SecretEncryptionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import jakarta.validation.Valid;
 
 import java.time.Instant;
 import java.util.List;
@@ -65,6 +72,12 @@ public class NotificationConfigController {
     
     @Autowired
     private DynamicMailSenderService dynamicMailSenderService;
+
+    @Autowired
+    private NotificationConfigurationTestService notificationConfigurationTestService;
+
+    @Autowired
+    private SecretEncryptionService secretEncryptionService;
     
     // ==================== SMTP配置管理 ====================
     
@@ -72,8 +85,10 @@ public class NotificationConfigController {
      * 获取所有SMTP配置
      */
     @GetMapping("/smtp")
-    public ResponseEntity<List<SmtpConfig>> getAllSmtpConfigs() {
-        List<SmtpConfig> configs = smtpConfigRepository.findAll();
+    public ResponseEntity<List<SmtpConfigResponse>> getAllSmtpConfigs() {
+        List<SmtpConfigResponse> configs = smtpConfigRepository.findAll().stream()
+                .map(SmtpConfigResponse::fromEntity)
+                .toList();
         logger.info("Retrieved {} SMTP configurations", configs.size());
         return ResponseEntity.ok(configs);
     }
@@ -82,24 +97,49 @@ public class NotificationConfigController {
      * 获取默认SMTP配置
      */
     @GetMapping("/smtp/default")
-    public ResponseEntity<SmtpConfig> getDefaultSmtpConfig() {
+    public ResponseEntity<SmtpConfigResponse> getDefaultSmtpConfig() {
         Optional<SmtpConfig> config = smtpConfigRepository.findByIsDefaultTrue();
         if (config.isPresent()) {
             logger.info("Retrieved default SMTP config: {}", config.get().getConfigName());
-            return ResponseEntity.ok(config.get());
+            return ResponseEntity.ok(SmtpConfigResponse.fromEntity(config.get()));
         }
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(SmtpConfigResponse.unconfigured());
+    }
+
+    /**
+     * 创建或更新唯一的默认SMTP配置。更新时密码留空表示保留已有密码。
+     */
+    @PutMapping("/smtp/default")
+    public ResponseEntity<SmtpConfigResponse> upsertDefaultSmtpConfig(
+            @Valid @RequestBody SmtpConfigRequest request) {
+        SmtpConfig config = smtpConfigRepository.findByIsDefaultTrue()
+                .orElseGet(SmtpConfig::new);
+        boolean creating = config.getId() == null;
+        if (creating && (request.getPassword() == null || request.getPassword().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "SMTP password is required when creating the default configuration");
+        }
+
+        applyRequest(config, request, true);
+        if (creating) {
+            config.setCreatedAt(Instant.now());
+        }
+        config.setUpdatedAt(Instant.now());
+        SmtpConfig saved = smtpConfigRepository.save(config);
+        dynamicMailSenderService.refreshCache();
+        logger.info("Upserted default SMTP config: {} (ID={})", saved.getConfigName(), saved.getId());
+        return ResponseEntity.ok(SmtpConfigResponse.fromEntity(saved));
     }
     
     /**
      * 根据ID获取SMTP配置
      */
     @GetMapping("/smtp/{id}")
-    public ResponseEntity<SmtpConfig> getSmtpConfigById(@PathVariable Long id) {
+    public ResponseEntity<SmtpConfigResponse> getSmtpConfigById(@PathVariable Long id) {
         Optional<SmtpConfig> config = smtpConfigRepository.findById(id);
         if (config.isPresent()) {
             logger.info("Retrieved SMTP config: {}", config.get().getConfigName());
-            return ResponseEntity.ok(config.get());
+            return ResponseEntity.ok(SmtpConfigResponse.fromEntity(config.get()));
         }
         return ResponseEntity.notFound().build();
     }
@@ -108,7 +148,14 @@ public class NotificationConfigController {
      * 创建新SMTP配置
      */
     @PostMapping("/smtp")
-    public ResponseEntity<SmtpConfig> createSmtpConfig(@RequestBody SmtpConfig config) {
+    public ResponseEntity<SmtpConfigResponse> createSmtpConfig(
+            @Valid @RequestBody SmtpConfigRequest request) {
+        if (request.getPassword() == null || request.getPassword().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "SMTP password is required when creating a configuration");
+        }
+        SmtpConfig config = new SmtpConfig();
+        applyRequest(config, request, Boolean.TRUE.equals(request.getIsDefault()));
         config.setCreatedAt(Instant.now());
         config.setUpdatedAt(Instant.now());
         
@@ -118,16 +165,17 @@ public class NotificationConfigController {
         // 清除缓存
         dynamicMailSenderService.refreshCache();
         
-        return ResponseEntity.ok(savedConfig);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(SmtpConfigResponse.fromEntity(savedConfig));
     }
     
     /**
      * 更新SMTP配置
      */
     @PutMapping("/smtp/{id}")
-    public ResponseEntity<SmtpConfig> updateSmtpConfig(
+    public ResponseEntity<SmtpConfigResponse> updateSmtpConfig(
             @PathVariable Long id,
-            @RequestBody SmtpConfig config) {
+            @Valid @RequestBody SmtpConfigRequest request) {
         
         Optional<SmtpConfig> existingOpt = smtpConfigRepository.findById(id);
         if (existingOpt.isEmpty()) {
@@ -136,25 +184,7 @@ public class NotificationConfigController {
         
         SmtpConfig existing = existingOpt.get();
         
-        // 更新字段
-        existing.setHost(config.getHost());
-        existing.setPort(config.getPort());
-        existing.setUsername(config.getUsername());
-        
-        if (config.getPassword() != null && !config.getPassword().isEmpty()) {
-            existing.setPassword(config.getPassword());
-        }
-        
-        existing.setFromAddress(config.getFromAddress());
-        existing.setFromName(config.getFromName());
-        existing.setEnableTls(config.getEnableTls());
-        existing.setEnableSsl(config.getEnableSsl());
-        existing.setEnableStarttls(config.getEnableStarttls());
-        existing.setConnectionTimeout(config.getConnectionTimeout());
-        existing.setTimeout(config.getTimeout());
-        existing.setWriteTimeout(config.getWriteTimeout());
-        existing.setIsActive(config.getIsActive());
-        existing.setDescription(config.getDescription());
+        applyRequest(existing, request, Boolean.TRUE.equals(existing.getIsDefault()));
         existing.setUpdatedAt(Instant.now());
         
         SmtpConfig updated = smtpConfigRepository.save(existing);
@@ -163,7 +193,42 @@ public class NotificationConfigController {
         // 清除缓存
         dynamicMailSenderService.refreshCache();
         
-        return ResponseEntity.ok(updated);
+        return ResponseEntity.ok(SmtpConfigResponse.fromEntity(updated));
+    }
+
+    private void applyRequest(SmtpConfig config, SmtpConfigRequest request, boolean forceDefault) {
+        String encryption = request.getEncryption() == null
+                ? "TLS"
+                : request.getEncryption().trim().toUpperCase();
+        String requestedName = request.getConfigName();
+        if (forceDefault) {
+            config.setConfigName("default");
+        } else if (requestedName != null && !requestedName.isBlank()) {
+            config.setConfigName(requestedName.trim());
+        } else if (config.getConfigName() == null || config.getConfigName().isBlank()) {
+            config.setConfigName("smtp-" + System.currentTimeMillis());
+        }
+        config.setHost(request.getHost().trim());
+        config.setPort(request.getPort());
+        config.setUsername(request.getUsername() == null ? "" : request.getUsername().trim());
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            config.setPassword(secretEncryptionService.encrypt(request.getPassword()));
+        }
+        config.setFromAddress(request.getFromAddress().trim());
+        config.setFromName(request.getFromName());
+        config.setEnableTls("TLS".equals(encryption));
+        config.setEnableStarttls("STARTTLS".equals(encryption));
+        config.setEnableSsl("SSL".equals(encryption));
+        config.setConnectionTimeout(defaultTimeout(request.getConnectionTimeout()));
+        config.setTimeout(defaultTimeout(request.getTimeout()));
+        config.setWriteTimeout(defaultTimeout(request.getWriteTimeout()));
+        config.setIsActive(request.getActive() == null || request.getActive());
+        config.setIsDefault(forceDefault || Boolean.TRUE.equals(request.getIsDefault()));
+        config.setDescription(request.getDescription());
+    }
+
+    private int defaultTimeout(Integer value) {
+        return value == null || value < 1 ? 5000 : value;
     }
     
     /**
@@ -214,6 +279,12 @@ public class NotificationConfigController {
             return ResponseEntity.ok(config.get());
         }
         return ResponseEntity.notFound().build();
+    }
+
+    /** Performs real sends for every enabled channel and returns per-target results. */
+    @PostMapping("/customer/{customerId}/test")
+    public ResponseEntity<Map<String, Object>> testCustomerConfig(@PathVariable String customerId) {
+        return ResponseEntity.ok(notificationConfigurationTestService.test(customerId));
     }
     
     /**

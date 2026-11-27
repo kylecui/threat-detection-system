@@ -261,7 +261,7 @@ public class ConfigAssignmentController {
     private boolean canViewCustomer(CallerContext caller, String customerId) {
         if (caller.roles.contains("SUPER_ADMIN")) return true;
         if (caller.roles.contains("TENANT_ADMIN")) return true;
-        return caller.roles.contains("CUSTOMER_USER")
+        return (caller.roles.contains("CUSTOMER_USER") || caller.roles.contains("CUSTOMER_ADMIN"))
                 && caller.customerId != null
                 && caller.customerId.equals(customerId);
     }

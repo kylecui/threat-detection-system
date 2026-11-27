@@ -12,6 +12,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -45,18 +47,31 @@ public class ThreatQueryService {
     
     // 常用端口名称映射
     private static final Map<Integer, String> PORT_NAMES = Map.ofEntries(
+            Map.entry(21, "FTP"),
             Map.entry(22, "SSH"),
             Map.entry(23, "Telnet"),
+            Map.entry(25, "SMTP"),
+            Map.entry(53, "DNS"),
             Map.entry(80, "HTTP"),
+            Map.entry(110, "POP3"),
             Map.entry(135, "RPC"),
             Map.entry(139, "NetBIOS"),
+            Map.entry(143, "IMAP"),
+            Map.entry(443, "HTTPS"),
             Map.entry(445, "SMB"),
+            Map.entry(993, "IMAPS"),
+            Map.entry(995, "POP3S"),
             Map.entry(1433, "SQL Server"),
+            Map.entry(1521, "Oracle"),
+            Map.entry(2049, "NFS"),
             Map.entry(3306, "MySQL"),
             Map.entry(3389, "RDP"),
             Map.entry(5432, "PostgreSQL"),
             Map.entry(5900, "VNC"),
-            Map.entry(8080, "HTTP-Proxy")
+            Map.entry(6379, "Redis"),
+            Map.entry(8080, "HTTP-Proxy"),
+            Map.entry(9200, "Elasticsearch"),
+            Map.entry(27017, "MongoDB")
     );
     
     public ThreatQueryService(ThreatAssessmentRepository repository) {
@@ -77,6 +92,40 @@ public class ThreatQueryService {
         
         return convertToDetailResponse(assessment);
     }
+
+    @Transactional
+    @CacheEvict(value = "overviewSnapshots", allEntries = true)
+    public void deleteAssessment(Long id, String customerId, Long tenantId) {
+        ThreatAssessment assessment = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Assessment not found: " + id));
+        verifyDeleteScope(assessment, customerId, tenantId);
+        repository.delete(assessment);
+        log.info("Deleted assessment id={} customerId={} tenantId={}", id, customerId, tenantId);
+    }
+
+    @Transactional
+    @CacheEvict(value = "overviewSnapshots", allEntries = true)
+    public int deleteAssessments(List<Long> ids, String customerId, Long tenantId) {
+        LinkedHashSet<Long> uniqueIds = new LinkedHashSet<>(ids);
+        List<ThreatAssessment> assessments = repository.findAllById(uniqueIds);
+        if (assessments.size() != uniqueIds.size()) {
+            throw new IllegalArgumentException("One or more assessments were not found");
+        }
+        assessments.forEach(assessment -> verifyDeleteScope(assessment, customerId, tenantId));
+        repository.deleteAllInBatch(assessments);
+        log.info("Deleted {} assessments customerId={} tenantId={}", assessments.size(), customerId, tenantId);
+        return assessments.size();
+    }
+
+    private void verifyDeleteScope(ThreatAssessment assessment, String customerId, Long tenantId) {
+        if (customerId != null && !customerId.isBlank()
+                && !customerId.trim().equals(assessment.getCustomerId())) {
+            throw new IllegalArgumentException("Assessment is outside the requested customer scope");
+        }
+        if (tenantId != null && !repository.existsByIdAndTenantId(assessment.getId(), tenantId)) {
+            throw new IllegalArgumentException("Assessment is outside the requested tenant scope");
+        }
+    }
     
     /**
      * 查询评估列表 (分页)
@@ -87,7 +136,7 @@ public class ThreatQueryService {
      * @return 分页结果
      */
     public Page<ThreatAssessmentDetailResponse> getAssessmentList(String customerId, int page, int size) {
-        return getAssessmentList(customerId, page, size, null, null, null, null);
+        return getAssessmentList(customerId, page, size, null, null, null, null, null);
     }
 
     public Page<ThreatAssessmentDetailResponse> getAssessmentList(String customerId,
@@ -96,7 +145,8 @@ public class ThreatQueryService {
                                                                   String threatLevel,
                                                                   Instant startTime,
                                                                   Instant endTime,
-                                                                  String attackMac) {
+                                                                  String attackMac,
+                                                                  Integer detectionTier) {
         log.info("Querying assessment list: customerId={}, page={}, size={}, threatLevel={}, startTime={}, endTime={}, attackMac={}",
                 customerId, page, size, threatLevel, startTime, endTime, attackMac);
 
@@ -114,6 +164,12 @@ public class ThreatQueryService {
         }
         if (attackMac != null && !attackMac.isBlank()) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("attackMac"), attackMac.trim()));
+        }
+        if (detectionTier != null) {
+            if (detectionTier < 1 || detectionTier > 3) {
+                throw new IllegalArgumentException("detection_tier must be 1, 2 or 3");
+            }
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("detectionTier"), detectionTier));
         }
 
         Page<ThreatAssessment> assessmentPage = repository.findAll(spec, pageable);
@@ -142,39 +198,7 @@ public class ThreatQueryService {
      */
     public ThreatStatisticsResponse getStatistics(String customerId) {
         log.info("Getting threat statistics: customerId={}", customerId);
-        
-        long totalCount = repository.countByCustomerId(customerId);
-        long criticalCount = repository.countByCustomerIdAndLevel(customerId, "CRITICAL");
-        long highCount = repository.countByCustomerIdAndLevel(customerId, "HIGH");
-        long mediumCount = repository.countByCustomerIdAndLevel(customerId, "MEDIUM");
-        long lowCount = repository.countByCustomerIdAndLevel(customerId, "LOW");
-        long infoCount = repository.countByCustomerIdAndLevel(customerId, "INFO");
-        
-        Double avgScore = repository.getAverageThreatScore(customerId);
-        Double maxScore = repository.getMaxThreatScore(customerId);
-        Double minScore = repository.getMinThreatScore(customerId);
-        
-        Map<String, Long> levelDistribution = Map.of(
-                "CRITICAL", criticalCount,
-                "HIGH", highCount,
-                "MEDIUM", mediumCount,
-                "LOW", lowCount,
-                "INFO", infoCount
-        );
-        
-        ThreatStatisticsResponse response = new ThreatStatisticsResponse();
-        response.setCustomerId(customerId);
-        response.setTotalCount(totalCount);
-        response.setCriticalCount(criticalCount);
-        response.setHighCount(highCount);
-        response.setMediumCount(mediumCount);
-        response.setLowCount(lowCount);
-        response.setInfoCount(infoCount);
-        response.setAverageThreatScore(avgScore != null ? avgScore : 0.0);
-        response.setMaxThreatScore(maxScore != null ? maxScore : 0.0);
-        response.setMinThreatScore(minScore != null ? minScore : 0.0);
-        response.setLevelDistribution(levelDistribution);
-        return response;
+        return toStatisticsResponse(customerId, repository.getStatisticsAggregate(customerId));
     }
 
     public ThreatStatisticsResponse getTenantStatistics(List<String> customerIds) {
@@ -202,38 +226,151 @@ public class ThreatQueryService {
             return emptyResponse;
         }
 
-        long totalCount = repository.countByCustomerIdIn(customerIds);
-        long criticalCount = repository.countByCustomerIdInAndLevel(customerIds, "CRITICAL");
-        long highCount = repository.countByCustomerIdInAndLevel(customerIds, "HIGH");
-        long mediumCount = repository.countByCustomerIdInAndLevel(customerIds, "MEDIUM");
-        long lowCount = repository.countByCustomerIdInAndLevel(customerIds, "LOW");
-        long infoCount = repository.countByCustomerIdInAndLevel(customerIds, "INFO");
+        return toStatisticsResponse("TENANT", repository.getStatisticsAggregateForCustomers(customerIds));
+    }
 
-        Double avgScore = repository.getAverageThreatScoreForCustomers(customerIds);
-        Double maxScore = repository.getMaxThreatScoreForCustomers(customerIds);
-        Double minScore = repository.getMinThreatScoreForCustomers(customerIds);
+    @Cacheable(
+            value = "overviewSnapshots",
+            key = "(#customerId == null ? '' : #customerId) + ':' + (#tenantId == null ? '' : #tenantId) + ':' + #hours",
+            sync = true
+    )
+    public OverviewSnapshotResponse getOverviewSnapshot(String customerId, Long tenantId, int hours) {
+        int safeHours = Math.max(1, Math.min(hours, 24 * 90));
+        Instant now = Instant.now();
+        boolean dailyBuckets = safeHours > 48;
+        int bucketCount = dailyBuckets ? Math.max(1, (int) Math.ceil(safeHours / 24.0)) : safeHours;
+        Instant bucketEnd = dailyBuckets
+                ? now.truncatedTo(ChronoUnit.DAYS)
+                : now.truncatedTo(ChronoUnit.HOURS);
+        Instant since = dailyBuckets
+                ? bucketEnd.minus(bucketCount - 1L, ChronoUnit.DAYS)
+                : bucketEnd.minus(bucketCount - 1L, ChronoUnit.HOURS);
 
-        Map<String, Long> levelDistribution = Map.of(
-                "CRITICAL", criticalCount,
-                "HIGH", highCount,
-                "MEDIUM", mediumCount,
-                "LOW", lowCount,
-                "INFO", infoCount
-        );
+        if (customerId != null && !customerId.isBlank()) {
+            List<Object[]> rawTrend = dailyBuckets
+                    ? repository.getDailyTrend(customerId, since, now)
+                    : repository.getHourlyTrend(customerId, since, now);
+            return OverviewSnapshotResponse.builder()
+                    .generatedAt(now)
+                    .statistics(toStatisticsResponse(customerId,
+                            repository.getStatisticsAggregateSince(customerId, since)))
+                    .trend(fillTrendBuckets(rawTrend, since, bucketEnd, dailyBuckets))
+                    .portDistribution(toPortDistribution(repository.getPortDistributionRows(customerId, since, 15)))
+                    .nonPortProtocols(toNonPortProtocols(repository.getNonPortProtocolRows(customerId, since)))
+                    .topAttackers(getTopAttackers(customerId, 10, safeHours))
+                    .recentThreats(repository.findDistinctRecentByCustomer(customerId, since, 10).stream()
+                            .map(this::convertToDetailResponse).collect(Collectors.toList()))
+                    .build();
+        }
+        if (tenantId == null) {
+            throw new IllegalArgumentException("customer_id or tenant_id is required");
+        }
+        List<Object[]> rawTrend = dailyBuckets
+                ? repository.getDailyTrendForTenant(tenantId, since, now)
+                : repository.getHourlyTrendForTenant(tenantId, since, now);
+        return OverviewSnapshotResponse.builder()
+                .generatedAt(now)
+                .statistics(toStatisticsResponse("TENANT",
+                        repository.getStatisticsAggregateForTenantSince(tenantId, since)))
+                .trend(fillTrendBuckets(rawTrend, since, bucketEnd, dailyBuckets))
+                .portDistribution(toPortDistribution(repository.getPortDistributionRowsForTenant(tenantId, since, 15)))
+                .nonPortProtocols(toNonPortProtocols(repository.getNonPortProtocolRowsForTenant(tenantId, since)))
+                .topAttackers(repository.findTopAttackersForTenant(tenantId, since, 10).stream()
+                        .map(this::convertToTopAttackerResponse).collect(Collectors.toList()))
+                .recentThreats(repository.findDistinctRecentByTenant(tenantId, since, 10).stream()
+                        .map(this::convertToDetailResponse).collect(Collectors.toList()))
+                .build();
+    }
+
+    private List<TrendDataPoint> fillTrendBuckets(List<Object[]> rows,
+                                                  Instant bucketStart,
+                                                  Instant bucketEnd,
+                                                  boolean dailyBuckets) {
+        ChronoUnit unit = dailyBuckets ? ChronoUnit.DAYS : ChronoUnit.HOURS;
+        Map<Instant, TrendDataPoint> existing = rows.stream()
+                .map(this::convertToTrendDataPoint)
+                .collect(Collectors.toMap(
+                        item -> item.getTimestamp().truncatedTo(unit),
+                        item -> item,
+                        (left, right) -> left));
+        List<TrendDataPoint> result = new ArrayList<>();
+        for (Instant cursor = bucketStart; !cursor.isAfter(bucketEnd); cursor = cursor.plus(1, unit)) {
+            TrendDataPoint item = existing.get(cursor);
+            if (item == null) {
+                item = TrendDataPoint.builder()
+                        .timestamp(cursor)
+                        .count(0L)
+                        .averageScore(0.0)
+                        .maxScore(0.0)
+                        .criticalCount(0L)
+                        .highCount(0L)
+                        .mediumCount(0L)
+                        .build();
+            }
+            result.add(item);
+        }
+        return result;
+    }
+
+    private List<NonPortProtocolDistribution> toNonPortProtocols(List<Object[]> rows) {
+        return rows.stream()
+                .map(row -> NonPortProtocolDistribution.builder()
+                        .protocol(String.valueOf(row[0]))
+                        .count(number(row[1]).longValue())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    private List<PortDistribution> toPortDistribution(List<Object[]> rows) {
+        long fallbackTotal = rows.stream().mapToLong(row -> number(row[1]).longValue()).sum();
+        return rows.stream().map(row -> {
+            int port = number(row[0]).intValue();
+            long count = number(row[1]).longValue();
+            long total = row.length > 2 ? number(row[2]).longValue() : fallbackTotal;
+            PortDistribution item = new PortDistribution();
+            item.setPort(port);
+            item.setPortName(PORT_NAMES.get(port));
+            item.setCount(count);
+            item.setPercentage(total == 0 ? 0.0 : Math.round(count * 10000.0 / total) / 100.0);
+            return item;
+        }).collect(Collectors.toList());
+    }
+
+    private ThreatStatisticsResponse toStatisticsResponse(String scope, Object[] row) {
+        if (row == null || row.length < 9) {
+            row = new Object[] {0L, 0L, 0L, 0L, 0L, 0L, 0.0, 0.0, 0.0};
+        }
+
+        long totalCount = number(row[0]).longValue();
+        long criticalCount = number(row[1]).longValue();
+        long highCount = number(row[2]).longValue();
+        long mediumCount = number(row[3]).longValue();
+        long lowCount = number(row[4]).longValue();
+        long infoCount = number(row[5]).longValue();
 
         ThreatStatisticsResponse response = new ThreatStatisticsResponse();
-        response.setCustomerId("TENANT");
+        response.setCustomerId(scope);
         response.setTotalCount(totalCount);
         response.setCriticalCount(criticalCount);
         response.setHighCount(highCount);
         response.setMediumCount(mediumCount);
         response.setLowCount(lowCount);
         response.setInfoCount(infoCount);
-        response.setAverageThreatScore(avgScore != null ? avgScore : 0.0);
-        response.setMaxThreatScore(maxScore != null ? maxScore : 0.0);
-        response.setMinThreatScore(minScore != null ? minScore : 0.0);
-        response.setLevelDistribution(levelDistribution);
+        response.setAverageThreatScore(number(row[6]).doubleValue());
+        response.setMaxThreatScore(number(row[7]).doubleValue());
+        response.setMinThreatScore(number(row[8]).doubleValue());
+        response.setLevelDistribution(Map.of(
+                "CRITICAL", criticalCount,
+                "HIGH", highCount,
+                "MEDIUM", mediumCount,
+                "LOW", lowCount,
+                "INFO", infoCount
+        ));
         return response;
+    }
+
+    private Number number(Object value) {
+        return value instanceof Number ? (Number) value : 0;
     }
     
     /**
@@ -276,59 +413,14 @@ public class ThreatQueryService {
      * 获取端口分布
      * 
      * @param customerId 客户ID (必需)
-     * @return 端口分布列表 (TOP 10)
+     * @return 原始攻击事件端口分布列表 (TOP 15)
      */
     public List<PortDistribution> getPortDistribution(String customerId, int hours) {
         log.info("Getting port distribution: customerId={}, hours={}", customerId, hours);
         
-        // 查询指定时间范围的威胁
-        Instant since = Instant.now().minus(hours, ChronoUnit.HOURS);
-        List<ThreatAssessment> recentThreats = repository.findRecent24Hours(customerId, since);
-        
-        // 解析portList字段,统计端口出现次数
-        Map<Integer, Long> portCountMap = new HashMap<>();
-        
-        for (ThreatAssessment threat : recentThreats) {
-            String portList = threat.getPortList();
-            if (portList != null && !portList.isEmpty()) {
-                // 假设portList格式: "80,443,3389" 或 "[80, 443, 3389]"
-                String cleaned = portList.replaceAll("[\\[\\]\\s]", "");
-                String[] ports = cleaned.split(",");
-                
-                for (String portStr : ports) {
-                    try {
-                        int port = Integer.parseInt(portStr.trim());
-                        portCountMap.merge(port, 1L, Long::sum);
-                    } catch (NumberFormatException e) {
-                        log.warn("Invalid port number: {}", portStr);
-                    }
-                }
-            }
-        }
-        
-        // 计算总数
-        long totalCount = portCountMap.values().stream().mapToLong(Long::longValue).sum();
-        
-        // 转换为DTO并排序 (TOP 10)
-        return portCountMap.entrySet().stream()
-                .sorted(Map.Entry.<Integer, Long>comparingByValue().reversed())
-                .limit(10)
-                .map(entry -> {
-                    int port = entry.getKey();
-                    long count = entry.getValue();
-                    double percentage = totalCount > 0 ? (count * 100.0 / totalCount) : 0.0;
-                    
-                    String portName = PORT_NAMES.getOrDefault(port, String.valueOf(port));
-                    String label = port + "-" + portName;
-                    
-                    PortDistribution distribution = new PortDistribution();
-                    distribution.setPort(port);
-                    distribution.setPortName(label);
-                    distribution.setCount(count);
-                    distribution.setPercentage(Math.round(percentage * 100.0) / 100.0);
-                    return distribution;
-                })
-                .collect(Collectors.toList());
+        int safeHours = Math.max(1, Math.min(hours, 24 * 90));
+        Instant since = Instant.now().minus(safeHours, ChronoUnit.HOURS);
+        return toPortDistribution(repository.getPortDistributionRows(customerId, since, 15));
     }
 
     public List<PortDistribution> getTenantPortDistribution(List<String> customerIds, int hours) {
@@ -338,49 +430,9 @@ public class ThreatQueryService {
             return Collections.emptyList();
         }
 
-        Instant since = Instant.now().minus(hours, ChronoUnit.HOURS);
-        List<ThreatAssessment> recentThreats = repository.findRecent24HoursForCustomers(customerIds, since);
-
-        Map<Integer, Long> portCountMap = new HashMap<>();
-
-        for (ThreatAssessment threat : recentThreats) {
-            String portList = threat.getPortList();
-            if (portList != null && !portList.isEmpty()) {
-                String cleaned = portList.replaceAll("[\\[\\]\\s]", "");
-                String[] ports = cleaned.split(",");
-
-                for (String portStr : ports) {
-                    try {
-                        int port = Integer.parseInt(portStr.trim());
-                        portCountMap.merge(port, 1L, Long::sum);
-                    } catch (NumberFormatException e) {
-                        log.warn("Invalid port number: {}", portStr);
-                    }
-                }
-            }
-        }
-
-        long totalCount = portCountMap.values().stream().mapToLong(Long::longValue).sum();
-
-        return portCountMap.entrySet().stream()
-                .sorted(Map.Entry.<Integer, Long>comparingByValue().reversed())
-                .limit(10)
-                .map(entry -> {
-                    int port = entry.getKey();
-                    long count = entry.getValue();
-                    double percentage = totalCount > 0 ? (count * 100.0 / totalCount) : 0.0;
-
-                    String portName = PORT_NAMES.getOrDefault(port, String.valueOf(port));
-                    String label = port + "-" + portName;
-
-                    PortDistribution distribution = new PortDistribution();
-                    distribution.setPort(port);
-                    distribution.setPortName(label);
-                    distribution.setCount(count);
-                    distribution.setPercentage(Math.round(percentage * 100.0) / 100.0);
-                    return distribution;
-                })
-                .collect(Collectors.toList());
+        int safeHours = Math.max(1, Math.min(hours, 24 * 90));
+        Instant since = Instant.now().minus(safeHours, ChronoUnit.HOURS);
+        return toPortDistribution(repository.getPortDistributionRowsForCustomers(customerIds, since, 15));
     }
 
     public List<TopAttackerResponse> getTopAttackers(String customerId, int limit, int hours) {
@@ -437,7 +489,7 @@ public class ThreatQueryService {
         response.setId(assessment.getId());
         response.setCustomerId(assessment.getCustomerId());
         response.setAttackMac(assessment.getAttackMac());
-        response.setAttackIp("N/A");
+        response.setAttackIp(assessment.getAttackIp());
         response.setThreatScore(assessment.getThreatScore());
         response.setThreatLevel(assessment.getThreatLevel());
         response.setAttackCount(assessment.getAttackCount());

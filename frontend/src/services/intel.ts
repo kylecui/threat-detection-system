@@ -29,6 +29,7 @@ class IntelService {
     iocType?: string;
     severity?: string;
     sourceName?: string;
+    sort?: string | string[];
   }): Promise<PaginatedResponse<ThreatIndicator>> {
     const response = await apiClient.get<PaginatedResponse<ThreatIndicator>>(
       '/api/v1/threat-intel/indicators',
@@ -113,8 +114,8 @@ class IntelService {
   }
 
   /** 手动触发Feed轮询 */
-  async pollFeed(id: number): Promise<{ polledCount: number }> {
-    const response = await apiClient.post<{ polledCount: number }>(
+  async pollFeed(id: number): Promise<{ indicatorsProcessed?: number; indicatorsNew?: number; success?: boolean; errorMessage?: string }> {
+    const response = await apiClient.post<{ indicatorsProcessed?: number; indicatorsNew?: number; success?: boolean; errorMessage?: string }>(
       `/api/v1/threat-intel/feeds/${id}/poll`
     );
     return response.data;

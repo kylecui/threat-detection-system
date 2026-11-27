@@ -1,0 +1,18 @@
+<!doctype html>
+<!--
+  INTERACTION-004 test-only harness. ConfigCascading has no production route
+  (App.tsx mounts the split /config/* pages, not the legacy aggregate page), so
+  E2E renders it here. Served by the Vite dev server only; the production build
+  input is frontend/index.html, so this page never ships.
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>E2E harness · ConfigCascading</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./config-cascading.tsx"></script>
+  </body>
+</html>

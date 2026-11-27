@@ -1,0 +1,20 @@
+{
+  "3.1.32": {
+    "PACKAGE_CONTENTS.txt": "27466627d7e67e631c1e11cc9dd238adc7f6ef2632ccfa0193c3b4bd1ef44112",
+    "RELEASE_NOTES.md": "649e38aed6d0123c5450e415cd30cf2a02e0c6e297c212c9fe92fada196f779c",
+    "SHA256SUMS": "40099776731b51feb972d9aec06c72ed11a416db6ecec18f95340915f6b34e07",
+    "threat-detection-system-3.1.32-linux-x86_64.tar.gz": "af89be1e122b67a47703875009bf145ad13353e6ee628daf4bddee76079baaef"
+  },
+  "3.1.38": {
+    "PACKAGE_CONTENTS.txt": "c1279f8761a5596ffa2394b67664f87bd128d87ff6767c7f403d0b2a6dc5ff39",
+    "RELEASE_NOTES.md": "d15f39a31e367d90fb5e09cb6db0a27749d7a966793eb58673f469c93ac817a7",
+    "SHA256SUMS": "3cc4f09dadc376247ee6a33d67caad0c557738217ebe98da96f9f812f79e4dc9",
+    "threat-detection-system-3.1.38-linux-x86_64.tar.gz": "7a6404adb2f413a5bc20b8c8ef694cac64ffc3a67b7e5109c4d8a88a6cdb9eec"
+  },
+  "3.1.39": {
+    "PACKAGE_CONTENTS.txt": "224b9cfac82c2273e2898662a10430b5a4e037ba6af358178ca70f4a6f55cad9",
+    "RELEASE_NOTES.md": "2188b9a74a9260b13a1a78680e98f5136c8534536c2c3a184b9e484caf691f38",
+    "SHA256SUMS": "bd6a769c86bb9c9757d9aaa58831cceae89f6a88715af96ccabd31d9a3852942",
+    "threat-detection-system-3.1.39-linux-x86_64.tar.gz": "a9a2629a1893bce6a86108d2e058e6278fac73404bd1f07be68a2478b44aa36d"
+  }
+}

@@ -208,15 +208,15 @@ public class AlertController {
      * 手动升级告警
      */
     @PostMapping("/{id}/escalate")
-    @Operation(summary = "升级告警", description = "手动升级告警")
-    public ResponseEntity<Void> escalateAlert(
+    @Operation(summary = "提级处理告警", description = "提高告警的处置层级")
+    public ResponseEntity<Alert> escalateAlert(
             @Parameter(description = "告警ID") @PathVariable Long id,
             @Valid @RequestBody EscalateAlertRequest request) {
 
         logger.info("Manually escalating alert {}: {}", id, request.getReason());
 
-        escalationService.manuallyEscalateAlert(id, request.getReason());
-        return ResponseEntity.ok().build();
+        Alert escalatedAlert = escalationService.manuallyEscalateAlert(id, request.getReason());
+        return ResponseEntity.ok(escalatedAlert);
     }
 
     /**
@@ -224,13 +224,13 @@ public class AlertController {
      */
     @PostMapping("/{id}/cancel-escalation")
     @Operation(summary = "取消升级", description = "取消告警的升级状态")
-    public ResponseEntity<Void> cancelEscalation(
+    public ResponseEntity<Alert> cancelEscalation(
             @Parameter(description = "告警ID") @PathVariable Long id) {
 
         logger.info("Canceling escalation for alert {}", id);
 
-        escalationService.cancelEscalation(id);
-        return ResponseEntity.ok().build();
+        Alert alert = escalationService.cancelEscalation(id);
+        return ResponseEntity.ok(alert);
     }
 
     /**
@@ -332,9 +332,11 @@ public class AlertController {
     // 请求DTO类
     public static class ResolveAlertRequest {
         @NotBlank
+        @jakarta.validation.constraints.Size(max = 1000)
         private String resolution;
 
         @NotBlank
+        @jakarta.validation.constraints.Size(max = 100)
         private String resolvedBy;
 
         public String getResolution() { return resolution; }
@@ -346,6 +348,7 @@ public class AlertController {
 
     public static class AssignAlertRequest {
         @NotBlank
+        @jakarta.validation.constraints.Size(max = 100)
         private String assignedTo;
 
         public String getAssignedTo() { return assignedTo; }
@@ -354,6 +357,7 @@ public class AlertController {
 
     public static class EscalateAlertRequest {
         @NotBlank
+        @jakarta.validation.constraints.Size(max = 1000)
         private String reason;
 
         public String getReason() { return reason; }

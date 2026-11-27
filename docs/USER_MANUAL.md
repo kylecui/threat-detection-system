@@ -1,8 +1,12 @@
 # 威胁检测系统用户手册
 
-**版本**: 3.0  
-**更新日期**: 2026-04-24  
+**版本**: 3.1.39  
+**更新日期**: 2026-10-30  
 **适用对象**: 系统管理员、运维工程师、开发人员
+
+> 3.1.39 登录入口采用浅色双栏，手机上改为上下布局；登录与首次管理员创建操作不变。按钮悬停文字更清晰，长按密码显隐快捷键只切换一次。交付与验证状态见 `AI_PROJECT/records/tests/2026-10-30-release-3.1.39.md`。
+>
+> 历史记录：3.1.37 的前端合并与当时紧凑登录页说明见 [前端工作台分支合并说明](fixes/FRONTEND_WORKSPACE_MERGE_2026-10-26.md)。3.1.36 的告警详情、责任人显示、处置弹窗和威胁列表对齐说明见 [告警详情与威胁列表界面修复说明](fixes/ALERT_DETAIL_AND_THREAT_TABLE_UI_FIX_2026-10-24.md)。
 
 ---
 
@@ -84,7 +88,7 @@
 |------|------|------|------|
 | data-ingestion | Java (Spring Boot 3.1.5) | 8080 | 接收 rsyslog/MQTT 日志，解析后发布到 Kafka |
 | stream-processing | Java (Apache Flink 1.17) | 8081 (Flink UI) | 实时威胁检测，3 级时间窗口聚合与评分 |
-| alert-management | Java (Spring Boot) | 8082 | 多通道告警通知（Email/SMS/Webhook/Slack/Teams），智能去重与升级 |
+| alert-management | Java (Spring Boot) | 8082 | 多通道告警通知（Email/SMS/Webhook/Slack/Teams），智能去重与提级处置 |
 | threat-assessment | Java (Spring Boot) | 8083 | 威胁评分计算、风险评估、历史趋势分析、设备管理 |
 | customer-management | Java (Spring Boot) | 8084 | 客户 CRUD、设备绑定、多租户层级、网段权重配置 |
 | threat-intelligence | Java (Spring Boot) | 8085 | 威胁情报指标管理、IP 信誉查询、多源 IOC 聚合 |
@@ -127,7 +131,7 @@ V2 哨兵 (MQTT JSON)  --> EMQX:1883  -->        |                          |
 5. 威胁评估服务计算最终风险等级，持久化到 PostgreSQL
 6. ML 检测服务提供辅助异常检测评分 (mlWeight 0.5-3.0)
 7. TIRE 引擎通过 11 款插件聚合外部威胁情报，丰富告警上下文
-8. 告警管理服务执行多通道通知，支持智能去重和升级策略
+8. 告警管理服务执行多通道通知，支持智能去重和提级处置策略
 
 ### 1.5 技术栈
 
@@ -463,6 +467,8 @@ docker compose up -d --force-recreate <container-name>
 
 系统使用 JWT (JSON Web Token) 进行认证：
 
+首次初始化超级管理员以及后续创建或修改用户密码时，密码长度必须为 8–16 位，不要求字母、数字或特殊字符组合。客户管理员初始密码由系统独立生成，不与客户 ID 绑定。
+
 ```bash
 # 登录获取 Token
 curl -X POST http://localhost:8888/api/v1/auth/login \
@@ -588,11 +594,30 @@ curl http://localhost:8082/api/v1/alerts/analytics/stats?customerId=customer-001
 
 ```bash
 # IP 信誉查询
-curl http://localhost:8085/api/v1/threat-intel/lookup/192.168.1.100
+curl "http://localhost:8085/api/v1/threat-intel/lookup?ip=192.168.1.100"
 
 # 威胁指标管理
 curl http://localhost:8085/api/v1/threat-intel/indicators
+
+# 订阅源与统计
+curl http://localhost:8085/api/v1/threat-intel/feeds
+curl http://localhost:8085/api/v1/threat-intel/statistics
 ```
+
+前端“威胁情报 → 订阅源管理”展示订阅源名称、地址、类型、启用状态、指标数、最近拉取状态和时间。配置 API 密钥本身不会自动产生指标：还需启用对应外部订阅源，并手动点击“拉取”或等待定时任务。`internal` 是内部来源，不代表 AbuseIPDB、OTX、VirusTotal 或 GreyNoise 已启用。
+
+威胁指标中的“记录再次出现”用于确认同一个 IOC 又在新的安全事件中出现。点击后出现次数增加、最后发现时间更新，指标本身不会删除或换成另一条记录。重复出现较多、最近仍活跃的指标，应优先结合告警和原始日志继续研判。
+
+内置外部订阅源与配置项的对应关系：
+
+| 订阅源 | 系统配置项 | 默认状态 |
+|--------|------------|----------|
+| AbuseIPDB | `ABUSEIPDB_API_KEY` | 停用 |
+| AlienVault OTX | `OTX_API_KEY` | 停用 |
+| VirusTotal | `VT_API_KEY` | 停用 |
+| GreyNoise | `GREYNOISE_API_KEY` | 停用 |
+
+拉取成功后，订阅源行会更新指标数量、最后拉取状态和时间；“威胁指标”列表及顶部统计会同步刷新。若拉取失败，将鼠标悬停在失败状态上可查看后端返回的错误原因。IP 查询是按需信誉查询，即使尚未导入批量指标，也会在已配置的 TIRE 插件可用时返回 TIRE 评分、等级和结论。
 
 #### 3.2.6 ML 检测服务 (端口 8086)
 
@@ -633,13 +658,15 @@ curl http://localhost:5000/metrics
 |------|------|------|
 | Dashboard | / | 系统总览：实时威胁态势、攻击统计、热力图 |
 | Analytics | /analytics | 深度分析：趋势图表、攻击模式、Top-N 统计 |
-| Alerts | /alerts | 告警管理：告警列表、状态更新、升级处理 |
+| Alerts | /alerts | 告警管理：待处置/处理中/已处置/已归档、责任人、提级处理与处置详情 |
 | Customers | /customers | 客户管理：客户 CRUD、设备绑定、网段配置 |
 | ML Detection | /ml-detection | ML 检测：模型状态、异常检测结果、置信度分析 |
 | Threat Intel | /threat-intel | 威胁情报：IOC 查询、情报源管理、TIRE 结果 |
 | Logs | /logs | 日志查看：原始日志检索、事件时间线 |
 | Settings | /settings | 系统设置：TIRE 插件管理、LLM 配置、RBAC 权限 |
 | Login | /login | 登录页面 |
+
+告警中心的“责任人”是当前负责跟进的启用账号；指派后告警进入“处理中”。“实际处理人”是完成处置时的当前登录账号，系统同时记录完成时间和处置结论。“处置层级”表示是否需要更高级别人员介入，不等同于工作状态；需要提高关注和处理能力时使用“提级处理”，并填写提级原因。完整审计字段通过每行的“查看详情”进入，不在主列表中堆叠换行。
 
 #### 3.3.2 RBAC 角色
 
@@ -743,6 +770,8 @@ TIRE (Threat Intelligence Reputation Engine) 集成了 11 款内置情报插件�
 #### 3.5.2 插件配置
 
 通过前端 Settings 页面管理插件的启用/禁用、API 密钥、优先级和超时时间。也可通过 API Gateway 的系统配置接口管理。
+
+保存 AbuseIPDB 等密钥后，应继续进入“威胁运营 → 威胁情报 → 订阅源管理”，启用同名订阅源并执行一次拉取。密钥配置、插件按需查询和订阅源批量导入是三个相互关联但不同的环节；仅保存密钥时，威胁指标表保持为空属于正常状态。
 
 #### 3.5.3 LLM 验证
 

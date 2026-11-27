@@ -91,6 +91,9 @@ class NarrativeReporter:
                 source=overrides.get("source", "template"),
                 fingerprint=overrides.get("fingerprint", ""),
                 shared_config_id=overrides.get("shared_config_id"),
+                allow_environment_fallback=overrides.get(
+                    "allow_environment_fallback", True
+                ),
             )
             if response:
                 llm_sections = self._parse_llm_response(response)

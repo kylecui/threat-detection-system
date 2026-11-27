@@ -8,12 +8,13 @@ interface PermissionCheck {
   canAccess: (requiredRoles: AppRole[]) => boolean;
   isSuperAdmin: boolean;
   isTenantAdmin: boolean;
+  isCustomerAdmin: boolean;
   isCustomerUser: boolean;
   isAdminRole: boolean;
 }
 
 export function usePermission(): PermissionCheck {
-  const { user, isSuperAdmin, isTenantAdmin, isCustomerUser } = useAuth();
+  const { user, isSuperAdmin, isTenantAdmin, isCustomerAdmin, isCustomerUser } = useAuth();
 
   return useMemo(() => {
     const roles = user?.roles ?? [];
@@ -39,8 +40,9 @@ export function usePermission(): PermissionCheck {
       canAccess,
       isSuperAdmin,
       isTenantAdmin,
+      isCustomerAdmin,
       isCustomerUser,
       isAdminRole: isSuperAdmin || isTenantAdmin,
     };
-  }, [user, isSuperAdmin, isTenantAdmin, isCustomerUser]);
+  }, [user, isSuperAdmin, isTenantAdmin, isCustomerAdmin, isCustomerUser]);
 }

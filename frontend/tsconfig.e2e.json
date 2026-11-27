@@ -1,0 +1,10 @@
+{
+  "//": "INTERACTION-003: type-check E2E specs, helpers, typed API fixtures and test harnesses (npm run typecheck:e2e).",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["e2e", "src/vite-env.d.ts"],
+  "exclude": []
+}

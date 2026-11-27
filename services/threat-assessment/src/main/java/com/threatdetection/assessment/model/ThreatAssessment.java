@@ -78,6 +78,12 @@ public class ThreatAssessment {
     @Column(name = "detection_tier")
     private Integer detectionTier = 2;
 
+    @Column(name = "window_start")
+    private Instant windowStart;
+
+    @Column(name = "window_end")
+    private Instant windowEnd;
+
     // 新增字段 - 权重因子 (用于审计和调试)
     @Column(name = "time_weight")
     private Double timeWeight;
@@ -196,6 +202,12 @@ public class ThreatAssessment {
 
     public Integer getDetectionTier() { return detectionTier; }
     public void setDetectionTier(Integer detectionTier) { this.detectionTier = detectionTier; }
+
+    public Instant getWindowStart() { return windowStart; }
+    public void setWindowStart(Instant windowStart) { this.windowStart = windowStart; }
+
+    public Instant getWindowEnd() { return windowEnd; }
+    public void setWindowEnd(Instant windowEnd) { this.windowEnd = windowEnd; }
 
     public Double getTimeWeight() { return timeWeight; }
     public void setTimeWeight(Double timeWeight) { this.timeWeight = timeWeight; }

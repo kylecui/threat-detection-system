@@ -48,3 +48,26 @@ references/
 .venv
 __pycache__/
 *.pyc
+
+# Runtime configuration and secrets
+.env
+docker/.env
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Release output and local deployment state
+outputs/
+.deploy/
+MANIFEST.sha256
+
+# Frontend generated files
+frontend/node_modules/
+frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db

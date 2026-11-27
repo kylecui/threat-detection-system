@@ -12,6 +12,8 @@ import java.util.Optional;
 import com.threatdetection.ingestion.model.AttackEvent;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 /**
  * Phase 1A: LogParserService 单元测试
@@ -27,7 +29,22 @@ class LogParserServiceTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        when(mappingService.resolveCustomerId(anyString())).thenReturn("customer-test");
         logParserService = new LogParserService(mappingService);
+    }
+
+    @Test
+    @DisplayName("停用客户或未配对设备的攻击日志必须拒绝")
+    void testRejectUnmappedOrInactiveCustomer() {
+        when(mappingService.resolveCustomerId("ABC123")).thenReturn("unknown");
+        String log = "syslog_version=1.10.0,dev_serial=ABC123,log_type=1,sub_type=1," +
+                "attack_mac=00:11:22:33:44:55,attack_ip=192.168.1.100,response_ip=192.168.1.200," +
+                "response_port=22,line_id=1,Iface_type=1,Vlan_id=0,log_time=1728465600," +
+                "eth_type=2048,ip_type=6";
+
+        assertTrue(logParserService.parseLog(log).isEmpty());
+        assertEquals(1, logParserService.getParseStatistics()
+                .getOrDefault("unmapped_or_inactive_customer", 0));
     }
 
     @Test

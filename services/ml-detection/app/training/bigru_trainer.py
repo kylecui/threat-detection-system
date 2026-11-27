@@ -111,10 +111,17 @@ def _prepare_splits(
         (val_seqs, val_masks, val_labels),
         train_idx, val_idx
     """
-    from sklearn.model_selection import GroupShuffleSplit
+    from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
-    splitter = GroupShuffleSplit(n_splits=1, test_size=val_fraction, random_state=42)
-    train_idx, val_idx = next(splitter.split(sequences, labels, groups))
+    if len(np.unique(groups)) >= 2:
+        splitter = GroupShuffleSplit(n_splits=1, test_size=val_fraction, random_state=42)
+        train_idx, val_idx = next(splitter.split(sequences, labels, groups))
+    else:
+        # Small installations can legitimately have data from only one attacker.
+        indices = np.arange(len(sequences))
+        train_idx, val_idx = train_test_split(
+            indices, test_size=val_fraction, random_state=42, shuffle=True
+        )
 
     train_data = (
         torch.tensor(sequences[train_idx], dtype=torch.float32),
@@ -297,7 +304,6 @@ def export_bigru_onnx(
             "attention_weights": {0: "batch"},
         },
         opset_version=17,
-        dynamo=False,
     )
 
     if optimal_alpha is not None:

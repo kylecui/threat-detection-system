@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS threat_assessments (
     port_list TEXT,
     port_risk_score DECIMAL(12,4) DEFAULT 0.0,
     detection_tier INTEGER DEFAULT 2,
+    window_start TIMESTAMP WITH TIME ZONE,
+    window_end TIMESTAMP WITH TIME ZONE,
 
     -- 权重因子 (用于审计和调试)
     time_weight DECIMAL(12,4),

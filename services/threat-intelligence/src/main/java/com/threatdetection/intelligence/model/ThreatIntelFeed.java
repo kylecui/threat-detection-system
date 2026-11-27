@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -63,6 +64,23 @@ public class ThreatIntelFeed {
     @Builder.Default
     @Column(name = "indicator_count")
     private Integer indicatorCount = 0;
+
+    /**
+     * Runtime capability metadata. These fields are deliberately not persisted:
+     * pollability depends on the pollers registered by the running service, not
+     * only on the feed row stored in the database.
+     */
+    @Transient
+    private Boolean pollable;
+
+    @Transient
+    private String capability;
+
+    @Transient
+    private String nonPollableReason;
+
+    @Transient
+    private Integer pollBatchLimit;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

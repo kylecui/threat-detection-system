@@ -3,22 +3,21 @@ package com.threatdetection.gateway.auth.controller;
 import com.threatdetection.gateway.auth.entity.LlmProvider;
 import com.threatdetection.gateway.auth.repository.LlmProviderRepository;
 import com.threatdetection.gateway.auth.service.JwtTokenProvider;
+import com.threatdetection.gateway.auth.service.LlmValidationService;
+import com.threatdetection.gateway.auth.service.SecretEncryptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Multi-LLM Provider CRUD with multi-tenant RBAC.
@@ -34,6 +33,8 @@ public class LlmProviderController {
 
     private final LlmProviderRepository providerRepository;
     private final JwtTokenProvider jwtTokenProvider;
+    private final SecretEncryptionService encryptionService;
+    private final LlmValidationService llmValidationService;
 
     @GetMapping
     public Mono<ResponseEntity<List<Map<String, Object>>>> list(ServerWebExchange exchange) {
@@ -52,7 +53,7 @@ public class LlmProviderController {
                     var tenantFlux = tenantId != null
                             ? providerRepository.findByOwnerTypeAndOwnerId("TENANT", tenantId)
                             : reactor.core.publisher.Flux.<LlmProvider>empty();
-                    var userFlux = caller.roles.contains("CUSTOMER_USER")
+                    var userFlux = (caller.roles.contains("CUSTOMER_USER") || caller.roles.contains("CUSTOMER_ADMIN"))
                             ? providerRepository.findByOwnerTypeAndOwnerId("USER", userId)
                             : reactor.core.publisher.Flux.<LlmProvider>empty();
 
@@ -157,7 +158,6 @@ public class LlmProviderController {
     }
 
     @PostMapping("/{id}/validate")
-    @SuppressWarnings("unchecked")
     public Mono<ResponseEntity<Map<String, Object>>> validate(
             @PathVariable Long id, ServerWebExchange exchange) {
         return extractCaller(exchange)
@@ -168,52 +168,30 @@ public class LlmProviderController {
                                         .<Map<String, Object>>build());
                             }
 
-                            String apiKey = provider.getApiKey();
+                            String apiKey = encryptionService.decrypt(provider.getApiKey());
                             String baseUrl = provider.getBaseUrl();
-                            if (apiKey == null || apiKey.isBlank() || baseUrl == null || baseUrl.isBlank()) {
+                            String model = provider.getModel();
+                            if (apiKey == null || apiKey.isBlank() || baseUrl == null || baseUrl.isBlank()
+                                    || model == null || model.isBlank()) {
                                 Map<String, Object> err = new HashMap<>();
                                 err.put("ok", false);
                                 err.put("models", List.of());
-                                err.put("error", "Provider missing api_key or base_url");
+                                err.put("error", "Provider missing api_key, base_url or model");
                                 return Mono.just(ResponseEntity.badRequest().body(err));
                             }
-
-                            String effectiveBase = baseUrl.endsWith("/")
-                                    ? baseUrl.substring(0, baseUrl.length() - 1)
-                                    : baseUrl;
-
-                            return WebClient.create()
-                                    .get()
-                                    .uri(effectiveBase + "/models")
-                                    .header("Authorization", "Bearer " + apiKey)
-                                    .retrieve()
-                                    .bodyToMono(Map.class)
-                                    .timeout(Duration.ofSeconds(15))
-                                    .map(data -> {
-                                        List<Map<String, Object>> modelList =
-                                                (List<Map<String, Object>>) data.get("data");
-                                        List<String> models = modelList == null ? List.of() :
-                                                modelList.stream()
-                                                        .map(m -> (String) m.get("id"))
-                                                        .filter(mid -> mid != null)
-                                                        .sorted()
-                                                        .collect(Collectors.toList());
-
-                                        Map<String, Object> result = new HashMap<>();
-                                        result.put("ok", true);
-                                        result.put("models", models);
-                                        result.put("error", null);
-                                        log.info("LLM provider validated: id={}, {} models at {}",
-                                                id, models.size(), effectiveBase);
+                            return llmValidationService.validate(apiKey, baseUrl, model)
+                                    .map(result -> {
+                                        log.info("LLM provider generation probe succeeded: id={}, model={}",
+                                                id, model);
                                         return ResponseEntity.ok(result);
                                     })
                                     .onErrorResume(e -> {
                                         Map<String, Object> errResult = new HashMap<>();
                                         errResult.put("ok", false);
                                         errResult.put("models", List.of());
-                                        errResult.put("error", e.getMessage());
-                                        log.warn("LLM provider validation failed: id={}, {}: {}",
-                                                id, effectiveBase, e.getMessage());
+                                        errResult.put("error", "The selected model could not complete a test request");
+                                        log.warn("LLM provider generation probe failed: id={}, model={}, error={}",
+                                                id, model, e.getClass().getSimpleName());
                                         return Mono.just(ResponseEntity.ok(errResult));
                                     });
                         })
@@ -235,7 +213,7 @@ public class LlmProviderController {
         if (caller.roles.contains("SUPER_ADMIN")) return true;
         if (caller.roles.contains("TENANT_ADMIN") && "TENANT".equals(provider.getOwnerType())
                 && caller.tenantId != null && caller.tenantId.equals(provider.getOwnerId())) return true;
-        return caller.roles.contains("CUSTOMER_USER") && "USER".equals(provider.getOwnerType())
+        return (caller.roles.contains("CUSTOMER_USER") || caller.roles.contains("CUSTOMER_ADMIN")) && "USER".equals(provider.getOwnerType())
                 && caller.userId != null && caller.userId.equals(provider.getOwnerId());
     }
 
@@ -255,7 +233,7 @@ public class LlmProviderController {
 
         return LlmProvider.builder()
                 .name((String) body.get("name"))
-                .apiKey((String) body.get("apiKey"))
+                .apiKey(encryptionService.encrypt((String) body.get("apiKey")))
                 .model((String) body.get("model"))
                 .baseUrl((String) body.get("baseUrl"))
                 .isDefault(body.get("isDefault") != null ? (Boolean) body.get("isDefault") : false)
@@ -267,7 +245,10 @@ public class LlmProviderController {
 
     private void applyUpdates(LlmProvider existing, Map<String, Object> body) {
         if (body.containsKey("name")) existing.setName((String) body.get("name"));
-        if (body.containsKey("apiKey")) existing.setApiKey((String) body.get("apiKey"));
+        if (body.containsKey("apiKey") && body.get("apiKey") instanceof String apiKey
+                && !apiKey.isBlank()) {
+            existing.setApiKey(encryptionService.encrypt(apiKey));
+        }
         if (body.containsKey("model")) existing.setModel((String) body.get("model"));
         if (body.containsKey("baseUrl")) existing.setBaseUrl((String) body.get("baseUrl"));
         if (body.containsKey("isDefault")) existing.setIsDefault((Boolean) body.get("isDefault"));

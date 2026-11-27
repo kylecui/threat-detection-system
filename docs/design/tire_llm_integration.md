@@ -5,8 +5,8 @@
 - **TIRE (Threat Intelligence Reputation Engine)**: A specialized engine for evaluating the reputation of various indicators of compromise (IOCs).
 - **Origin**: Originally developed as a standalone project [ipit](https://github.com/kylecui/ipit).
 - **Integration**: Integrated into the threat detection system as a microservice.
-- **Deployment**: Runs as a separate pod in the K3s namespace `threat-detection`.
-- **Network**: Internal port `5000`, accessible via the API gateway.
+- **Deployment**: Runs as the `tire` service in the production Docker Compose stack; Kubernetes manifests are optional deployment references, not the single-node release path.
+- **Network**: Internal port `8000`, accessed through the API gateway.
 
 ## 2. 威胁情报插件 / Threat Intelligence Plugins
 
@@ -51,53 +51,43 @@ All endpoints require the `SUPER_ADMIN` role.
 
 ## 5. LLM 集成 / LLM Integration
 
-LLM configurations are stored in the `system_config` table under the `llm` category.
+平台级配置保存在 `system_config` 的 `llm` 分类，多供应商和多租户配置保存在 `llm_providers`、`user_configs` 和 `config_assignments`。主要字段为 `LLM_API_KEY`、`LLM_MODEL`、`LLM_BASE_URL`；API Key 在数据库中使用 AES-256-GCM 密文保存。
 
-### 配置项 / Configuration Keys
-- `llm_api_key`: API key for the LLM provider.
-- `llm_base_url`: Base URL for the API (e.g., `https://api.openai.com/v1`).
-- `llm_model`: The specific model to use (e.g., `gpt-4`).
-- `llm_enabled`: Boolean to enable/disable LLM features.
+### 动态运行时读取
+
+1. 用户从 Web 端请求生成 TIRE 报告。
+2. API Gateway 在认证后向 TIRE 传递用户、客户和租户上下文。
+3. TIRE 使用独立的 `TIRE_INTERNAL_SERVICE_TOKEN` 请求 `GET /internal/v1/runtime-config/llm/effective`。
+4. Gateway 按管理员锁定配置、用户自有配置、管理员分配配置、系统默认配置的规则返回有效模型、Base URL、临时使用的明文 API Key 与配置指纹。
+5. TIRE 仅在内存中短时缓存配置；配置指纹进入报告缓存键。Gateway 暂时不可用时，可在限定的 stale TTL 内使用最后成功值。运行时桥接已启用但没有有效缓存时执行 fail-closed：禁止本地/环境 LLM 密钥回退，仅生成模板报告；只有未配置运行时桥接的旧版独立部署才使用 TIRE 本地解析器。
+
+内部接口不接受浏览器 JWT 作为服务身份，不向公开页面暴露，响应设置 `Cache-Control: no-store`。Compose 首次安装自动生成内部令牌和 32 字节配置加密密钥，升级时保留。
 
 ### 连接验证 / Connection Validation
+
 - **Endpoint**: `POST /api/v1/system-config/llm/validate`
 - **Role**: `SUPER_ADMIN`
 - **Request Body**:
   ```json
   {
     "api_key": "sk-...",
-    "base_url": "https://api.openai.com/v1"
+    "base_url": "https://api.openai.com/v1",
+    "model": "gpt-4o-mini"
   }
   ```
-- **Mechanism**: The server uses `WebClient` to call the provider's `/models` endpoint.
-- **Response**:
-  ```json
-  {
-    "ok": true,
-    "models": ["gpt-4", "gpt-3.5-turbo", ...],
-    "error": null
-  }
-  ```
-- **Compatibility**: Supports any OpenAI-compatible API (OpenAI, Azure OpenAI, local LLM servers like Ollama/vLLM).
+- **Mechanism**: 使用所选模型调用最小 `/chat/completions` 生成请求；模型列表查询为可选补充，不能替代真实生成验证。
+- **Compatibility**: 支持实现 OpenAI-compatible Chat Completions API 的服务。供应商若只实现其他协议，需要增加适配器。
 
 ## 6. 前端界面 / Frontend UI
 
-The Settings page (`/settings`) is restricted to the `SUPER_ADMIN` role and contains the following tabs:
-
-1. **系统配置 (System Config)**: General system-wide settings.
-2. **插件管理 (Plugin Management)**: A grid layout for the 11 TIRE plugins, featuring toggle switches for status, and numeric inputs for priority and timeout.
-3. **LLM配置 (LLM Config)**:
-   - Inputs for API Key and Base URL.
-   - **测试连接 (Test Connection)** button to trigger validation.
-   - Model selection dropdown, dynamically populated from the validation response.
-4. **RBAC管理 (RBAC Management)**: User and role management.
+平台配置工作区的 AI 配置页提供全局 API Key、模型、Base URL、连接测试、多供应商和配置分配。保存后无需重启 TIRE；新生成或明确重新生成的报告读取最新有效配置，已有缓存报告不会自动重算。
 
 ## 7. 威胁情报增强流程 / Threat Intelligence Enrichment Flow
 
 The system enriches attack events with threat intelligence to refine threat scores.
 
 ```text
-Attack event → Flink scoring → Threat Intelligence Service (8085) → TIRE (5000)
+Attack event → Flink scoring → Threat Intelligence Service (8085) → TIRE (8000)
                                         ↓
                             IOC lookup + plugin queries
                                         ↓
@@ -109,9 +99,15 @@ Attack event → Flink scoring → Threat Intelligence Service (8085) → TIRE (
 - **Database**: `docker/33-plugin-configs.sql` (Seed data).
 - **Backend (API Gateway)**:
   - `SystemConfigController.java`: Plugin CRUD and LLM validation logic.
+  - `InternalLlmRuntimeConfigController.java`: token-protected runtime config endpoint.
+  - `LlmRuntimeConfigService.java`: effective config resolution.
+  - `SecretEncryptionService.java`: AES-256-GCM secret storage.
   - `SystemConfig.java`: Entity definition.
   - `SystemConfigRepository.java`: R2DBC repository for database access.
 - **Frontend**:
-  - `frontend/src/pages/Settings/index.tsx`: UI implementation for Plugin and LLM tabs (lines 817-998).
+  - `frontend/src/pages/Configuration/AIConfig.tsx`: AI configuration and validation UI.
   - `frontend/src/services/config.ts`: `validateLlmConnection()` API integration.
   - `frontend/src/types/index.ts`: Type definitions including `tire_plugins` category.
+- **TIRE**:
+  - `services/tire/app/runtime_llm_config.py`: request-context lookup, TTL cache and stale fallback.
+  - `services/tire/app/api.py`: resolves effective configuration before report generation.

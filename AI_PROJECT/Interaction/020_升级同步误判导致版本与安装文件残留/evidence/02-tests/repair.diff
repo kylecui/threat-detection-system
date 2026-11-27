@@ -1,0 +1,1956 @@
+--- published-3.1.39/install.sh
++++ working-tree/install.sh
+@@ -11,6 +11,8 @@
+ 
+ SRC_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ SCRIPT_DIR="$SRC_ROOT/scripts"
++INTEGRITY_HELPER="$SCRIPT_DIR/verify_release_state.py"
++TRUSTED_MANIFEST=""
+ TARGET_DIR="/opt/threat-detection-system"
+ BACKUP_ROOT="/opt/threat-detection-system-backups"
+ UNIT_NAME="threat-detection-compose.service"
+@@ -19,6 +21,7 @@
+ WATCHDOG_TIMER_NAME="threat-detection-runtime-watchdog.timer"
+ WATCHDOG_SERVICE_PATH="/etc/systemd/system/$WATCHDOG_SERVICE_NAME"
+ WATCHDOG_TIMER_PATH="/etc/systemd/system/$WATCHDOG_TIMER_NAME"
++DIAG_PATH="/usr/local/sbin/tdsdiag"
+ NO_START=false
+ UNINSTALL=false
+ PURGE=false
+@@ -29,6 +32,8 @@
+ ROLLBACK_DIR=""
+ TARGET_EXISTED=false
+ INSTALL_ACTIVE=false
++PRESERVE_ROLLBACK=false
++ROLLBACK_RESULT="not-needed"
+ RELEASE_VERSION=""
+ INSTALLED_VERSION=""
+ INSTALL_MODE="fresh"
+@@ -183,6 +188,27 @@
+   (cd "$SRC_ROOT" && sha256sum -c --quiet MANIFEST.sha256) \
+     || die "Release verification failed; the system was not modified"
+   ok "Release manifest verified"
++}
++
++verify_release_source_state() {
++  python3 "$INTEGRITY_HELPER" verify-release "$SRC_ROOT" \
++    --manifest "$SRC_ROOT/MANIFEST.sha256" --expected "$RELEASE_VERSION" \
++    || die "Source release contents or version metadata are inconsistent"
++}
++
++verify_installed_release() {
++  local phase="${1:-content}" args=()
++  [[ -n "$TRUSTED_MANIFEST" && -f "$TRUSTED_MANIFEST" ]] \
++    || die "Trusted source manifest is unavailable; refusing to commit the installation"
++  case "$phase" in
++    content) ;;
++    environment) args+=(--runtime-env "$TARGET_DIR/.env") ;;
++    metadata) args+=(--metadata) ;;
++    *) die "Unknown installation verification phase" ;;
++  esac
++  python3 "$INTEGRITY_HELPER" verify-release "$TARGET_DIR" \
++    --manifest "$TRUSTED_MANIFEST" --expected "$RELEASE_VERSION" "${args[@]}" \
++    || die "Installed release contents or version metadata verification failed"
+ }
+ 
+ validate_postgres_init_scripts() {
+@@ -700,15 +726,35 @@
+ prepare_rollback() {
+   ROLLBACK_DIR="$(mktemp -d /var/tmp/threat-detection-rollback.XXXXXX)"
+   chmod 700 "$ROLLBACK_DIR"
++  # Keep the verifier and the verified source manifest outside the tree being replaced.
++  install -m 700 "$INTEGRITY_HELPER" "$ROLLBACK_DIR/verify_release_state.py"
++  INTEGRITY_HELPER="$ROLLBACK_DIR/verify_release_state.py"
++  install -m 600 "$SRC_ROOT/MANIFEST.sha256" "$ROLLBACK_DIR/release-manifest.sha256"
++  TRUSTED_MANIFEST="$ROLLBACK_DIR/release-manifest.sha256"
++  python3 "$INTEGRITY_HELPER" verify-release "$SRC_ROOT" \
++    --manifest "$TRUSTED_MANIFEST" --expected "$RELEASE_VERSION" \
++    || die "Source release changed before the transaction started"
+   if [[ -d "$TARGET_DIR" ]]; then
+     TARGET_EXISTED=true
+     mkdir -p "$ROLLBACK_DIR/target"
+     rsync -a "$TARGET_DIR/" "$ROLLBACK_DIR/target/"
+-  fi
+-  mkdir -p "$ROLLBACK_DIR/units"
+-  for unit_path in "$UNIT_PATH" "$WATCHDOG_SERVICE_PATH" "$WATCHDOG_TIMER_PATH"; do
+-    [[ ! -f "$unit_path" ]] || cp -a "$unit_path" "$ROLLBACK_DIR/units/"
++    python3 "$INTEGRITY_HELPER" snapshot "$ROLLBACK_DIR/target" "$ROLLBACK_DIR/target.snapshot.json"
++  else
++    python3 "$INTEGRITY_HELPER" snapshot "$TARGET_DIR" "$ROLLBACK_DIR/target.snapshot.json"
++  fi
++  local managed_path index=0
++  mkdir -p "$ROLLBACK_DIR/paths"
++  for managed_path in "$UNIT_PATH" "$WATCHDOG_SERVICE_PATH" "$WATCHDOG_TIMER_PATH" "$DIAG_PATH"; do
++    if [[ -e "$managed_path" || -L "$managed_path" ]]; then
++      cp -a -- "$managed_path" "$ROLLBACK_DIR/paths/$index"
++      python3 "$INTEGRITY_HELPER" snapshot "$ROLLBACK_DIR/paths/$index" "$ROLLBACK_DIR/path-$index.json"
++    else
++      python3 "$INTEGRITY_HELPER" snapshot "$managed_path" "$ROLLBACK_DIR/path-$index.json"
++    fi
++    index=$((index + 1))
+   done
++  PRESERVE_ROLLBACK=false
++  ROLLBACK_RESULT="prepared"
+   INSTALL_ACTIVE=true
+   ok "Transactional rollback snapshot prepared"
+ }
+@@ -738,12 +784,43 @@
+   warn "Failure diagnostics saved to $output (0600)"
+ }
+ 
++rollback_failed() {
++  PRESERVE_ROLLBACK=true
++  ROLLBACK_RESULT="failed"
++  if [[ -n "$ROLLBACK_DIR" && -d "$ROLLBACK_DIR" ]]; then
++    printf 'rollback_result=failed\nrecovery_directory=%s\n' "$ROLLBACK_DIR" \
++      >"$ROLLBACK_DIR/rollback-failure.txt" || true
++    chmod 600 "$ROLLBACK_DIR/rollback-failure.txt" 2>/dev/null || true
++  fi
++  warn "Rollback could not be verified. Recovery materials were retained at: $ROLLBACK_DIR"
++  return 1
++}
++
++restore_managed_paths() {
++  local managed_path index=0
++  for managed_path in "$UNIT_PATH" "$WATCHDOG_SERVICE_PATH" "$WATCHDOG_TIMER_PATH" "$DIAG_PATH"; do
++    if [[ -e "$ROLLBACK_DIR/paths/$index" || -L "$ROLLBACK_DIR/paths/$index" ]]; then
++      python3 "$INTEGRITY_HELPER" verify-snapshot "$ROLLBACK_DIR/paths/$index" "$ROLLBACK_DIR/path-$index.json" \
++        || return 1
++    fi
++    rm -f -- "$managed_path" || return 1
++    if [[ -e "$ROLLBACK_DIR/paths/$index" || -L "$ROLLBACK_DIR/paths/$index" ]]; then
++      cp -a -- "$ROLLBACK_DIR/paths/$index" "$managed_path" || return 1
++    fi
++    python3 "$INTEGRITY_HELPER" verify-snapshot "$managed_path" "$ROLLBACK_DIR/path-$index.json" \
++      || return 1
++    index=$((index + 1))
++  done
++}
++
+ rollback_install() {
+   local rc="$1"
+   [[ "$INSTALL_ACTIVE" == true ]] || return 0
+   INSTALL_ACTIVE=false
++  PRESERVE_ROLLBACK=true
++  ROLLBACK_RESULT="restoring"
+   warn "Installation failed (rc=$rc); restoring the pre-install state..."
+-  [[ ! -d "$TARGET_DIR" ]] || capture_failure_diagnostics
++  [[ ! -d "$TARGET_DIR" ]] || capture_failure_diagnostics || true
+   systemctl disable --now "$WATCHDOG_TIMER_NAME" >/dev/null 2>&1 || true
+   systemctl stop "$WATCHDOG_SERVICE_NAME" "$UNIT_NAME" >/dev/null 2>&1 || true
+   if [[ -f "$TARGET_DIR/.env" && -f "$TARGET_DIR/docker/docker-compose.yml" ]]; then
+@@ -753,36 +830,51 @@
+       compose_in "$TARGET_DIR" down -v --rmi local --remove-orphans >/dev/null 2>&1 || true
+     fi
+   fi
+-  rm -f -- "$UNIT_PATH" "$WATCHDOG_SERVICE_PATH" "$WATCHDOG_TIMER_PATH"
+-  if $TARGET_EXISTED && [[ -d "$ROLLBACK_DIR/target" ]]; then
+-    mkdir -p "$TARGET_DIR"
+-    rsync -a --delete "$ROLLBACK_DIR/target/" "$TARGET_DIR/"
+-    if [[ -d "$ROLLBACK_DIR/units" ]]; then
+-      find "$ROLLBACK_DIR/units" -maxdepth 1 -type f -exec install -m 644 {} /etc/systemd/system/ \;
+-    fi
+-    systemctl daemon-reload >/dev/null 2>&1 || true
+-    systemctl enable --now "$UNIT_NAME" >/dev/null 2>&1 || true
++  if $TARGET_EXISTED; then
++    [[ -d "$ROLLBACK_DIR/target" ]] || { rollback_failed; return 1; }
++    python3 "$INTEGRITY_HELPER" verify-snapshot "$ROLLBACK_DIR/target" "$ROLLBACK_DIR/target.snapshot.json" \
++      || { rollback_failed; return 1; }
++    mkdir -p "$TARGET_DIR" || { rollback_failed; return 1; }
++    rsync -a --checksum --delete "$ROLLBACK_DIR/target/" "$TARGET_DIR/" \
++      || { rollback_failed; return 1; }
++    python3 "$INTEGRITY_HELPER" verify-snapshot "$TARGET_DIR" "$ROLLBACK_DIR/target.snapshot.json" \
++      || { rollback_failed; return 1; }
++  else
++    rm -rf -- "$TARGET_DIR" || { rollback_failed; return 1; }
++    python3 "$INTEGRITY_HELPER" verify-snapshot "$TARGET_DIR" "$ROLLBACK_DIR/target.snapshot.json" \
++      || { rollback_failed; return 1; }
++  fi
++  restore_managed_paths || { rollback_failed; return 1; }
++  systemctl daemon-reload >/dev/null 2>&1 || { rollback_failed; return 1; }
++  if $TARGET_EXISTED; then
++    [[ ! -f "$UNIT_PATH" ]] \
++      || systemctl enable --now "$UNIT_NAME" >/dev/null 2>&1 || { rollback_failed; return 1; }
+     [[ ! -f "$WATCHDOG_TIMER_PATH" ]] \
+-      || systemctl enable --now "$WATCHDOG_TIMER_NAME" >/dev/null 2>&1 || true
++      || systemctl enable --now "$WATCHDOG_TIMER_NAME" >/dev/null 2>&1 || { rollback_failed; return 1; }
+     warn "The previous installation was restored; verify its status"
+   else
+-    rm -rf -- "$TARGET_DIR"
+-    systemctl daemon-reload >/dev/null 2>&1 || true
+     warn "State created by the failed fresh installation was removed"
+   fi
++  ROLLBACK_RESULT="restored"
++  PRESERVE_ROLLBACK=false
+   [[ ! -d "$ROLLBACK_DIR" ]] || rm -rf -- "$ROLLBACK_DIR"
++  ROLLBACK_DIR=""
++  return 0
+ }
+ 
+ cleanup_temp() {
+   [[ -z "$PREPARED_ENV" || ! -f "$PREPARED_ENV" ]] || rm -f -- "$PREPARED_ENV"
+-  [[ -z "$ROLLBACK_DIR" || ! -d "$ROLLBACK_DIR" || "$INSTALL_ACTIVE" == true ]] \
++  [[ -z "$ROLLBACK_DIR" || ! -d "$ROLLBACK_DIR" || "$INSTALL_ACTIVE" == true || "$PRESERVE_ROLLBACK" == true ]] \
+     || rm -rf -- "$ROLLBACK_DIR"
+ }
+ 
+ on_exit() {
+   local rc=$?
+-  [[ $rc -eq 0 ]] || rollback_install "$rc"
+-  cleanup_temp
++  trap - EXIT
++  if [[ $rc -ne 0 ]]; then
++    rollback_install "$rc" || rc=1
++  fi
++  cleanup_temp || rc=1
+   exit "$rc"
+ }
+ trap on_exit EXIT
+@@ -861,18 +953,31 @@
+     if [[ "$INSTALL_MODE" != "fresh" ]]; then
+       info "Overwriting the existing application tree with release $RELEASE_VERSION"
+     fi
+-    rsync -a --delete --exclude='.env' "$SRC_ROOT/" "$TARGET_DIR/"
++    rsync -a --checksum --delete --exclude='.env' "$SRC_ROOT/" "$TARGET_DIR/"
+   else
+     info "Running from the installed release tree; file synchronization is not required"
+   fi
++  verify_installed_release content
+   install -m 600 "$PREPARED_ENV" "$TARGET_DIR/.env"
+-  install -m 644 "$SRC_ROOT/VERSION" "$TARGET_DIR/.installed_version"
+-  install -m 755 "$TARGET_DIR/scripts/tdsdiag.sh" /usr/local/sbin/tdsdiag
++  verify_installed_release environment
++  printf '%s\n' "$RELEASE_VERSION" >"$ROLLBACK_DIR/installed-version"
++  install -m 644 "$ROLLBACK_DIR/installed-version" "$TARGET_DIR/.installed_version"
++  verify_installed_release metadata
++  install -m 755 "$TARGET_DIR/scripts/tdsdiag.sh" "$DIAG_PATH"
+   chmod 755 "$TARGET_DIR/scripts/runtime-watchdog.sh"
+   install -m 644 "$TARGET_DIR/deploy/systemd/threat-detection-compose.service" "$UNIT_PATH"
+   install -m 644 "$TARGET_DIR/deploy/systemd/threat-detection-runtime-watchdog.service" "$WATCHDOG_SERVICE_PATH"
+   install -m 644 "$TARGET_DIR/deploy/systemd/threat-detection-runtime-watchdog.timer" "$WATCHDOG_TIMER_PATH"
+   ok "Release files installed to $TARGET_DIR"
++}
++
++commit_install() {
++  # Content and metadata must still match before either success branch drops recovery.
++  verify_installed_release metadata
++  INSTALL_ACTIVE=false
++  ROLLBACK_RESULT="committed"
++  rm -rf -- "$ROLLBACK_DIR"
++  ROLLBACK_DIR=""
+ }
+ 
+ backup_existing_install() {
+@@ -1139,6 +1244,7 @@
+ detect_existing_install
+ 
+ ensure_dependencies
++verify_release_source_state
+ check_host_capacity
+ exec 9>/run/lock/threat-detection-install.lock
+ flock -n 9 || die "Another Threat Detection System install operation is running"
+@@ -1171,9 +1277,8 @@
+ systemctl enable "$WATCHDOG_TIMER_NAME" >/dev/null
+ 
+ if $NO_START; then
+-  INSTALL_ACTIVE=false
+-  rm -rf -- "$ROLLBACK_DIR"; ROLLBACK_DIR=""
+-  ok "Files installed with --no-start; containers were not built or started"
++  commit_install
++  ok "Release $RELEASE_VERSION files verified and installed with --no-start; containers were not built or started"
+   exit 0
+ fi
+ 
+@@ -1186,6 +1291,5 @@
+ verify_runtime
+ systemctl start "$WATCHDOG_TIMER_NAME"
+ 
+-INSTALL_ACTIVE=false
+-rm -rf -- "$ROLLBACK_DIR"; ROLLBACK_DIR=""
++commit_install
+ print_summary
+--- published-3.1.39/scripts/tdsdiag.sh
++++ working-tree/scripts/tdsdiag.sh
+@@ -11,8 +11,9 @@
+   cat <<'EOF'
+ Usage: sudo tdsdiag [--self-test] [--output FILE]
+ 
+-Collects service, container, resource, port and public health status without
+-reading .env values, database rows, private keys or application payload logs.
++Collects service, container, resource, port and public health status, plus
++release-version metadata. From .env only RELEASE_VERSION is read; credentials,
++database rows, private keys and application payload logs are not collected.
+ Exit codes: 0=collected/no critical failure, 2=collected/critical failure,
+ 1=invalid arguments or collection failure.
+ EOF
+@@ -39,6 +40,101 @@
+ }
+ 
+ critical=0
++
++# Collect and validate release metadata before the self-test can return. Only
++# allowlisted, validated version strings leave this boundary, including when the
++# helper is missing, fails, or returns an invalid document.
++version_metadata="$(python3 - "$TARGET_DIR" <<'PY'
++import json
++import re
++import subprocess
++import sys
++from pathlib import Path
++
++root = Path(sys.argv[1])
++keys = (
++    "file_version", "installed_version", "environment_version",
++    "template_version", "frontend_build_version",
++)
++version_pattern = re.compile(r"[0-9]+(?:\.[0-9]+)*(?:[+~-][0-9A-Za-z.-]+)?")
++values = {key: None for key in keys}
++consistency = "checker_missing"
++check_rc = 1
++helper = root / "scripts/verify_release_state.py"
++if helper.is_file() and not helper.is_symlink():
++    consistency = "checker_failed"
++    try:
++        result = subprocess.run(
++            [sys.executable, str(helper), "versions", str(root)],
++            capture_output=True, text=True, timeout=15, check=False,
++        )
++        check_rc = result.returncode
++        document = json.loads(result.stdout)
++        if not isinstance(document, dict):
++            raise ValueError("invalid document")
++        status = document.get("version_consistency")
++        if status not in {"consistent", "legacy", "unknown", "invalid", "mismatch"}:
++            raise ValueError("invalid status")
++        candidate = {key: document.get(key) for key in keys}
++        if any(
++            value is not None
++            and (not isinstance(value, str) or not version_pattern.fullmatch(value))
++            for value in candidate.values()
++        ):
++            raise ValueError("invalid version")
++        if status in {"consistent", "legacy"}:
++            if not candidate["file_version"] or not candidate["environment_version"]:
++                raise ValueError("incomplete version metadata")
++            present = [value for value in candidate.values() if value is not None]
++            if len(set(present)) != 1:
++                raise ValueError("contradictory version metadata")
++            if status == "consistent" and not candidate["installed_version"]:
++                raise ValueError("installation marker missing")
++        values = candidate
++        consistency = status
++    except (OSError, ValueError, subprocess.SubprocessError):
++        check_rc = 1
++
++if values["file_version"] is None:
++    marker = root / "VERSION"
++    try:
++        if marker.is_file() and not marker.is_symlink():
++            candidate = marker.read_text(encoding="utf-8").strip()
++            if version_pattern.fullmatch(candidate):
++                values["file_version"] = candidate
++    except (OSError, UnicodeError):
++        pass
++
++for key in keys:
++    print(f"{key}={values[key] or 'unknown'}")
++print(f"version_consistency={consistency}")
++print(f"version_check_rc={check_rc}")
++PY
++)"
++file_version="unknown"
++installed_version="unknown"
++environment_version="unknown"
++template_version="unknown"
++frontend_build_version="unknown"
++version_consistency="checker_failed"
++version_check_rc=1
++while IFS='=' read -r key value; do
++  case "$key" in
++    file_version) file_version="$value" ;;
++    installed_version) installed_version="$value" ;;
++    environment_version) environment_version="$value" ;;
++    template_version) template_version="$value" ;;
++    frontend_build_version) frontend_build_version="$value" ;;
++    version_consistency) version_consistency="$value" ;;
++    version_check_rc) version_check_rc="$value" ;;
++  esac
++done <<<"$version_metadata"
++if [[ "$version_check_rc" != 0 || ( "$version_consistency" != consistent && "$version_consistency" != legacy ) ]]; then
++  critical=1
++elif [[ "$version_consistency" == legacy ]]; then
++  echo "[WARN] Legacy installation has no installation marker; available release metadata agrees" >&2
++fi
++
+ unit_state="$(systemctl is-active threat-detection-compose.service 2>/dev/null || true)"
+ unit_enabled="$(systemctl is-enabled threat-detection-compose.service 2>/dev/null || true)"
+ [[ "$unit_state" == active ]] || critical=1
+@@ -118,6 +214,9 @@
+   [[ "$runtime_consistency" == ok ]] || printf '%s\n' "$runtime_check_output" >&2
+   [[ "$v1_syslog_tcp" == ok ]] \
+     || echo "[ERR] V1 Syslog TCP listener is unavailable inside the Logstash container" >&2
++  [[ "$version_check_rc" == 0 && ( "$version_consistency" == consistent || "$version_consistency" == legacy ) ]] \
++    || printf '[ERR] Release version metadata is inconsistent or unavailable (status=%s, rc=%s)\n' \
++      "$version_consistency" "$version_check_rc" >&2
+   echo "[ERR] tdsdiag self-test found a critical failure" >&2
+   exit 2
+ fi
+@@ -128,10 +227,17 @@
+ timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+ [[ -n "$OUTPUT" ]] || OUTPUT="/tmp/tdsdiag-${timestamp}.tar.gz"
+ 
+-version="$(tr -d '\r\n' <"$TARGET_DIR/VERSION" 2>/dev/null || echo unknown)"
++version="$file_version"
+ cat >"$work_dir/diag-summary.txt" <<EOF
+ captured_at=${timestamp}
+ version=${version}
++file_version=${file_version}
++installed_version=${installed_version}
++environment_version=${environment_version}
++template_version=${template_version}
++frontend_build_version=${frontend_build_version}
++version_consistency=${version_consistency}
++version_check_rc=${version_check_rc}
+ unit_active=${unit_state}
+ unit_enabled=${unit_enabled}
+ running_containers=${running_count}
+--- before/scripts/pack_release.py
++++ working-tree/scripts/pack_release.py
+@@ -61,12 +61,14 @@
+     "deploy/systemd/threat-detection-runtime-watchdog.service",
+     "deploy/systemd/threat-detection-runtime-watchdog.timer",
+     "scripts/prepare_release_env.py",
++    "scripts/verify_release_state.py",
+     "scripts/runtime-watchdog.sh",
+     "scripts/tdsdiag.sh",
+ }
+ EXECUTABLE_FILES = {
+     "install.sh",
+     "scripts/prepare_release_env.py",
++    "scripts/verify_release_state.py",
+     "scripts/runtime-watchdog.sh",
+     "scripts/tdsdiag.sh",
+ }
+--- before/tests/test_release_contract.py
++++ working-tree/tests/test_release_contract.py
+@@ -2,11 +2,11 @@
+ from __future__ import annotations
+ 
+ import hashlib
++import importlib.util
+ import json
+ import os
+ import re
+ import subprocess
+-import sys
+ import tarfile
+ import tempfile
+ import unittest
+@@ -15,26 +15,45 @@
+ 
+ ROOT = Path(__file__).resolve().parent.parent
+ VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+-OUTPUT = ROOT / "outputs" / f"v{VERSION}"
+-ARCHIVE = OUTPUT / f"threat-detection-system-{VERSION}-linux-x86_64.tar.gz"
+ PREFIX = f"threat-detection-system-{VERSION}-linux-x86_64"
+ 
+ 
+-class ReleaseContractTest(unittest.TestCase):
++class ReleaseArchiveContractTest(unittest.TestCase):
+     @classmethod
+     def setUpClass(cls) -> None:
+-        subprocess.run([sys.executable, str(ROOT / "scripts/pack_release.py")], check=True)
++        # Exercise the real packer without replacing an already delivered release.
++        cls.temporary = tempfile.TemporaryDirectory(prefix="tds-release-contract-")
++        cls.addClassCleanup(cls.temporary.cleanup)
++        specification = importlib.util.spec_from_file_location("release_contract_packer", ROOT / "scripts/pack_release.py")
++        assert specification is not None and specification.loader is not None
++        packer = importlib.util.module_from_spec(specification)
++        specification.loader.exec_module(packer)
++        cls.output = Path(cls.temporary.name)
++        packer.OUTPUT_DIR = cls.output
++        cls.packer = packer
++        cls.archive = packer.build()
++
++    def test_repeated_archive_is_byte_identical(self) -> None:
++        with tempfile.TemporaryDirectory(prefix="tds-release-repeat-") as temporary:
++            previous = self.packer.OUTPUT_DIR
++            try:
++                self.packer.OUTPUT_DIR = Path(temporary)
++                repeated = self.packer.build()
++                self.assertEqual(self.archive.read_bytes(), repeated.read_bytes())
++            finally:
++                self.packer.OUTPUT_DIR = previous
+ 
+     def test_external_checksum(self) -> None:
+-        expected, name = (OUTPUT / "SHA256SUMS").read_text(encoding="utf-8").split()
+-        self.assertEqual(name, ARCHIVE.name)
+-        self.assertEqual(expected, hashlib.sha256(ARCHIVE.read_bytes()).hexdigest())
+-        self.assertTrue((OUTPUT / "PACKAGE_CONTENTS.txt").is_file())
+-        self.assertTrue((OUTPUT / "RELEASE_NOTES.md").is_file())
++        expected, name = (self.output / "SHA256SUMS").read_text(encoding="utf-8").split()
++        self.assertEqual(name, self.archive.name)
++        self.assertEqual(expected, hashlib.sha256(self.archive.read_bytes()).hexdigest())
++        self.assertTrue((self.output / "PACKAGE_CONTENTS.txt").is_file())
++        self.assertTrue((self.output / "RELEASE_NOTES.md").is_file())
+ 
+     def test_archive_shape_and_internal_manifest(self) -> None:
+-        with tempfile.TemporaryDirectory() as temp, tarfile.open(ARCHIVE, "r:gz") as archive:
++        with tempfile.TemporaryDirectory() as temp, tarfile.open(self.archive, "r:gz") as archive:
+             names = archive.getnames()
++            self.assertTrue(all(member.mtime == 0 for member in archive.getmembers()))
+             self.assertTrue(all(name == PREFIX or name.startswith(PREFIX + "/") for name in names))
+             self.assertEqual(
+                 [name for name in names if Path(name).name == "install.sh"],
+@@ -50,6 +69,7 @@
+                 "docker/docker-compose.yml",
+                 "scripts/runtime-watchdog.sh",
+                 "scripts/tdsdiag.sh",
++                "scripts/verify_release_state.py",
+                 "deploy/systemd/threat-detection-runtime-watchdog.service",
+                 "deploy/systemd/threat-detection-runtime-watchdog.timer",
+             }
+@@ -63,6 +83,7 @@
+                 "scripts/prepare_release_env.py",
+                 "scripts/runtime-watchdog.sh",
+                 "scripts/tdsdiag.sh",
++                "scripts/verify_release_state.py",
+             ):
+                 member = archive.getmember(f"{PREFIX}/{relative}")
+                 self.assertEqual(member.mode & 0o777, 0o755, relative)
+@@ -72,7 +93,7 @@
+             self.assertEqual(readme.mode & 0o777, 0o644)
+ 
+     def test_no_development_or_secret_material(self) -> None:
+-        with tarfile.open(ARCHIVE, "r:gz") as archive:
++        with tarfile.open(self.archive, "r:gz") as archive:
+             names = archive.getnames()
+         forbidden_parts = {"AI_PROJECT", "docs", "k8s", "node_modules", "target", "tests", "__tests__", "e2e"}
+         for name in names:
+@@ -81,6 +102,10 @@
+             self.assertNotEqual(Path(name).name, ".env", name)
+             self.assertFalse(name.endswith((".pem", ".key", ".p12", ".pfx", ".bak", ".backup")), name)
+             self.assertFalse(name.endswith((".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx")), name)
++
++
++class ReleaseContractTest(unittest.TestCase):
++    """Read-only contracts can run without regenerating a delivered archive."""
+ 
+     def test_installer_waits_for_apt_lock_without_deleting_it(self) -> None:
+         installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+@@ -150,7 +175,10 @@
+         self.assertIn(".env and Docker data volumes will be preserved", detection)
+         self.assertNotIn("confirm ", detection)
+         self.assertIn("Do not run --purge before an upgrade", installer)
+-        self.assertIn("rsync -a --delete --exclude='.env'", sync)
++        self.assertIn("rsync -a --checksum --delete --exclude='.env'", sync)
++        self.assertLess(sync.index("verify_installed_release content"), sync.index('install -m 600 "$PREPARED_ENV"'))
++        self.assertLess(sync.index("verify_installed_release environment"), sync.index('"$TARGET_DIR/.installed_version"'))
++        self.assertIn("verify_installed_release metadata", sync)
+         self.assertLess(execution.index("detect_existing_install"), execution.index("prepare_runtime_env"))
+         self.assertLess(execution.index("detect_existing_install"), execution.index("prepare_rollback"))
+ 
+--- /dev/null
++++ working-tree/scripts/verify_release_state.py
+@@ -0,0 +1,301 @@
++#!/usr/bin/env python3
++"""Verify release contents, version metadata and actual rollback snapshots.
++
++Only release-version keys are read from environment files. Configuration is
++never evaluated, and errors never include configuration values or file data.
++"""
++
++from __future__ import annotations
++
++import argparse
++import hashlib
++import json
++import os
++import re
++import stat
++import sys
++import tempfile
++from pathlib import Path, PurePosixPath
++
++
++VERSION_RE = re.compile(r"[0-9]+(?:\.[0-9]+)*(?:[+~-][0-9A-Za-z.-]+)?\Z")
++MANIFEST_RE = re.compile(r"([0-9a-fA-F]{64})  (.+)\Z")
++GENERATED_FILES = {".env", ".installed_version", "MANIFEST.sha256"}
++
++
++class VerificationError(Exception):
++    """An error whose message is safe to include in installer output."""
++
++
++def sha256(path: Path) -> str:
++    digest = hashlib.sha256()
++    with path.open("rb") as stream:
++        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
++            digest.update(chunk)
++    return digest.hexdigest()
++
++
++def regular_file(path: Path) -> bool:
++    try:
++        return stat.S_ISREG(path.lstat().st_mode)
++    except FileNotFoundError:
++        return False
++
++
++def version_value(path: Path, key: str | None = None) -> tuple[str | None, str]:
++    """Return only a validated version and a valid/missing/invalid state."""
++    try:
++        if not regular_file(path):
++            return None, "invalid" if path.is_symlink() or path.exists() else "missing"
++        if key is None:
++            value = path.read_text(encoding="utf-8").strip()
++        else:
++            values: list[str] = []
++            pattern = re.compile(rf"(?:export\s+)?{re.escape(key)}\s*=\s*(.*)\Z")
++            with path.open(encoding="utf-8") as stream:
++                for raw in stream:
++                    match = pattern.fullmatch(raw.strip())
++                    if not match:
++                        continue
++                    candidate = match[1].strip()
++                    if candidate.startswith(("'", '"')):
++                        quote = candidate[0]
++                        end = candidate.find(quote, 1)
++                        if end < 0:
++                            return None, "invalid"
++                        remainder = candidate[end + 1 :].strip()
++                        if remainder and not remainder.startswith("#"):
++                            return None, "invalid"
++                        candidate = candidate[1:end]
++                    else:
++                        candidate = re.split(r"\s+#", candidate, maxsplit=1)[0].strip()
++                    values.append(candidate)
++            if not values:
++                return None, "missing"
++            if len(values) != 1:
++                return None, "invalid"
++            value = values[0]
++        if not VERSION_RE.fullmatch(value):
++            return None, "invalid"
++        return value, "valid"
++    except (OSError, UnicodeError):
++        return None, "invalid"
++
++
++def versions(root: Path) -> dict[str, object]:
++    sources = {
++        "file_version": (root / "VERSION", None),
++        "installed_version": (root / ".installed_version", None),
++        "environment_version": (root / ".env", "RELEASE_VERSION"),
++        "template_version": (root / ".env.example", "RELEASE_VERSION"),
++        "frontend_build_version": (root / "frontend/.env.production", "VITE_APP_VERSION"),
++    }
++    values: dict[str, str | None] = {}
++    states: dict[str, str] = {}
++    for name, (path, key) in sources.items():
++        values[name], states[name] = version_value(path, key)
++    if "invalid" in states.values():
++        consistency = "invalid"
++    elif len({value for value in values.values() if value is not None}) > 1:
++        consistency = "mismatch"
++    elif states["file_version"] != "valid" or states["environment_version"] != "valid":
++        consistency = "unknown"
++    elif states["installed_version"] == "missing":
++        consistency = "legacy"
++    else:
++        consistency = "consistent"
++    return {**values, "version_consistency": consistency, "version_states": states}
++
++
++def managed_path(root: Path, relative: str) -> Path:
++    path = PurePosixPath(relative)
++    if (
++        not relative
++        or path.is_absolute()
++        or path.as_posix() != relative
++        or any(part in {".", ".."} for part in path.parts)
++        or "\\" in relative
++        or ":" in relative
++        or any(ord(character) < 32 for character in relative)
++        or relative in GENERATED_FILES
++    ):
++        raise VerificationError("Manifest contains an unsafe or generated-file path")
++    current = root
++    if current.is_symlink() or not current.is_dir():
++        raise VerificationError("Release root is not a regular directory")
++    for part in path.parts:
++        current = current / part
++        if current.is_symlink():
++            raise VerificationError(f"Managed release path is a symlink: {relative}")
++    if not regular_file(current):
++        raise VerificationError(f"Managed release file is missing or not regular: {relative}")
++    return current
++
++
++def verify_release(
++    root: Path,
++    manifest: Path,
++    expected: str,
++    metadata: bool = False,
++    runtime_env: Path | None = None,
++) -> None:
++    if not VERSION_RE.fullmatch(expected):
++        raise VerificationError("Expected release version is invalid")
++    if not regular_file(manifest):
++        raise VerificationError("Trusted release manifest is missing or not regular")
++    target_manifest = root / "MANIFEST.sha256"
++    if not regular_file(target_manifest):
++        raise VerificationError("Target manifest is missing or not regular")
++    trusted_bytes = manifest.read_bytes()
++    if target_manifest.read_bytes() != trusted_bytes:
++        raise VerificationError("Target manifest differs from the trusted release manifest")
++    entries = trusted_bytes.decode("utf-8").splitlines()
++    if not entries:
++        raise VerificationError("Trusted release manifest is empty")
++    names: set[str] = set()
++    for line in entries:
++        match = MANIFEST_RE.fullmatch(line)
++        if not match:
++            raise VerificationError("Trusted release manifest contains an invalid entry")
++        checksum, relative = match.groups()
++        if relative in names:
++            raise VerificationError("Trusted release manifest contains duplicate paths")
++        names.add(relative)
++        if sha256(managed_path(root, relative)) != checksum.lower():
++            raise VerificationError(f"Managed release checksum mismatch: {relative}")
++    for relative in ("VERSION", ".env.example"):
++        if relative not in names:
++            raise VerificationError("Trusted manifest omits mandatory version metadata")
++    sources = [(root / "VERSION", None), (root / ".env.example", "RELEASE_VERSION")]
++    frontend = root / "frontend/.env.production"
++    if frontend.exists() or frontend.is_symlink():
++        if "frontend/.env.production" not in names:
++            raise VerificationError("Trusted manifest omits frontend version metadata")
++        sources.append((frontend, "VITE_APP_VERSION"))
++    if metadata:
++        sources.extend([(root / ".installed_version", None), (root / ".env", "RELEASE_VERSION")])
++    if runtime_env is not None:
++        sources.append((runtime_env, "RELEASE_VERSION"))
++    for path, key in sources:
++        value, state = version_value(path, key)
++        if state != "valid" or value != expected:
++            label = key or path.name
++            raise VerificationError(f"Release version metadata is missing, invalid or inconsistent: {label}")
++
++
++def capture_snapshot(path: Path) -> dict[str, object]:
++    entries: dict[str, dict[str, object]] = {}
++
++    def visit(current: Path, relative: str) -> None:
++        info = current.lstat()
++        entry: dict[str, object] = {
++            "mode": stat.S_IMODE(info.st_mode),
++            "uid": info.st_uid,
++            "gid": info.st_gid,
++            "mtime_ns": info.st_mtime_ns,
++        }
++        if stat.S_ISLNK(info.st_mode):
++            entry.update(type="symlink", target=os.readlink(current))
++        elif getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0):
++            raise VerificationError("Snapshot contains an unsupported filesystem reparse point")
++        elif stat.S_ISREG(info.st_mode):
++            entry.update(type="file", sha256=sha256(current))
++        elif stat.S_ISDIR(info.st_mode):
++            entry.update(type="directory")
++        else:
++            raise VerificationError("Snapshot contains an unsupported special file")
++        entries[relative] = entry
++        if entry["type"] == "directory":
++            for child in sorted(current.iterdir(), key=lambda item: item.name):
++                child_relative = child.name if relative == "." else f"{relative}/{child.name}"
++                visit(child, child_relative)
++
++    try:
++        path.lstat()
++    except FileNotFoundError:
++        return {"format": 1, "exists": False, "entries": {}}
++    visit(path, ".")
++    return {"format": 1, "exists": True, "entries": entries}
++
++
++def write_snapshot(path: Path, output: Path) -> None:
++    # Never put recovery metadata inside the tree being recorded or overwrite it.
++    if output.absolute() == path.absolute() or (
++        path.is_dir() and not path.is_symlink() and output.resolve().is_relative_to(path.resolve())
++    ):
++        raise VerificationError("Snapshot metadata must be outside the recorded path")
++    data = capture_snapshot(path)
++    descriptor, temporary = tempfile.mkstemp(prefix=".release-state-", dir=output.parent)
++    temporary_path = Path(temporary)
++    try:
++        os.chmod(temporary_path, 0o600)
++        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
++            json.dump(data, stream, ensure_ascii=False, indent=2)
++            stream.write("\n")
++            stream.flush()
++            os.fsync(stream.fileno())
++        os.replace(temporary_path, output)
++    finally:
++        temporary_path.unlink(missing_ok=True)
++
++
++def verify_snapshot(path: Path, source: Path) -> None:
++    if not regular_file(source):
++        raise VerificationError("Snapshot metadata is missing or not regular")
++    expected = json.loads(source.read_text(encoding="utf-8"))
++    if (
++        not isinstance(expected, dict)
++        or expected.get("format") != 1
++        or not isinstance(expected.get("exists"), bool)
++        or not isinstance(expected.get("entries"), dict)
++    ):
++        raise VerificationError("Snapshot metadata format is invalid")
++    actual = capture_snapshot(path)
++    if actual != expected:
++        raise VerificationError("Restored path differs from the actual pre-install snapshot")
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = argparse.ArgumentParser(description=__doc__)
++    commands = parser.add_subparsers(dest="command", required=True)
++    release = commands.add_parser("verify-release")
++    release.add_argument("root", type=Path)
++    release.add_argument("--manifest", type=Path, required=True)
++    release.add_argument("--expected", required=True)
++    release.add_argument("--metadata", action="store_true")
++    release.add_argument("--runtime-env", type=Path)
++    version = commands.add_parser("versions")
++    version.add_argument("root", type=Path)
++    version.add_argument("--strict", action="store_true")
++    snapshot = commands.add_parser("snapshot")
++    snapshot.add_argument("path", type=Path)
++    snapshot.add_argument("output", type=Path)
++    restore = commands.add_parser("verify-snapshot")
++    restore.add_argument("path", type=Path)
++    restore.add_argument("source", type=Path)
++    args = parser.parse_args(argv)
++    try:
++        if args.command == "versions":
++            report = versions(args.root)
++            print(json.dumps(report, ensure_ascii=False, sort_keys=True))
++            allowed = {"consistent"} if args.strict else {"consistent", "legacy"}
++            return 0 if report["version_consistency"] in allowed else 2
++        if args.command == "verify-release":
++            verify_release(args.root, args.manifest, args.expected, args.metadata, args.runtime_env)
++            print("Release contents and version metadata verified")
++        elif args.command == "snapshot":
++            write_snapshot(args.path, args.output)
++            print("Actual pre-install snapshot metadata recorded")
++        else:
++            verify_snapshot(args.path, args.source)
++            print("Restored path matches the actual pre-install snapshot")
++        return 0
++    except VerificationError as exc:
++        print(f"[ERR] {exc}", file=sys.stderr)
++    except (OSError, UnicodeError, ValueError, KeyError, TypeError):
++        print("[ERR] Release state verification failed; configuration values were not printed", file=sys.stderr)
++    return 1
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+--- /dev/null
++++ working-tree/tests/test_verify_release_state.py
+@@ -0,0 +1,309 @@
++#!/usr/bin/env python3
++"""Isolated verification tests; never package or operate on a live install."""
++
++from __future__ import annotations
++
++import hashlib
++import json
++import os
++import stat
++import subprocess
++import sys
++import tempfile
++import unittest
++from pathlib import Path
++
++
++ROOT = Path(__file__).resolve().parent.parent
++HELPER = ROOT / "scripts/verify_release_state.py"
++VERSION = "3.1.39"
++
++
++class ReleaseStateTest(unittest.TestCase):
++    def setUp(self) -> None:
++        self.temporary = tempfile.TemporaryDirectory(prefix="tds-release-state-")
++        self.addCleanup(self.temporary.cleanup)
++        self.base = Path(self.temporary.name)
++        self.root = self.base / "release"
++        self.root.mkdir()
++        (self.root / "frontend").mkdir()
++        (self.root / "VERSION").write_text(VERSION + "\n", encoding="utf-8")
++        (self.root / ".env.example").write_text(
++            f"RELEASE_VERSION={VERSION}\nJWT_SECRET=fixture-secret-not-for-output\n",
++            encoding="utf-8",
++        )
++        (self.root / "frontend/.env.production").write_text(
++            f"VITE_APP_VERSION={VERSION}\n", encoding="utf-8"
++        )
++        (self.root / "README.md").write_text("old content\n", encoding="utf-8")
++        self.managed = ["VERSION", ".env.example", "frontend/.env.production", "README.md"]
++        self.trusted = self.base / "trusted.sha256"
++        self.write_manifest()
++
++    def run_helper(self, *arguments: object) -> subprocess.CompletedProcess[str]:
++        return subprocess.run(
++            [sys.executable, str(HELPER), *(str(value) for value in arguments)],
++            capture_output=True,
++            text=True,
++            encoding="utf-8",
++            check=False,
++        )
++
++    def write_manifest(self) -> None:
++        data = "".join(
++            f"{hashlib.sha256((self.root / relative).read_bytes()).hexdigest()}  {relative}\n"
++            for relative in self.managed
++        )
++        (self.root / "MANIFEST.sha256").write_text(data, encoding="utf-8")
++        self.trusted.write_text(data, encoding="utf-8")
++
++    def metadata(self, version: str = VERSION) -> None:
++        (self.root / ".installed_version").write_text(version + "\n", encoding="utf-8")
++        (self.root / ".env").write_text(
++            f"RELEASE_VERSION={version}\nJWT_SECRET=fixture-secret-not-for-output\n",
++            encoding="utf-8",
++        )
++
++    def verify(self, *extra: str) -> subprocess.CompletedProcess[str]:
++        return self.run_helper(
++            "verify-release", self.root, "--manifest", self.trusted, "--expected", VERSION, *extra
++        )
++
++    def assert_rejected(self, result: subprocess.CompletedProcess[str]) -> None:
++        self.assertNotEqual(result.returncode, 0)
++        self.assertNotIn("fixture-secret-not-for-output", result.stdout + result.stderr)
++
++    def test_source_contents_and_all_metadata_pass(self) -> None:
++        self.assertEqual(self.verify().returncode, 0)
++        self.metadata()
++        result = self.verify("--metadata")
++        self.assertEqual(result.returncode, 0, result.stderr)
++
++    def test_equal_size_equal_time_changed_content_is_rejected(self) -> None:
++        source = self.root / "README.md"
++        os.utime(source, ns=(0, 0))
++        source.write_text("new content\n", encoding="utf-8")
++        os.utime(source, ns=(0, 0))
++        result = self.verify()
++        self.assert_rejected(result)
++        self.assertIn("checksum mismatch: README.md", result.stderr)
++
++    def test_missing_managed_file_is_rejected(self) -> None:
++        (self.root / "README.md").unlink()
++        self.assert_rejected(self.verify())
++
++    def test_target_manifest_cannot_substitute_its_own_new_checksums(self) -> None:
++        (self.root / "README.md").write_text("new content\n", encoding="utf-8")
++        trusted_data = self.trusted.read_bytes()
++        self.write_manifest()
++        self.trusted.write_bytes(trusted_data)
++        result = self.verify()
++        self.assert_rejected(result)
++        self.assertIn("differs from the trusted", result.stderr)
++
++    def test_runtime_metadata_is_checked_only_after_installation(self) -> None:
++        self.assertEqual(self.verify().returncode, 0)
++        self.assert_rejected(self.verify("--metadata"))
++        self.metadata("3.1.32")
++        self.assert_rejected(self.verify("--metadata"))
++
++    def test_prepared_runtime_env_is_checked_before_installation_marker(self) -> None:
++        prepared = self.base / "prepared.env"
++        prepared.write_text(
++            f"export RELEASE_VERSION='{VERSION}'\nJWT_SECRET=fixture-secret-not-for-output\n",
++            encoding="utf-8",
++        )
++        result = self.verify("--runtime-env", str(prepared))
++        self.assertEqual(result.returncode, 0, result.stderr)
++        self.assertFalse((self.root / ".installed_version").exists())
++        self.assertFalse((self.root / ".env").exists())
++        prepared.write_text("RELEASE_VERSION=3.1.32\n", encoding="utf-8")
++        self.assert_rejected(self.verify("--runtime-env", str(prepared)))
++        prepared.write_text(
++            "RELEASE_VERSION=$(fixture-secret-not-for-output)\n", encoding="utf-8"
++        )
++        self.assert_rejected(self.verify("--runtime-env", str(prepared)))
++        self.assertEqual(prepared.read_text(encoding="utf-8"), "RELEASE_VERSION=$(fixture-secret-not-for-output)\n")
++
++    def test_template_and_frontend_metadata_must_match_expected(self) -> None:
++        for name, key in ((".env.example", "RELEASE_VERSION"), ("frontend/.env.production", "VITE_APP_VERSION")):
++            with self.subTest(name=name):
++                target = self.root / name
++                old = target.read_bytes()
++                target.write_text(f"{key}=3.1.32\n", encoding="utf-8")
++                self.write_manifest()
++                self.assert_rejected(self.verify())
++                target.write_bytes(old)
++                self.write_manifest()
++
++    def test_unsafe_and_generated_manifest_paths_are_rejected(self) -> None:
++        for relative in ("../outside", "/etc/passwd", "folder/../VERSION", "folder//VERSION", "C:/Windows", "folder\\VERSION", ".env", ".installed_version", "MANIFEST.sha256"):
++            with self.subTest(relative=relative):
++                data = "0" * 64 + "  " + relative + "\n"
++                self.trusted.write_text(data, encoding="utf-8")
++                (self.root / "MANIFEST.sha256").write_text(data, encoding="utf-8")
++                self.assert_rejected(self.verify())
++
++    def test_duplicate_and_missing_required_manifest_entries_are_rejected(self) -> None:
++        data = self.trusted.read_text(encoding="utf-8")
++        self.trusted.write_text(data + data.splitlines()[0] + "\n", encoding="utf-8")
++        (self.root / "MANIFEST.sha256").write_bytes(self.trusted.read_bytes())
++        self.assert_rejected(self.verify())
++        self.managed.remove("VERSION")
++        self.write_manifest()
++        self.assert_rejected(self.verify())
++
++    def make_symlink(self, destination: Path, target: Path, *, directory: bool = False) -> None:
++        try:
++            destination.symlink_to(target, target_is_directory=directory)
++        except (OSError, NotImplementedError) as exc:
++            self.skipTest(f"Symlinks unavailable on this host: {type(exc).__name__}")
++
++    def test_managed_symlink_and_symlink_parent_are_rejected(self) -> None:
++        original = self.root / "README.md"
++        outside = self.base / "outside"
++        outside.write_bytes(original.read_bytes())
++        original.unlink()
++        self.make_symlink(original, outside)
++        self.assert_rejected(self.verify())
++        original.unlink()
++        original.write_bytes(outside.read_bytes())
++        frontend = self.root / "frontend"
++        moved = self.base / "frontend-real"
++        frontend.rename(moved)
++        self.make_symlink(frontend, moved, directory=True)
++        self.assert_rejected(self.verify())
++
++    def test_version_report_consistent_and_legacy(self) -> None:
++        self.metadata()
++        result = self.run_helper("versions", self.root)
++        self.assertEqual(result.returncode, 0, result.stderr)
++        self.assertEqual(json.loads(result.stdout)["version_consistency"], "consistent")
++        (self.root / ".installed_version").unlink()
++        legacy = self.run_helper("versions", self.root)
++        self.assertEqual(legacy.returncode, 0, legacy.stderr)
++        data = json.loads(legacy.stdout)
++        self.assertEqual(data["version_consistency"], "legacy")
++        self.assertIsNone(data["installed_version"])
++        self.assertEqual(data["version_states"]["installed_version"], "missing")
++        self.assertNotEqual(self.run_helper("versions", self.root, "--strict").returncode, 0)
++
++    def test_version_report_unknown_and_mismatch_are_nonzero_json(self) -> None:
++        unknown = self.run_helper("versions", self.root)
++        self.assertEqual(unknown.returncode, 2)
++        self.assertEqual(json.loads(unknown.stdout)["version_consistency"], "unknown")
++        self.metadata("3.1.32")
++        mismatch = self.run_helper("versions", self.root)
++        self.assertEqual(mismatch.returncode, 2)
++        self.assertEqual(json.loads(mismatch.stdout)["version_consistency"], "mismatch")
++
++    def test_version_parser_supports_export_quotes_comments_and_crlf(self) -> None:
++        self.metadata()
++        (self.root / ".env").write_bytes(
++            b'# unrelated values are not parsed\r\nJWT_SECRET=$(never-execute)\r\nexport RELEASE_VERSION = "3.1.39" # version only\r\n'
++        )
++        result = self.run_helper("versions", self.root)
++        self.assertEqual(result.returncode, 0, result.stderr)
++        self.assertEqual(json.loads(result.stdout)["environment_version"], VERSION)
++        self.assertNotIn("never-execute", result.stdout + result.stderr)
++
++    def test_invalid_version_is_redacted_and_never_executed(self) -> None:
++        self.metadata()
++        marker = self.base / "must-not-exist"
++        payload = f"$(touch {marker})-fixture-secret-not-for-output"
++        (self.root / ".env").write_text(f"RELEASE_VERSION={payload}\n", encoding="utf-8")
++        result = self.run_helper("versions", self.root)
++        self.assertEqual(result.returncode, 2)
++        data = json.loads(result.stdout)
++        self.assertEqual(data["version_consistency"], "invalid")
++        self.assertIsNone(data["environment_version"])
++        self.assertNotIn(payload, result.stdout + result.stderr)
++        self.assertFalse(marker.exists())
++
++    def test_duplicate_version_keys_and_multiline_markers_are_invalid(self) -> None:
++        self.metadata()
++        (self.root / ".env").write_text(
++            f"RELEASE_VERSION={VERSION}\nRELEASE_VERSION={VERSION}\n", encoding="utf-8"
++        )
++        result = self.run_helper("versions", self.root)
++        self.assertEqual(json.loads(result.stdout)["version_consistency"], "invalid")
++        self.metadata()
++        (self.root / "VERSION").write_text("3.1.\n39\n", encoding="utf-8")
++        self.assertEqual(json.loads(self.run_helper("versions", self.root).stdout)["file_version"], None)
++
++    def test_snapshot_records_actual_tree_including_local_files_and_empty_directory(self) -> None:
++        self.metadata()
++        (self.root / "local-custom-file").write_text("operator setting\n", encoding="utf-8")
++        (self.root / "empty-directory").mkdir()
++        # A historically wrong package manifest must not become the restore baseline.
++        (self.root / "MANIFEST.sha256").write_text("wrong old manifest\n", encoding="utf-8")
++        snapshot = self.base / "snapshot.json"
++        result = self.run_helper("snapshot", self.root, snapshot)
++        self.assertEqual(result.returncode, 0, result.stderr)
++        data = json.loads(snapshot.read_text(encoding="utf-8"))
++        self.assertIn("local-custom-file", data["entries"])
++        self.assertIn("empty-directory", data["entries"])
++        self.assertEqual(self.run_helper("verify-snapshot", self.root, snapshot).returncode, 0)
++        if os.name == "posix":
++            self.assertEqual(stat.S_IMODE(snapshot.stat().st_mode), 0o600)
++
++    def test_snapshot_detects_equal_metadata_content_change(self) -> None:
++        snapshot = self.base / "snapshot.json"
++        self.assertEqual(self.run_helper("snapshot", self.root, snapshot).returncode, 0)
++        target = self.root / "README.md"
++        before = target.stat()
++        target.write_text("new content\n", encoding="utf-8")
++        os.utime(target, ns=(before.st_atime_ns, before.st_mtime_ns))
++        self.assert_rejected(self.run_helper("verify-snapshot", self.root, snapshot))
++
++    def test_snapshot_detects_missing_or_extra_paths(self) -> None:
++        snapshot = self.base / "snapshot.json"
++        self.assertEqual(self.run_helper("snapshot", self.root, snapshot).returncode, 0)
++        (self.root / "extra").write_text("extra", encoding="utf-8")
++        self.assert_rejected(self.run_helper("verify-snapshot", self.root, snapshot))
++        (self.root / "extra").unlink()
++        (self.root / "README.md").unlink()
++        self.assert_rejected(self.run_helper("verify-snapshot", self.root, snapshot))
++
++    @unittest.skipUnless(os.name == "posix", "POSIX modes are deployment attributes")
++    def test_snapshot_detects_mode_change(self) -> None:
++        snapshot = self.base / "snapshot.json"
++        self.assertEqual(self.run_helper("snapshot", self.root, snapshot).returncode, 0)
++        target = self.root / "README.md"
++        target.chmod(stat.S_IMODE(target.stat().st_mode) ^ stat.S_IXUSR)
++        self.assert_rejected(self.run_helper("verify-snapshot", self.root, snapshot))
++
++    def test_snapshot_records_symlink_without_following_it(self) -> None:
++        outside = self.base / "external-secret"
++        outside.write_text("fixture-secret-not-for-output", encoding="utf-8")
++        link = self.root / "external-link"
++        self.make_symlink(link, outside)
++        snapshot = self.base / "snapshot.json"
++        self.assertEqual(self.run_helper("snapshot", self.root, snapshot).returncode, 0)
++        data = json.loads(snapshot.read_text(encoding="utf-8"))
++        self.assertEqual(data["entries"]["external-link"]["type"], "symlink")
++        self.assertNotIn("sha256", data["entries"]["external-link"])
++        self.assertNotIn("fixture-secret-not-for-output", snapshot.read_text(encoding="utf-8"))
++
++    def test_snapshot_represents_absent_external_path(self) -> None:
++        missing = self.base / "not-installed"
++        snapshot = self.base / "snapshot.json"
++        self.assertEqual(self.run_helper("snapshot", missing, snapshot).returncode, 0)
++        self.assertEqual(self.run_helper("verify-snapshot", missing, snapshot).returncode, 0)
++        missing.write_text("new external diagnostic", encoding="utf-8")
++        self.assert_rejected(self.run_helper("verify-snapshot", missing, snapshot))
++
++    def test_snapshot_rejects_metadata_inside_its_own_tree_and_invalid_metadata(self) -> None:
++        self.assert_rejected(self.run_helper("snapshot", self.root, self.root / "snapshot.json"))
++        snapshot = self.base / "invalid.json"
++        snapshot.write_text('{"secret":"fixture-secret-not-for-output"}', encoding="utf-8")
++        self.assert_rejected(self.run_helper("verify-snapshot", self.root, snapshot))
++
++    @unittest.skipUnless(os.name == "posix" and hasattr(os, "mkfifo"), "POSIX special-file fixture")
++    def test_snapshot_rejects_unsupported_special_file(self) -> None:
++        os.mkfifo(self.root / "named-pipe")
++        self.assert_rejected(self.run_helper("snapshot", self.root, self.base / "snapshot.json"))
++
++
++if __name__ == "__main__":
++    unittest.main()
+--- /dev/null
++++ working-tree/tests/test_tdsdiag_versions.py
+@@ -0,0 +1,227 @@
++"""Run the real diagnostic script against an isolated tree and healthy command stubs.
++
++No Docker/systemd/network command reaches the host. The sole production path
++assignment is rewritten in a temporary script; production accepts no test-only
++target override. Run this module on Linux as part of installer verification.
++"""
++
++from __future__ import annotations
++
++import json
++import os
++import shlex
++import shutil
++import subprocess
++import tarfile
++import tempfile
++import unittest
++from pathlib import Path
++
++
++ROOT = Path(__file__).resolve().parents[1]
++BASH = shutil.which("bash")
++SECRET = "test-only-secret-must-not-be-collected-020"
++
++
++@unittest.skipUnless(os.name == "posix" and BASH, "requires POSIX Bash; run on Linux")
++class DiagnosticVersionTests(unittest.TestCase):
++    def setUp(self) -> None:
++        self.temporary = tempfile.TemporaryDirectory(prefix="tdsdiag-versions-")
++        self.addCleanup(self.temporary.cleanup)
++        self.root = Path(self.temporary.name)
++        self.target = self.root / "installation"
++        self.bin = self.root / "bin"
++        self.bin.mkdir()
++        (self.target / "scripts").mkdir(parents=True)
++        (self.target / "docker").mkdir()
++        (self.target / "frontend").mkdir()
++        (self.target / "VERSION").write_text("3.1.40\n", encoding="utf-8")
++        (self.target / ".installed_version").write_text("3.1.40\n", encoding="utf-8")
++        (self.target / ".env.example").write_text("RELEASE_VERSION=3.1.40\n", encoding="utf-8")
++        (self.target / ".env").write_text(
++            f"RELEASE_VERSION=3.1.40\nPOSTGRES_PASSWORD={SECRET}\nJWT_SECRET={SECRET}\n",
++            encoding="utf-8",
++        )
++        (self.target / "frontend/.env.production").write_text(
++            "VITE_APP_VERSION=3.1.40\n", encoding="utf-8"
++        )
++        (self.target / "docker/docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
++        shutil.copyfile(
++            ROOT / "scripts/verify_release_state.py",
++            self.target / "scripts/verify_release_state.py",
++        )
++        self.write_executable(
++            self.target / "scripts/runtime-watchdog.sh", "#!/bin/sh\nprintf '[OK] mock runtime\\n'\n"
++        )
++        self.write_executable(self.bin / "id", "#!/bin/sh\nprintf '0\\n'\n")
++        self.write_executable(self.bin / "curl", "#!/bin/sh\nprintf '200'\n")
++        self.write_executable(self.bin / "timeout", "#!/bin/sh\nexit 0\n")
++        self.write_executable(self.bin / "ss", "#!/bin/sh\nexit 0\n")
++        self.write_executable(self.bin / "ctr", "#!/bin/sh\nexit 0\n")
++        self.write_executable(
++            self.bin / "systemctl",
++            "#!/bin/sh\ncase \"$1\" in is-active) echo active;; is-enabled) echo enabled;; *) echo mock-systemd;; esac\n",
++        )
++        self.write_executable(
++            self.bin / "docker",
++            r'''#!/usr/bin/env bash
++set -eu
++args="$*"
++if [[ "$1" == compose ]]; then
++  if [[ "$args" == *" ps --status running -q" ]]; then
++    for index in {1..18}; do printf 'mock-%s\n' "$index"; done
++  elif [[ "$args" == *" ps -aq topic-init" ]]; then echo mock-topic
++  elif [[ "$args" == *" ps -q logstash" ]]; then echo mock-logstash
++  elif [[ "$args" == *" ps -aq" ]]; then printf 'mock-topic\nmock-logstash\n'
++  elif [[ "$args" == *" exec -T kafka "* ]]; then echo 'Topic: attack-events PartitionCount: 2'
++  else echo mock-compose
++  fi
++elif [[ "$1" == inspect ]]; then
++  if [[ "$args" == *'.State.Status'* ]]; then echo exited
++  elif [[ "$args" == *'.State.ExitCode'* ]]; then echo 0
++  elif [[ "$args" == *'.IPAddress'* ]]; then echo 127.0.0.1
++  elif [[ "$args" == *'.RestartCount'* ]]; then echo /mock=0
++  else echo mock-inspect
++  fi
++else
++  echo 'unexpected docker operation' >&2
++  exit 90
++fi
++''',
++        )
++        self.script = self.root / "tdsdiag.sh"
++        source = (ROOT / "scripts/tdsdiag.sh").read_text(encoding="utf-8")
++        original = 'TARGET_DIR="/opt/threat-detection-system"'
++        self.assertEqual(source.count(original), 1)
++        self.script.write_text(
++            source.replace(original, f"TARGET_DIR={shlex.quote(str(self.target))}", 1),
++            encoding="utf-8",
++        )
++        self.environment = {**os.environ, "PATH": str(self.bin) + os.pathsep + os.environ["PATH"]}
++
++    @staticmethod
++    def write_executable(path: Path, source: str) -> None:
++        path.write_text(source, encoding="utf-8")
++        path.chmod(0o755)
++
++    def run_diagnostic(self, *arguments: str) -> subprocess.CompletedProcess[str]:
++        result = subprocess.run(
++            [BASH, str(self.script), *arguments],
++            cwd=self.root,
++            env=self.environment,
++            text=True,
++            capture_output=True,
++            timeout=25,
++            check=False,
++        )
++        self.assertNotIn(SECRET, result.stdout + result.stderr)
++        return result
++
++    def collect_summary(self) -> tuple[subprocess.CompletedProcess[str], dict[str, str], str]:
++        archive_path = self.root / "diagnostic.tar.gz"
++        result = self.run_diagnostic("--output", str(archive_path))
++        self.assertTrue(archive_path.is_file(), result.stdout + result.stderr)
++        self.assertEqual(archive_path.stat().st_mode & 0o777, 0o600)
++        with tarfile.open(archive_path, "r:gz") as archive:
++            names = archive.getnames()
++            self.assertNotIn(".env", names)
++            text = archive.extractfile("./diag-summary.txt").read().decode("utf-8")
++            summary = json.load(archive.extractfile("./diag-summary.json"))
++            for member in archive.getmembers():
++                if member.isfile():
++                    self.assertNotIn(SECRET.encode(), archive.extractfile(member).read(), member.name)
++        return result, summary, text
++
++    def test_consistent_metadata_passes_self_test(self) -> None:
++        result = self.run_diagnostic("--self-test")
++        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
++        self.assertIn("tdsdiag self-test passed", result.stdout)
++
++    def test_mismatch_fails_even_when_every_health_probe_is_successful(self) -> None:
++        (self.target / "VERSION").write_text("3.1.32\n", encoding="utf-8")
++        result = self.run_diagnostic("--self-test")
++        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
++        self.assertIn("Release version metadata", result.stderr)
++        self.assertIn("status=mismatch", result.stderr)
++        self.assertNotIn("self-test passed", result.stdout)
++
++    def test_missing_marker_is_explicit_legacy_compatibility(self) -> None:
++        (self.target / ".installed_version").unlink()
++        result = self.run_diagnostic("--self-test")
++        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
++        self.assertIn("Legacy installation", result.stderr)
++        result, summary, _ = self.collect_summary()
++        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
++        self.assertEqual(summary["version_consistency"], "legacy")
++        self.assertEqual(summary["installed_version"], "unknown")
++
++    def test_invalid_env_version_is_not_executed_or_disclosed(self) -> None:
++        sentinel = self.root / "must-not-exist"
++        payload = f"$(touch {sentinel})"
++        (self.target / ".env").write_text(
++            f"RELEASE_VERSION={payload}\nJWT_SECRET={SECRET}\n", encoding="utf-8"
++        )
++        result = self.run_diagnostic("--self-test")
++        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
++        self.assertIn("status=invalid", result.stderr)
++        self.assertNotIn(payload, result.stdout + result.stderr)
++        self.assertFalse(sentinel.exists())
++        result, summary, text = self.collect_summary()
++        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
++        self.assertEqual(summary["environment_version"], "unknown")
++        self.assertEqual(summary["version_consistency"], "invalid")
++        self.assertNotIn(payload, text)
++        self.assertFalse(sentinel.exists())
++
++    def test_missing_runtime_release_version_is_unknown_and_critical(self) -> None:
++        (self.target / ".env").write_text(f"JWT_SECRET={SECRET}\n", encoding="utf-8")
++        result = self.run_diagnostic("--self-test")
++        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
++        self.assertIn("status=unknown", result.stderr)
++
++    def test_missing_checker_cannot_pass_healthy_self_test(self) -> None:
++        (self.target / "scripts/verify_release_state.py").unlink()
++        result = self.run_diagnostic("--self-test")
++        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
++        self.assertIn("status=checker_missing", result.stderr)
++        result, summary, _ = self.collect_summary()
++        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
++        self.assertEqual(summary["version"], "3.1.40")
++        self.assertEqual(summary["version_consistency"], "checker_missing")
++
++    def test_export_preserves_version_field_and_adds_all_sources(self) -> None:
++        result, summary, text = self.collect_summary()
++        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
++        self.assertEqual(summary["version"], "3.1.40")
++        for key in (
++            "file_version", "installed_version", "environment_version",
++            "template_version", "frontend_build_version",
++        ):
++            self.assertEqual(summary[key], "3.1.40", key)
++            self.assertIn(f"{key}=3.1.40\n", text)
++        self.assertEqual(summary["version_consistency"], "consistent")
++        self.assertEqual(summary["version_check_rc"], "0")
++        self.assertEqual(summary["critical_failure"], "0")
++
++    def test_mismatch_export_does_not_overwrite_old_file_version(self) -> None:
++        (self.target / "VERSION").write_text("3.1.32\n", encoding="utf-8")
++        result, summary, _ = self.collect_summary()
++        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
++        self.assertEqual(summary["version"], "3.1.32")
++        self.assertEqual(summary["file_version"], "3.1.32")
++        self.assertEqual(summary["installed_version"], "3.1.40")
++        self.assertEqual(summary["environment_version"], "3.1.40")
++        self.assertEqual(summary["version_consistency"], "mismatch")
++        self.assertEqual(summary["critical_failure"], "1")
++
++    def test_malformed_helper_output_is_not_echoed(self) -> None:
++        (self.target / "scripts/verify_release_state.py").write_text(
++            f"print({SECRET!r})\n", encoding="utf-8"
++        )
++        result = self.run_diagnostic("--self-test")
++        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
++        self.assertIn("status=checker_failed", result.stderr)
++
++
++if __name__ == "__main__":
++    unittest.main()
+--- /dev/null
++++ working-tree/tests/test_installer_transaction.py
+@@ -0,0 +1,400 @@
++"""Real rsync transaction regressions in private, non-system installation trees.
++
++Only installer function definitions are loaded. Docker/systemd are recording
++stubs, and every shell filesystem writer rejects paths outside the fixture.
++"""
++from __future__ import annotations
++
++import hashlib
++import os
++import re
++import shlex
++import shutil
++import subprocess
++import sys
++import tempfile
++import unittest
++from pathlib import Path
++
++
++ROOT = Path(__file__).resolve().parents[1]
++INSTALLER = ROOT / "install.sh"
++HELPER = ROOT / "scripts/verify_release_state.py"
++BASH = shutil.which("bash")
++RSYNC = shutil.which("rsync")
++POSIX_RUNTIME = os.name == "posix" and BASH is not None and RSYNC is not None
++
++
++def installer_functions(source: str) -> str:
++    """Use the last function terminator, not braces inside Python heredocs."""
++    starts = list(re.finditer(r"^([a-z_][a-z0-9_]*)\(\) \{", source, re.M))
++    functions = []
++    omitted = {"info", "ok", "warn", "die", "compose_in", "capture_failure_diagnostics"}
++    for index, match in enumerate(starts):
++        if match.group(1) in omitted:
++            continue
++        boundary = starts[index + 1].start() if index + 1 < len(starts) else len(source)
++        segment = source[match.start():boundary]
++        end = segment.rfind("\n}\n")
++        if end < 0:
++            raise AssertionError(f"No complete function definition: {match.group(1)}")
++        functions.append(segment[:end + 3])
++    return "\n".join(functions)
++
++
++def tree_state(root: Path) -> dict[str, object]:
++    """Independent comparison to actual pre-state, never to its old MANIFEST."""
++    if not root.exists() and not root.is_symlink():
++        return {"exists": False}
++    result: dict[str, object] = {}
++    paths = [root]
++    if root.is_dir() and not root.is_symlink():
++        paths += sorted(root.rglob("*"))
++    for item in paths:
++        stat = item.lstat()
++        row: dict[str, object] = {
++            "mode": stat.st_mode & 0o7777,
++            "uid": stat.st_uid,
++            "gid": stat.st_gid,
++            "mtime_ns": stat.st_mtime_ns,
++        }
++        if item.is_symlink():
++            row["link"] = os.readlink(item)
++        elif item.is_file():
++            row["sha256"] = hashlib.sha256(item.read_bytes()).hexdigest()
++        else:
++            row["directory"] = True
++        result["." if item == root else item.relative_to(root).as_posix()] = row
++    return result
++
++
++@unittest.skipUnless(POSIX_RUNTIME, "requires POSIX bash and real rsync; run on isolated Linux")
++class InstallerTransactionTests(unittest.TestCase):
++    def setUp(self) -> None:
++        if not HELPER.is_file():
++            self.fail("The production release integrity helper is required")
++        self.temp = tempfile.TemporaryDirectory(prefix="tds-transaction-test-")
++        self.addCleanup(self.temp.cleanup)
++        self.root = Path(self.temp.name)
++        self.source = self.root / "source"
++        self.target = self.root / "target"
++        self.paths = [self.root / "system" / name for name in (
++            "threat-detection-compose.service",
++            "threat-detection-runtime-watchdog.service",
++            "threat-detection-runtime-watchdog.timer",
++            "tdsdiag",
++        )]
++        self.paths[0].parent.mkdir()
++        self.bin_dir = self.root / "bin"
++        self.bin_dir.mkdir()
++        writers = {name: shutil.which(name) for name in ("install", "rm", "mkdir", "cp")}
++        # Also guard subprocesses such as find -exec install, which do not see
++        # the shell's writer functions. No fixture may write system paths.
++        wrapper = "#!/usr/bin/env python3\n" + (
++            "import os, sys\n"
++            "from pathlib import Path\n"
++            f"writers = {writers!r}\n"
++            f"root = {str(self.root)!r}\n"
++            "name = Path(sys.argv[0]).name\n"
++            "args = sys.argv[1:]\n"
++            "paths = args[-1:] if name in {'cp','install'} else [arg for arg in args if not arg.startswith('-')]\n"
++            "for value in paths:\n"
++            "    if os.path.commonpath([root, os.path.abspath(value)]) != root:\n"
++            "        print('Refusing fixture write outside its private directory', file=sys.stderr)\n"
++            "        raise SystemExit(98)\n"
++            "os.execv(writers[name], [writers[name], *args])\n"
++        )
++        for name in writers:
++            executable = self.bin_dir / name
++            executable.write_text(wrapper, encoding="utf-8")
++            executable.chmod(0o755)
++        self.functions = installer_functions(INSTALLER.read_text(encoding="utf-8"))
++
++    def release_tree(self, destination: Path, version: str, content: str) -> None:
++        destination.mkdir(parents=True)
++        template = (ROOT / ".env.example").read_text(encoding="utf-8")
++        template = re.sub(r"(?m)^RELEASE_VERSION=.*$", f"RELEASE_VERSION={version}", template)
++        files = {
++            "VERSION": version + "\n",
++            ".env.example": template,
++            "pom.xml": f"<fixture>{content}</fixture>\n",
++            "data/config.txt": content + "\n",
++            "docker/docker-compose.yml": "services: {}\n",
++            "frontend/.env.production": f"VITE_APP_VERSION={version}\n",
++            "scripts/tdsdiag.sh": f"#!/bin/sh\n# {content}\nexit 0\n",
++            "scripts/runtime-watchdog.sh": "#!/bin/sh\nexit 0\n",
++        }
++        for unit in self.paths[:3]:
++            files[f"deploy/systemd/{unit.name}"] = f"# {content} {unit.name}\n"
++        for relative, value in files.items():
++            path = destination / relative
++            path.parent.mkdir(parents=True, exist_ok=True)
++            path.write_text(value, encoding="utf-8")
++        for name in ("prepare_release_env.py", "verify_release_state.py"):
++            shutil.copyfile(ROOT / "scripts" / name, destination / "scripts" / name)
++        for script in (destination / "scripts").iterdir():
++            script.chmod(0o755)
++        self.write_manifest(destination)
++        self.stamp(destination, 0)
++
++    @staticmethod
++    def write_manifest(root: Path) -> None:
++        entries = []
++        for path in sorted(root.rglob("*")):
++            if path.is_file() and path.name not in {"MANIFEST.sha256", ".env", ".installed_version"}:
++                entries.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(root).as_posix()}\n")
++        (root / "MANIFEST.sha256").write_text("".join(entries), encoding="utf-8")
++
++    @staticmethod
++    def stamp(root: Path, seconds: int) -> None:
++        for path in sorted(root.rglob("*"), reverse=True):
++            if not path.is_symlink():
++                os.utime(path, ns=(seconds * 10**9, seconds * 10**9))
++        os.utime(root, ns=(seconds * 10**9, seconds * 10**9))
++
++    def setup_upgrade(self, old_version: str = "3.1.32", new_version: str = "3.1.39") -> None:
++        self.release_tree(self.source, new_version, "new-data")
++        self.release_tree(self.target, old_version, "old-data")
++        subprocess.run(
++            [sys.executable, str(ROOT / "scripts/prepare_release_env.py"),
++             str(self.target / ".env.example"), str(self.target / ".env")],
++            check=True, capture_output=True, text=True,
++        )
++        with (self.target / ".env").open("a", encoding="utf-8") as stream:
++            stream.write("CUSTOM_OPERATOR_SETTING=retained-setting\n")
++        (self.target / ".installed_version").write_text(old_version + "\n", encoding="utf-8")
++        for path in self.paths:
++            path.write_text("old-external\n", encoding="utf-8")
++            path.chmod(0o750 if path.name == "tdsdiag" else 0o640)
++            os.utime(path, ns=(0, 0))
++        self.stamp(self.target, 0)
++
++    def run_shell(self, body: str, *, fault: str = "", source: Path | None = None) -> subprocess.CompletedProcess[str]:
++        assignments = {
++            "TEST_ROOT": self.root,
++            "SRC_ROOT": source or self.source,
++            "SCRIPT_DIR": (source or self.source) / "scripts",
++            "TARGET_DIR": self.target,
++            "BACKUP_ROOT": self.root / "backups",
++            "UNIT_PATH": self.paths[0],
++            "WATCHDOG_SERVICE_PATH": self.paths[1],
++            "WATCHDOG_TIMER_PATH": self.paths[2],
++            "DIAG_PATH": self.paths[3],
++            "CONTROL_LOG": self.root / "commands.log",
++            "REAL_RSYNC": RSYNC,
++            "FAULT_MODE": fault,
++            "PATH": str(self.bin_dir) + os.pathsep + os.environ.get("PATH", ""),
++        }
++        prelude = "\n".join(f"{key}={shlex.quote(str(value))}" for key, value in assignments.items())
++        harness = "set -Eeuo pipefail\n" + prelude + r'''
++UNIT_NAME=threat-detection-compose.service
++WATCHDOG_SERVICE_NAME=threat-detection-runtime-watchdog.service
++WATCHDOG_TIMER_NAME=threat-detection-runtime-watchdog.timer
++INSTALL_MODE=upgrade
++NO_START=true
++PREPARED_ENV=''
++ROLLBACK_DIR=''
++TARGET_EXISTED=false
++INSTALL_ACTIVE=false
++TRUSTED_MANIFEST=''
++INTEGRITY_HELPER="$SCRIPT_DIR/verify_release_state.py"
++PRESERVE_ROLLBACK=false
++ROLLBACK_RESULT=not-needed
++RELEASE_VERSION="$(cat "$SRC_ROOT/VERSION")"
++info() { printf 'INFO:%s\n' "$*"; }
++ok() { printf 'OK:%s\n' "$*"; }
++warn() { printf 'WARN:%s\n' "$*"; }
++die() { printf 'ERROR:%s\n' "$*" >&2; exit 1; }
++safe_path() { [[ "$1" == "$TEST_ROOT" || "$1" == "$TEST_ROOT/"* ]] || { printf 'Unsafe fixture write: %s\n' "$1" >&2; exit 98; }; }
++mkdir() { for arg in "$@"; do [[ "$arg" == -* ]] || safe_path "$arg"; done; command mkdir "$@"; }
++rm() { for arg in "$@"; do [[ "$arg" == -* ]] || safe_path "$arg"; done; command rm "$@"; }
++cp() {
++  local last="${!#}"
++  safe_path "$last"
++  command cp "$@" || return $?
++  if [[ "$FAULT_MODE" == corrupt-external-restore && "$last" == "$DIAG_PATH" ]]; then
++    printf 'bad external restore\n' >"$last"
++  fi
++}
++install() { local last="${!#}"; safe_path "$last"; command install "$@"; }
++mktemp() {
++  if [[ "${1:-}" == -d ]]; then command mktemp -d "$TEST_ROOT/rollback.XXXXXX";
++  else command mktemp "$TEST_ROOT/prepared.XXXXXX"; fi
++}
++systemctl() {
++  printf 'systemctl %s\n' "$*" >>"$CONTROL_LOG"
++  [[ "$FAULT_MODE" != fail-unit-reload || "$1" != daemon-reload ]]
++}
++compose_in() { printf 'compose %s\n' "$*" >>"$CONTROL_LOG"; }
++capture_failure_diagnostics() { printf 'fixture diagnostics only\n' >"$TEST_ROOT/failure-diagnostics.txt"; }
++rsync() {
++  local last="${!#}" penultimate="${@: -2:1}"
++  safe_path "$last"
++  if [[ "$penultimate" == "$SRC_ROOT/" && "$last" == "$TARGET_DIR/" ]]; then
++    if [[ "$FAULT_MODE" == omit-forward ]]; then return 0; fi
++    command "$REAL_RSYNC" "$@" || return $?
++    case "$FAULT_MODE" in
++      corrupt-target) printf 'bad-data\n' >"$TARGET_DIR/data/config.txt" ;;
++      missing-target) command rm -f "$TARGET_DIR/data/config.txt" ;;
++      corrupt-manifest) printf 'forged manifest\n' >"$TARGET_DIR/MANIFEST.sha256" ;;
++    esac
++    return 0
++  fi
++  if [[ "$penultimate" == "$ROLLBACK_DIR/target/" && "$last" == "$TARGET_DIR/" ]]; then
++    [[ "$FAULT_MODE" != fail-restore ]] || return 73
++    command "$REAL_RSYNC" "$@" || return $?
++    [[ "$FAULT_MODE" != corrupt-restore ]] || printf 'corruption\n' >"$TARGET_DIR/data/config.txt"
++    return 0
++  fi
++  command "$REAL_RSYNC" "$@"
++}
++''' + "\n" + self.functions + "\n" + body + "\n"
++        return subprocess.run([BASH, "-c", harness], cwd=ROOT, text=True, capture_output=True, timeout=90, check=False)
++
++    def assert_ok(self, result: subprocess.CompletedProcess[str]) -> None:
++        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
++
++    def test_fixture_reproduces_default_rsync_skip_at_zero_and_nonzero_mtime(self) -> None:
++        for seconds in (0, 1234567890):
++            with self.subTest(mtime=seconds):
++                source = self.root / f"quick-source-{seconds}"
++                target = self.root / f"quick-target-{seconds}"
++                source.mkdir(); target.mkdir()
++                for base, value in ((source, "new-data\n"), (target, "old-data\n")):
++                    file = base / "ordinary.txt"
++                    file.write_text(value, encoding="utf-8")
++                    os.utime(file, ns=(seconds * 10**9, seconds * 10**9))
++                subprocess.run([RSYNC, "-a", str(source) + "/", str(target) + "/"], check=True)
++                self.assertEqual((target / "ordinary.txt").read_text(), "old-data\n")
++                subprocess.run([RSYNC, "-a", "--checksum", str(source) + "/", str(target) + "/"], check=True)
++                self.assertEqual((target / "ordinary.txt").read_text(), "new-data\n")
++
++    def test_upgrade_reinstall_and_downgrade_converge_managed_content_and_preserve_env(self) -> None:
++        for old in ("3.1.32", "3.1.38", "3.1.39", "3.1.99"):
++            with self.subTest(old=old):
++                if self.source.exists(): shutil.rmtree(self.source)
++                if self.target.exists(): shutil.rmtree(self.target)
++                self.setup_upgrade(old)
++                before = dict(line.split("=", 1) for line in (self.target / ".env").read_text().splitlines() if "=" in line and not line.startswith("#"))
++                result = self.run_shell("detect_existing_install\nprepare_runtime_env\nprepare_rollback\nsync_release_tree\nverify_installed_release metadata\nprintf 'MODE=%s\\n' \"$INSTALL_MODE\"\n")
++                self.assert_ok(result)
++                self.assertEqual((self.target / "VERSION").read_text().strip(), "3.1.39")
++                self.assertEqual((self.target / ".installed_version").read_text().strip(), "3.1.39")
++                self.assertEqual((self.target / "data/config.txt").read_text(), "new-data\n")
++                self.assertEqual((self.target / ".env.example").read_bytes(), (self.source / ".env.example").read_bytes())
++                after = dict(line.split("=", 1) for line in (self.target / ".env").read_text().splitlines() if "=" in line and not line.startswith("#"))
++                self.assertEqual(after["RELEASE_VERSION"], "3.1.39")
++                for key in ("POSTGRES_PASSWORD", "JWT_SECRET", "CONFIG_ENCRYPTION_KEY", "CUSTOM_OPERATOR_SETTING"):
++                    self.assertTrue(after[key] == before[key], f"retention failed for {key}")
++
++    def test_source_equals_target_avoids_self_copy_but_still_checks_content(self) -> None:
++        self.setup_upgrade()
++        shutil.rmtree(self.target)
++        self.target = self.source
++        result = self.run_shell("detect_existing_install\nprepare_runtime_env\nprepare_rollback\nsync_release_tree\nverify_installed_release metadata\n", source=self.target)
++        self.assert_ok(result)
++        self.assertIn("file synchronization is not required", result.stdout)
++
++    def test_bad_target_content_blocks_metadata_and_external_installs(self) -> None:
++        for fault in ("omit-forward", "corrupt-target", "missing-target", "corrupt-manifest"):
++            with self.subTest(fault=fault):
++                if self.source.exists(): shutil.rmtree(self.source)
++                if self.target.exists(): shutil.rmtree(self.target)
++                self.setup_upgrade()
++                old_env = (self.target / ".env").read_bytes()
++                result = self.run_shell("prepare_runtime_env\nprepare_rollback\nsync_release_tree\n", fault=fault)
++                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
++                self.assertEqual((self.target / ".env").read_bytes(), old_env)
++                marker = self.target / ".installed_version"
++                self.assertFalse(marker.is_file() and marker.read_text().strip() == "3.1.39")
++                self.assertEqual(self.paths[3].read_text(), "old-external\n")
++                self.assertNotIn("Release files installed", result.stdout)
++
++    def test_rollback_restores_actual_mixed_prestate_units_and_external_diag(self) -> None:
++        self.setup_upgrade()
++        # The old package manifest intentionally no longer describes actual state.
++        (self.target / "data/config.txt").write_text("local-old\n", encoding="utf-8")
++        (self.target / "local-only.txt").write_text("operator file\n", encoding="utf-8")
++        self.stamp(self.target, 0)
++        before = tree_state(self.target)
++        external = [tree_state(path) for path in self.paths]
++        result = self.run_shell("prepare_runtime_env\nprepare_rollback\nsync_release_tree\nrollback_install 42\ncleanup_temp\n")
++        self.assert_ok(result)
++        self.assertEqual(tree_state(self.target), before)
++        self.assertEqual([tree_state(path) for path in self.paths], external)
++        self.assertIn("restored", result.stdout.lower())
++        self.assertEqual(list(self.root.glob("rollback.*")), [])
++        self.assertNotRegex((self.root / "commands.log").read_text(), r"compose .* down -v")
++
++    def test_bad_prepared_environment_blocks_marker_and_enters_verified_rollback(self) -> None:
++        self.setup_upgrade()
++        before = tree_state(self.target)
++        external = [tree_state(path) for path in self.paths]
++        result = self.run_shell(
++            "prepare_runtime_env\nprepare_rollback\ntrap on_exit EXIT\n"
++            "printf 'RELEASE_VERSION=0.0.0\\n' >\"$PREPARED_ENV\"\nsync_release_tree\n"
++        )
++        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
++        self.assertNotIn("Release files installed", result.stdout)
++        self.assertEqual(tree_state(self.target), before)
++        self.assertEqual([tree_state(path) for path in self.paths], external)
++        self.assertFalse(list(self.root.glob("rollback.*")))
++
++    def test_fresh_failure_removes_only_created_target_and_external_paths(self) -> None:
++        self.release_tree(self.source, "3.1.39", "new-data")
++        result = self.run_shell("prepare_runtime_env\nprepare_rollback\nsync_release_tree\nrollback_install 42\ncleanup_temp\n")
++        self.assert_ok(result)
++        self.assertFalse(self.target.exists())
++        self.assertTrue(self.source.is_dir())
++        self.assertTrue(all(not path.exists() for path in self.paths))
++        self.assertEqual(list(self.root.glob("rollback.*")), [])
++
++    def test_fresh_files_only_install_commits_verified_content_and_environment(self) -> None:
++        self.release_tree(self.source, "3.1.39", "new-data")
++        result = self.run_shell("prepare_runtime_env\nprepare_rollback\nsync_release_tree\ncommit_install\ncleanup_temp\n")
++        self.assert_ok(result)
++        self.assertEqual((self.target / "VERSION").read_text().strip(), "3.1.39")
++        self.assertEqual((self.target / ".installed_version").read_text().strip(), "3.1.39")
++        self.assertEqual((self.target / ".env").stat().st_mode & 0o777, 0o600)
++        self.assertTrue(all(path.is_file() for path in self.paths))
++        self.assertFalse(list(self.root.glob("rollback.*")))
++        self.assertFalse((self.root / "commands.log").exists(), "files-only transaction must not start services")
++
++    def test_restore_command_and_verification_failures_keep_snapshot_after_exit_cleanup(self) -> None:
++        for fault in ("fail-restore", "corrupt-restore", "corrupt-external-restore", "fail-unit-reload"):
++            with self.subTest(fault=fault):
++                if self.source.exists(): shutil.rmtree(self.source)
++                if self.target.exists(): shutil.rmtree(self.target)
++                self.setup_upgrade()
++                before = tree_state(self.target)
++                result = self.run_shell("prepare_runtime_env\nprepare_rollback\nsync_release_tree\ntrap on_exit EXIT\nexit 42\n", fault=fault)
++                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
++                retained = list(self.root.glob("rollback.*"))
++                self.assertTrue(retained, result.stdout + result.stderr)
++                self.assertTrue(any((directory / "target").is_dir() for directory in retained))
++                for directory in retained:
++                    self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
++                    self.assertEqual(tree_state(directory / "target"), before)
++                    self.assertTrue((directory / "release-manifest.sha256").is_file())
++                    self.assertTrue((directory / "verify_release_state.py").is_file())
++                    self.assertTrue((directory / "rollback-failure.txt").is_file())
++                self.assertNotIn("previous installation was restored", result.stdout.lower())
++                self.assertNotIn("Release installation committed", result.stdout)
++                for directory in retained: shutil.rmtree(directory)
++
++    def test_commit_refuses_corruption_and_no_start_uses_the_same_validation(self) -> None:
++        self.setup_upgrade()
++        result = self.run_shell("prepare_runtime_env\nprepare_rollback\nsync_release_tree\nprintf 'bad-data\\n' >\"$TARGET_DIR/data/config.txt\"\ncommit_install\n")
++        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
++        self.assertTrue(list(self.root.glob("rollback.*")), "validation must precede snapshot deletion")
++        source = INSTALLER.read_text(encoding="utf-8")
++        execution = source.rsplit("\nvalidate_target\n", 1)[1]
++        no_start = execution.split("if $NO_START; then", 1)[1].split("\nfi", 1)[0]
++        self.assertIn("commit_install", no_start)
++        commit = installer_functions(source)
++        definition = commit[commit.index("commit_install() {"):]
++        self.assertLess(definition.index("verify_installed_release"), definition.index("INSTALL_ACTIVE=false"))
++
++
++if __name__ == "__main__":
++    unittest.main()
+--- /dev/null
++++ working-tree/tests/test_installer_real_archives.py
+@@ -0,0 +1,152 @@
++"""Upgrade and roll back real delivered archives in the guarded rsync fixture.
++
++Set TDS_TEST_RELEASE_ARCHIVES_DIR to a directory containing the historical
++tarballs. Missing historical artifacts are explicit skips, never downloads.
++No installer main, Docker, systemd or delivered output is executed or changed.
++"""
++from __future__ import annotations
++
++import hashlib
++import importlib.util
++import json
++import os
++import shutil
++import subprocess
++import sys
++import tarfile
++import time
++import unittest
++from pathlib import Path
++
++from tests import test_installer_transaction as transaction
++
++
++ROOT = transaction.ROOT
++ARCHIVES = Path(os.environ.get("TDS_TEST_RELEASE_ARCHIVES_DIR", ROOT / "outputs"))
++
++
++@unittest.skipUnless(transaction.POSIX_RUNTIME, "requires isolated POSIX bash and real rsync")
++class HistoricalArchiveTransactionTests(unittest.TestCase):
++    def prepare_case(self, old: str) -> tuple[transaction.InstallerTransactionTests, Path]:
++        name = f"threat-detection-system-{old}-linux-x86_64.tar.gz"
++        archive = ARCHIVES / name
++        if not archive.is_file():
++            archive = ARCHIVES / f"v{old}" / name
++        if not archive.is_file():
++            self.skipTest(f"historical archive unavailable: {name}")
++        case = transaction.InstallerTransactionTests("test_source_equals_target_avoids_self_copy_but_still_checks_content")
++        case.setUp()
++        self.addCleanup(case.doCleanups)
++        specification = importlib.util.spec_from_file_location("historical_test_packer", ROOT / "scripts/pack_release.py")
++        assert specification is not None and specification.loader is not None
++        packer = importlib.util.module_from_spec(specification)
++        specification.loader.exec_module(packer)
++        case.source.mkdir()
++        files = packer.release_files()
++        packer.copy_release_tree(case.source, files)
++        packer.write_manifest(case.source, files)
++        case.stamp(case.source, 0)
++        extraction = case.root / "historical"
++        extraction.mkdir()
++        prefix = name.removesuffix(".tar.gz")
++        with tarfile.open(archive, "r:gz") as stream:
++            members = stream.getmembers()
++            self.assertTrue(all(member.name == prefix or member.name.startswith(prefix + "/") for member in members))
++            self.assertTrue(all(member.mtime == 0 for member in members))
++            self.assertTrue(all(member.isfile() or member.isdir() for member in members))
++            stream.extractall(extraction, filter="data")
++        shutil.move(extraction / prefix, case.target)
++        # Generate only synthetic credentials using the actual historical helper.
++        subprocess.run(
++            [sys.executable, str(case.target / "scripts/prepare_release_env.py"),
++             str(case.target / ".env.example"), str(case.target / ".env")],
++            check=True, capture_output=True, text=True,
++        )
++        with (case.target / ".env").open("a", encoding="utf-8") as stream:
++            stream.write("\nCUSTOM_OPERATOR_SETTING=historical-archive-test\n")
++        (case.target / ".installed_version").write_text(old + "\n", encoding="utf-8")
++        for external in case.paths:
++            original = case.target / ("scripts/tdsdiag.sh" if external.name == "tdsdiag" else f"deploy/systemd/{external.name}")
++            if original.is_file():
++                shutil.copy2(original, external)
++        return case, archive
++
++    @staticmethod
++    def environment(path: Path) -> dict[str, str]:
++        return dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines()
++                    if "=" in line and not line.startswith("#"))
++
++    def record(self, old: str, action: str, archive: Path, case: transaction.InstallerTransactionTests,
++               elapsed: float, files: int) -> None:
++        output = os.environ.get("TDS_TEST_EVIDENCE_DIR")
++        if output:
++            directory = Path(output)
++            directory.mkdir(parents=True, exist_ok=True)
++            report = {
++                "old_version": old, "candidate_version": (case.source / "VERSION").read_text().strip(),
++                "archive_name": archive.name, "archive_sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
++                "action": action, "managed_file_count": files, "result": "PASS", "elapsed_seconds": round(elapsed, 3),
++                "scope": "private temporary tree; real bash/rsync; recording Docker/systemd stubs; synthetic credentials",
++            }
++            (directory / f"historical-{old}-{action}.json").write_text(
++                json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
++            )
++
++    def upgrade(self, old: str) -> None:
++        started = time.monotonic()
++        case, archive = self.prepare_case(old)
++        before = self.environment(case.target / ".env")
++        result = case.run_shell("detect_existing_install\nprepare_runtime_env\nprepare_rollback\nsync_release_tree\ncommit_install\ncleanup_temp\n")
++        case.assert_ok(result)
++        expected = (case.source / "VERSION").read_text().strip()
++        self.assertEqual((case.target / "VERSION").read_text().strip(), expected)
++        self.assertEqual((case.target / ".installed_version").read_text().strip(), expected)
++        after = self.environment(case.target / ".env")
++        self.assertEqual(after["RELEASE_VERSION"], expected)
++        for key in ("POSTGRES_PASSWORD", "JWT_SECRET", "CONFIG_ENCRYPTION_KEY", "TIRE_FERNET_KEY",
++                    "TIRE_SESSION_SECRET", "TIRE_INTERNAL_SERVICE_TOKEN", "ALERT_INTERNAL_SERVICE_TOKEN",
++                    "CUSTOM_OPERATOR_SETTING"):
++            if key in before:
++                self.assertTrue(after.get(key) == before[key], f"operator value was not retained: {key}")
++        entries = (case.source / "MANIFEST.sha256").read_text().splitlines()
++        self.assertEqual((case.target / "MANIFEST.sha256").read_bytes(), (case.source / "MANIFEST.sha256").read_bytes())
++        for line in entries:
++            expected_hash, relative = line.split("  ", 1)
++            self.assertEqual(hashlib.sha256((case.target / relative).read_bytes()).hexdigest(), expected_hash, relative)
++        for external in case.paths:
++            relative = "scripts/tdsdiag.sh" if external.name == "tdsdiag" else f"deploy/systemd/{external.name}"
++            self.assertEqual(external.read_bytes(), (case.source / relative).read_bytes())
++        self.assertFalse(list(case.root.glob("rollback.*")))
++        self.record(old, "upgrade", archive, case, time.monotonic() - started, len(entries))
++
++    def rollback(self, old: str) -> None:
++        started = time.monotonic()
++        case, archive = self.prepare_case(old)
++        # Deliberately diverge from its historical manifest. The actual tree must win.
++        (case.target / "local-only.txt").write_text("operator local state\n", encoding="utf-8")
++        before = transaction.tree_state(case.target)
++        external = [transaction.tree_state(path) for path in case.paths]
++        result = case.run_shell("prepare_runtime_env\nprepare_rollback\nsync_release_tree\nrollback_install 42\ncleanup_temp\n")
++        case.assert_ok(result)
++        self.assertEqual(transaction.tree_state(case.target), before)
++        self.assertEqual([transaction.tree_state(path) for path in case.paths], external)
++        self.assertFalse(list(case.root.glob("rollback.*")))
++        self.assertNotRegex((case.root / "commands.log").read_text(), r"compose .* down -v")
++        entries = (case.source / "MANIFEST.sha256").read_text().splitlines()
++        self.record(old, "rollback", archive, case, time.monotonic() - started, len(entries))
++
++    def test_real_3_1_32_upgrade(self) -> None:
++        self.upgrade("3.1.32")
++
++    def test_real_3_1_38_upgrade(self) -> None:
++        self.upgrade("3.1.38")
++
++    def test_real_3_1_32_rollback(self) -> None:
++        self.rollback("3.1.32")
++
++    def test_real_3_1_38_rollback(self) -> None:
++        self.rollback("3.1.38")
++
++
++if __name__ == "__main__":
++    unittest.main()

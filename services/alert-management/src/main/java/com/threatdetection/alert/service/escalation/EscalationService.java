@@ -100,17 +100,14 @@ public class EscalationService {
     /**
      * 升级告警
      */
-    private void escalateAlert(Alert alert, int level, String reason) {
+    private Alert escalateAlert(Alert alert, int level, String reason) {
         logger.info("Escalating alert {} to level {}: {}", alert.getId(), level, reason);
 
-        alert.setEscalationLevel(level);
-        alert.setEscalationReason(reason);
-
-        // 保存升级后的告警
-        alertService.updateStatus(alert.getId(), alert.getStatus());
+        Alert escalated = alertService.setEscalation(alert.getId(), level, reason);
 
         // 发送升级通知
-        sendEscalationNotification(alert, level, reason);
+        sendEscalationNotification(escalated, level, reason);
+        return escalated;
     }
 
     /**
@@ -129,29 +126,22 @@ public class EscalationService {
     /**
      * 手动升级告警
      */
-    public void manuallyEscalateAlert(Long alertId, String reason) {
+    public Alert manuallyEscalateAlert(Long alertId, String reason) {
         Alert alert = alertService.findById(alertId)
                 .orElseThrow(() -> new IllegalArgumentException("Alert not found: " + alertId));
 
         int newLevel = (alert.getEscalationLevel() != null) ? alert.getEscalationLevel() + 1 : 1;
 
         logger.info("Manually escalating alert {} to level {}", alertId, newLevel);
-        escalateAlert(alert, newLevel, reason);
+        return escalateAlert(alert, newLevel, reason);
     }
 
     /**
      * 取消告警升级
      */
-    public void cancelEscalation(Long alertId) {
-        Alert alert = alertService.findById(alertId)
-                .orElseThrow(() -> new IllegalArgumentException("Alert not found: " + alertId));
-
+    public Alert cancelEscalation(Long alertId) {
         logger.info("Canceling escalation for alert {}", alertId);
-
-        alert.setEscalationLevel(null);
-        alert.setEscalationReason(null);
-
-        alertService.updateStatus(alert.getId(), alert.getStatus());
+        return alertService.clearEscalation(alertId);
     }
 
     /**

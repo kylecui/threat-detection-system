@@ -1,6 +1,15 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { message } from 'antd';
 import i18n from '@/i18n';
+import { isAuthenticationFailure, terminateSession } from '@/services/session';
+
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    suppressGlobalError?: boolean;
+    maxRetries?: number;
+    skipScope?: boolean;
+  }
+}
 
 function snakeToCamel(str: string): string {
   return str.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
@@ -24,20 +33,41 @@ function convertKeys(obj: unknown): unknown {
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? '/api',
-  timeout: 30000,
+  timeout: 12000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
+const recentApiErrors = new Map<string, number>();
+function notifyApiError(key: string, content: string) {
+  const now = Date.now();
+  const previous = recentApiErrors.get(key) ?? 0;
+  if (now - previous < 2000) return;
+  recentApiErrors.set(key, now);
+  message.error(content);
+  if (recentApiErrors.size > 100) {
+    for (const [entryKey, timestamp] of recentApiErrors) {
+      if (now - timestamp > 10000) recentApiErrors.delete(entryKey);
+    }
+  }
+}
+
 /**
  * 从 localStorage 获取当前 customerId。
- * 优先级: customer_id 键 → user JSON 中的 customerId 字段。
- * 管理员用户无绑定客户时返回 undefined（不注入 customer_id 参数）。
+ * 优先级: 统一作用域键 → 固定客户账号 → 兼容旧键。
+ * 平台/租户管理员在选择“全部客户”时不再回退到历史 customer_id。
  */
 export function getCustomerId(): string | undefined {
   const scoped = localStorage.getItem('scope_customer_id');
-  if (scoped && scoped !== '__all__') return scoped;
+  if (scoped) return scoped === '__all__' ? undefined : scoped;
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '');
+    const roles: string[] = Array.isArray(user?.roles) ? user.roles : [];
+    if (roles.includes('SUPER_ADMIN') || roles.includes('TENANT_ADMIN')) {
+      return undefined;
+    }
+  } catch { /* ignore parse errors */ }
   const stored = localStorage.getItem('customer_id');
   if (stored) return stored;
   try {
@@ -70,7 +100,8 @@ apiClient.interceptors.request.use(
       '/api/v1/user-config',
       '/api/v1/system/health',
     ];
-    const shouldInjectScope = !skipScopeUrls.some((prefix) => url.includes(prefix));
+    const shouldInjectScope = !config.skipScope
+      && !skipScopeUrls.some((prefix) => url.includes(prefix));
 
     if (shouldInjectScope) {
       const customerId = getCustomerId();
@@ -84,15 +115,13 @@ apiClient.interceptors.request.use(
     }
 
     const tenantId = localStorage.getItem('scope_tenant_id') || localStorage.getItem('tenant_id');
-    const scopeCustomerId = localStorage.getItem('scope_customer_id') || localStorage.getItem('customer_id');
-    if (tenantId && config.headers) {
+    const scopeCustomerId = getCustomerId();
+    if (!config.skipScope && tenantId && config.headers) {
       config.headers['X-Tenant-Id'] = tenantId;
     }
-    if (scopeCustomerId && scopeCustomerId !== '__all__' && config.headers) {
+    if (!config.skipScope && scopeCustomerId && config.headers) {
       config.headers['X-Customer-Id'] = scopeCustomerId;
     }
-
-    console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.params);
 
     return config;
   },
@@ -110,44 +139,79 @@ apiClient.interceptors.response.use(
     if (response.data && typeof response.data === 'object') {
       response.data = convertKeys(response.data);
     }
-    console.log(`[API Response] ${response.config.url}`, response.data);
     return response;
   },
   (error: AxiosError) => {
-    console.error('[API Response Error]', error);
+    const retryConfig = error.config as (InternalAxiosRequestConfig & {
+      _retryCount?: number;
+      suppressGlobalError?: boolean;
+      maxRetries?: number;
+    }) | undefined;
+    const status = error.response?.status;
+    const safeToRetry = retryConfig?.method?.toUpperCase() === 'GET';
+    const transient = !error.response || status === 502 || status === 503 || status === 504;
+    const retryCount = retryConfig?._retryCount ?? 0;
+
+    // A single bounded retry masks a brief cold-start race without multiplying
+    // every page request into three backend calls on an overloaded node.
+    const maxRetries = retryConfig?.maxRetries ?? 1;
+
+    if (retryConfig && safeToRetry && transient && retryCount < maxRetries) {
+      retryConfig._retryCount = retryCount + 1;
+      const delayMs = retryCount === 0 ? 350 : 900;
+      return new Promise((resolve) => window.setTimeout(resolve, delayMs))
+        .then(() => apiClient.request(retryConfig));
+    }
+
+    const responseData = error.response?.data;
+    const hasSession = Boolean(
+      localStorage.getItem('token')
+      || retryConfig?.headers?.Authorization,
+    );
+    if (hasSession && isAuthenticationFailure(status, responseData)) {
+      if (!retryConfig?.suppressGlobalError) {
+        const errorKey = `${status ?? 'auth'}:${retryConfig?.method ?? 'GET'}:${retryConfig?.url ?? 'unknown'}`;
+        notifyApiError(errorKey, String(i18n.t('apiErrors.unauthorized')));
+      }
+      terminateSession('session_expired');
+      return Promise.reject(error);
+    }
+
+    if (retryConfig?.suppressGlobalError) {
+      return Promise.reject(error);
+    }
 
     const t = i18n.t.bind(i18n);
+    const errorKey = `${status ?? 'network'}:${retryConfig?.method ?? 'GET'}:${retryConfig?.url ?? 'unknown'}`;
     if (error.response) {
       const { status, data } = error.response;
       
       switch (status) {
         case 400:
-          message.error(t('apiErrors.badRequest', { message: (data as any)?.message || t('apiErrors.defaultBadRequest') }));
+          notifyApiError(errorKey, String(t('apiErrors.badRequest', { message: (data as any)?.message || t('apiErrors.defaultBadRequest') })));
           break;
         case 401:
-          message.error(t('apiErrors.unauthorized'));
-          localStorage.removeItem('token');
-          window.location.href = '/login';
+          notifyApiError(errorKey, String(t('apiErrors.unauthorized')));
           break;
         case 403:
-          message.error(t('apiErrors.forbidden'));
+          notifyApiError(errorKey, String(t('apiErrors.forbidden')));
           break;
         case 404:
-          message.error(t('apiErrors.notFound'));
+          notifyApiError(errorKey, String(t('apiErrors.notFound')));
           break;
         case 500:
-          message.error(t('apiErrors.serverError', { message: (data as any)?.message || t('apiErrors.defaultServerError') }));
+          notifyApiError(errorKey, String(t('apiErrors.serverError', { message: (data as any)?.message || t('apiErrors.defaultServerError') })));
           break;
         case 503:
-          message.error(t('apiErrors.serviceUnavailable'));
+          notifyApiError(errorKey, String(t('apiErrors.serviceUnavailable')));
           break;
         default:
-          message.error(t('apiErrors.requestFailed', { status }));
+          notifyApiError(errorKey, String(t('apiErrors.requestFailed', { status })));
       }
     } else if (error.request) {
-      message.error(t('apiErrors.networkError'));
+      notifyApiError(errorKey, String(t('apiErrors.networkError')));
     } else {
-      message.error(t('apiErrors.configError', { message: error.message }));
+      notifyApiError(errorKey, String(t('apiErrors.configError', { message: error.message })));
     }
 
     return Promise.reject(error);

@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -117,6 +118,22 @@ public class DeviceManagementController {
         log.info("GET /api/v1/customers/{}/devices/{}", customerId, devSerial);
         DeviceMappingResponse device = deviceManagementService.getDevice(customerId, devSerial);
         return ResponseEntity.ok(device);
+    }
+
+    /**
+     * Return recent raw attack events for one bound device. This endpoint is intentionally
+     * paginated so the Web console never loads an unbounded event history.
+     */
+    @GetMapping("/{devSerial}/events")
+    public ResponseEntity<Page<DeviceAttackEventResponse>> getDeviceEvents(
+            @PathVariable("customerId") String customerId,
+            @PathVariable("devSerial") String devSerial,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(100, size));
+        return ResponseEntity.ok(deviceManagementService.getDeviceAttackEvents(
+                customerId, devSerial, PageRequest.of(safePage, safeSize)));
     }
 
     /**

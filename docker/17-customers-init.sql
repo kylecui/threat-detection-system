@@ -28,15 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_customer_id ON customers(customer_id);
 CREATE INDEX IF NOT EXISTS idx_customer_email ON customers(email);
 CREATE INDEX IF NOT EXISTS idx_customer_status ON customers(status);
 
--- 插入测试数据 (生产安全 - 只插入不存在的记录)
-INSERT INTO customers (customer_id, name, email, phone, address, status, subscription_tier, max_devices, description)
-VALUES
-('customer_a', 'Acme Corporation', 'admin@acme.com', '+1-555-0001', '123 Main St, New York, NY', 'ACTIVE', 'PROFESSIONAL', 100, 'Enterprise customer - IT Security Division'),
-('customer_b', 'Beta Industries', 'contact@beta.com', '+1-555-0002', '456 Oak Ave, San Francisco, CA', 'ACTIVE', 'BASIC', 20, 'SMB customer - Manufacturing'),
-('customer_c', 'Gamma Tech', 'info@gamma.tech', '+1-555-0003', '789 Pine Rd, Austin, TX', 'ACTIVE', 'ENTERPRISE', 10000, 'Large enterprise - Tech company'),
-('customer_d', 'Delta Solutions', 'support@delta.com', '+1-555-0004', '321 Elm St, Seattle, WA', 'SUSPENDED', 'BASIC', 20, 'Customer suspended for payment issues'),
-('customer_test', 'Test Customer', 'test@example.com', '+1-555-9999', 'Test Address', 'ACTIVE', 'FREE', 5, 'Test customer for development')
-ON CONFLICT (customer_id) DO NOTHING;
+-- Production installations intentionally start with no customer data.
 
 -- 更新现有device_customer_mapping表的客户信息
 COMMENT ON TABLE customers IS '客户/租户信息表';

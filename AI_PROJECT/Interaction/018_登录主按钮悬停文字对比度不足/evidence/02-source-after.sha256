@@ -1,0 +1,3 @@
+38ff4ba7b316a92cda015423ef5dca3f3a6878acb3973b15db07d91714e54b6e  frontend/src/pages/Login/index.tsx
+18508c509097a314aa5f80252a43d3ecd9a37d490ad521a3f3bb0cd475a2f8e8  frontend/e2e/login-contrast.spec.ts
+8129a3b274e9629f93828e7caaf89ab5a63692be41b6e4bbc9473c8c8c9f6cb1  frontend/e2e/login-key-repeat.spec.ts

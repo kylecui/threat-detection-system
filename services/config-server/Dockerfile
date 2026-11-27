@@ -7,6 +7,7 @@ WORKDIR /workspace
 ARG USE_CHINA_MIRROR=false
 COPY maven-settings.xml /tmp/maven-settings.xml
 RUN if [ "$USE_CHINA_MIRROR" = "true" ]; then \
+      mkdir -p /root/.m2 && \
       cp /tmp/maven-settings.xml /root/.m2/settings.xml; \
     fi
 # Install parent POM only (non-recursive, no module resolution)
@@ -22,7 +23,7 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 # Copy source and build this module only (direct POM, no reactor)
 COPY services/config-server/src ./services/config-server/src
 RUN --mount=type=cache,target=/root/.m2/repository \
-    mvn package -f services/config-server/pom.xml -DskipTests -B -q
+    mvn package -f services/config-server/pom.xml -Dmaven.test.skip=true -B -q
 
 ############################
 # Runtime stage

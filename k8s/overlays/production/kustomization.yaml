@@ -8,6 +8,7 @@ namespace: threat-detection-prod
 
 resources:
   - ../../base
+  - availability.yaml
 
 patches:
   - path: replica-patch.yaml

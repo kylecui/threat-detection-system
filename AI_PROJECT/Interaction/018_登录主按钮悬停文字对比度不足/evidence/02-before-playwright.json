@@ -1,0 +1,154 @@
+{
+  "config": {
+    "configFile": "F:\\codex\\threat-detection-system\\frontend\\playwright.config.ts",
+    "rootDir": "F:/codex/threat-detection-system/frontend/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": "F:\\codex\\threat-detection-system\\frontend\\e2e\\global-setup.ts",
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "F:/codex/threat-detection-system/AI_PROJECT/Interaction/018_登录主按钮悬停文字对比度不足/evidence/before/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "F:/codex/threat-detection-system/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line"
+      ],
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.59.1",
+    "workers": 1,
+    "webServer": {
+      "command": "npm run dev",
+      "url": "http://localhost:3000",
+      "reuseExistingServer": true,
+      "timeout": 30000
+    }
+  },
+  "suites": [
+    {
+      "title": "login-contrast.spec.ts",
+      "file": "login-contrast.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "login primary text contrast: zh-CN, light, ordinary",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 5824,
+                  "error": {
+                    "message": "Error: hover: rgb(255, 255, 255) on rgb(35, 146, 168)\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: >= \u001b[32m4.5\u001b[39m\nReceived:    \u001b[31m3.653159082742227\u001b[39m",
+                    "stack": "Error: hover: rgb(255, 255, 255) on rgb(35, 146, 168)\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: >= \u001b[32m4.5\u001b[39m\nReceived:    \u001b[31m3.653159082742227\u001b[39m\n    at F:\\codex\\threat-detection-system\\frontend\\e2e\\login-contrast.spec.ts:278:13",
+                    "location": {
+                      "file": "F:\\codex\\threat-detection-system\\frontend\\e2e\\login-contrast.spec.ts",
+                      "column": 13,
+                      "line": 278
+                    },
+                    "snippet": "  276 |             sample.ratio,\n  277 |             `${sample.state}: ${sample.foreground} on ${sample.background}`,\n> 278 |           ).toBeGreaterThanOrEqual(4.5);\n      |             ^\n  279 |       });\n  280 |     }\n  281 |   }"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "F:\\codex\\threat-detection-system\\frontend\\e2e\\login-contrast.spec.ts",
+                        "column": 13,
+                        "line": 278
+                      },
+                      "message": "Error: hover: rgb(255, 255, 255) on rgb(35, 146, 168)\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: >= \u001b[32m4.5\u001b[39m\nReceived:    \u001b[31m3.653159082742227\u001b[39m\n\n  276 |             sample.ratio,\n  277 |             `${sample.state}: ${sample.foreground} on ${sample.background}`,\n> 278 |           ).toBeGreaterThanOrEqual(4.5);\n      |             ^\n  279 |       });\n  280 |     }\n  281 |   }\n    at F:\\codex\\threat-detection-system\\frontend\\e2e\\login-contrast.spec.ts:278:13"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-30T02:11:01.801Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "login-button-contrast",
+                      "contentType": "application/json",
+                      "body": "ewogICJsYW5ndWFnZSI6ICJ6aC1DTiIsCiAgInByZWZlcmVuY2UiOiAibGlnaHQiLAogICJib290c3RyYXAiOiBmYWxzZSwKICAic2FtcGxlcyI6IFsKICAgIHsKICAgICAgInN0YXRlIjogIm5vcm1hbCIsCiAgICAgICJmb3JlZ3JvdW5kIjogInJnYigyNTUsIDI1NSwgMjU1KSIsCiAgICAgICJiYWNrZ3JvdW5kIjogInJnYig4LCAxMjcsIDE1NikiLAogICAgICAiY29tcG9zZWRGb3JlZ3JvdW5kIjogWwogICAgICAgIDI1NSwKICAgICAgICAyNTUsCiAgICAgICAgMjU1CiAgICAgIF0sCiAgICAgICJjb21wb3NlZEJhY2tncm91bmQiOiBbCiAgICAgICAgOCwKICAgICAgICAxMjcsCiAgICAgICAgMTU2CiAgICAgIF0sCiAgICAgICJmb250U2l6ZSI6ICIxNHB4IiwKICAgICAgImZvbnRXZWlnaHQiOiAiNjAwIiwKICAgICAgInJhdGlvIjogNC42Mzk3MjE2OTI4NDk5MzEsCiAgICAgICJob3ZlciI6IGZhbHNlLAogICAgICAiYWN0aXZlIjogZmFsc2UsCiAgICAgICJmb2N1c1Zpc2libGUiOiBmYWxzZQogICAgfSwKICAgIHsKICAgICAgInN0YXRlIjogImhvdmVyIiwKICAgICAgImZvcmVncm91bmQiOiAicmdiKDI1NSwgMjU1LCAyNTUpIiwKICAgICAgImJhY2tncm91bmQiOiAicmdiKDM1LCAxNDYsIDE2OCkiLAogICAgICAiY29tcG9zZWRGb3JlZ3JvdW5kIjogWwogICAgICAgIDI1NSwKICAgICAgICAyNTUsCiAgICAgICAgMjU1CiAgICAgIF0sCiAgICAgICJjb21wb3NlZEJhY2tncm91bmQiOiBbCiAgICAgICAgMzUsCiAgICAgICAgMTQ2LAogICAgICAgIDE2OAogICAgICBdLAogICAgICAiZm9udFNpemUiOiAiMTRweCIsCiAgICAgICJmb250V2VpZ2h0IjogIjYwMCIsCiAgICAgICJyYXRpbyI6IDMuNjUzMTU5MDgyNzQyMjI3LAogICAgICAiaG92ZXIiOiB0cnVlLAogICAgICAiYWN0aXZlIjogZmFsc2UsCiAgICAgICJmb2N1c1Zpc2libGUiOiBmYWxzZQogICAgfSwKICAgIHsKICAgICAgInN0YXRlIjogImtleWJvYXJkLWZvY3VzIiwKICAgICAgImZvcmVncm91bmQiOiAicmdiKDI1NSwgMjU1LCAyNTUpIiwKICAgICAgImJhY2tncm91bmQiOiAicmdiKDgsIDEyNywgMTU2KSIsCiAgICAgICJjb21wb3NlZEZvcmVncm91bmQiOiBbCiAgICAgICAgMjU1LAogICAgICAgIDI1NSwKICAgICAgICAyNTUKICAgICAgXSwKICAgICAgImNvbXBvc2VkQmFja2dyb3VuZCI6IFsKICAgICAgICA4LAogICAgICAgIDEyNywKICAgICAgICAxNTYKICAgICAgXSwKICAgICAgImZvbnRTaXplIjogIjE0cHgiLAogICAgICAiZm9udFdlaWdodCI6ICI2MDAiLAogICAgICAicmF0aW8iOiA0LjYzOTcyMTY5Mjg0OTkzMSwKICAgICAgImhvdmVyIjogZmFsc2UsCiAgICAgICJhY3RpdmUiOiBmYWxzZSwKICAgICAgImZvY3VzVmlzaWJsZSI6IHRydWUKICAgIH0sCiAgICB7CiAgICAgICJzdGF0ZSI6ICJob3Zlci1hY3RpdmUiLAogICAgICAiZm9yZWdyb3VuZCI6ICJyZ2IoMjU1LCAyNTUsIDI1NSkiLAogICAgICAiYmFja2dyb3VuZCI6ICJyZ2IoMCwgOTAsIDExNykiLAogICAgICAiY29tcG9zZWRGb3JlZ3JvdW5kIjogWwogICAgICAgIDI1NSwKICAgICAgICAyNTUsCiAgICAgICAgMjU1CiAgICAgIF0sCiAgICAgICJjb21wb3NlZEJhY2tncm91bmQiOiBbCiAgICAgICAgMCwKICAgICAgICA5MCwKICAgICAgICAxMTcKICAgICAgXSwKICAgICAgImZvbnRTaXplIjogIjE0cHgiLAogICAgICAiZm9udFdlaWdodCI6ICI2MDAiLAogICAgICAicmF0aW8iOiA3LjcyMjQ3MTY1ODc2Mzk1OCwKICAgICAgImhvdmVyIjogdHJ1ZSwKICAgICAgImFjdGl2ZSI6IHRydWUsCiAgICAgICJmb2N1c1Zpc2libGUiOiB0cnVlCiAgICB9LAogICAgewogICAgICAic3RhdGUiOiAiYWN0aXZlLXdpdGhvdXQtaG92ZXIiLAogICAgICAiZm9yZWdyb3VuZCI6ICJyZ2IoMjU1LCAyNTUsIDI1NSkiLAogICAgICAiYmFja2dyb3VuZCI6ICJyZ2IoMCwgOTAsIDExNykiLAogICAgICAiY29tcG9zZWRGb3JlZ3JvdW5kIjogWwogICAgICAgIDI1NSwKICAgICAgICAyNTUsCiAgICAgICAgMjU1CiAgICAgIF0sCiAgICAgICJjb21wb3NlZEJhY2tncm91bmQiOiBbCiAgICAgICAgMCwKICAgICAgICA5MCwKICAgICAgICAxMTcKICAgICAgXSwKICAgICAgImZvbnRTaXplIjogIjE0cHgiLAogICAgICAiZm9udFdlaWdodCI6ICI2MDAiLAogICAgICAicmF0aW8iOiA3LjcyMjQ3MTY1ODc2Mzk1OCwKICAgICAgImhvdmVyIjogZmFsc2UsCiAgICAgICJhY3RpdmUiOiB0cnVlLAogICAgICAiZm9jdXNWaXNpYmxlIjogdHJ1ZQogICAgfQogIF0sCiAgImZpZWxkU3RhdGVzIjogWwogICAgewogICAgICAiZmllbGQiOiAidXNlcm5hbWUiLAogICAgICAiaG92ZXJCb3JkZXIiOiAiY29sb3Ioc3JnYiAwLjI3MjMxNCAwLjYwNzIxNiAwLjY5NTg0MykiLAogICAgICAiZm9jdXMiOiB7CiAgICAgICAgImJvcmRlciI6ICJyZ2IoOCwgMTI3LCAxNTYpIiwKICAgICAgICAic2hhZG93IjogImNvbG9yKHNyZ2IgMC4wMzEzNzI2IDAuNDk4MDM5IDAuNjExNzY1IC8gMC4xMykgMHB4IDBweCAwcHggM3B4IgogICAgICB9CiAgICB9LAogICAgewogICAgICAiZmllbGQiOiAicGFzc3dvcmQiLAogICAgICAiaG92ZXJCb3JkZXIiOiAiY29sb3Ioc3JnYiAwLjI3MjMxNCAwLjYwNzIxNiAwLjY5NTg0MykiLAogICAgICAiZm9jdXMiOiB7CiAgICAgICAgImJvcmRlciI6ICJyZ2IoOCwgMTI3LCAxNTYpIiwKICAgICAgICAic2hhZG93IjogImNvbG9yKHNyZ2IgMC4wMzEzNzI2IDAuNDk4MDM5IDAuNjExNzY1IC8gMC4xMykgMHB4IDBweCAwcHggM3B4IgogICAgICB9CiAgICB9CiAgXSwKICAic3VibWl0dGVkIjogW10KfQ=="
+                    },
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "F:\\codex\\threat-detection-system\\AI_PROJECT\\Interaction\\018_登录主按钮悬停文字对比度不足\\evidence\\before\\test-results\\login-contrast-login-prima-687a1-ntrast-zh-CN-light-ordinary-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "F:\\codex\\threat-detection-system\\AI_PROJECT\\Interaction\\018_登录主按钮悬停文字对比度不足\\evidence\\before\\test-results\\login-contrast-login-prima-687a1-ntrast-zh-CN-light-ordinary-chromium\\error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "F:\\codex\\threat-detection-system\\frontend\\e2e\\login-contrast.spec.ts",
+                    "column": 13,
+                    "line": 278
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "3488a2deb7c7e2abad6e-e38d4e491ea941f86057",
+          "file": "login-contrast.spec.ts",
+          "line": 155,
+          "column": 11
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-30T02:10:19.927Z",
+    "duration": 48383.235,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

@@ -145,7 +145,7 @@ public class MqttListenerService {
                     String topic = publish.getTopic().toString();
                     String payload = new String(publish.getPayloadAsBytes(), StandardCharsets.UTF_8);
 
-                    logger.info("MQTT message received: topic={}, payloadSize={}", topic, payload.length());
+                    logger.debug("MQTT message received: topic={}, payloadSize={}", topic, payload.length());
 
                     v2EventParserService.parseV2Event(topic, payload).ifPresent(event -> {
                         if (event instanceof AttackEvent attackEvent) {
@@ -153,7 +153,7 @@ public class MqttListenerService {
                         } else if (event instanceof HeartbeatEvent heartbeatEvent) {
                             try {
                                 heartbeatPersistenceService.persistHeartbeat(heartbeatEvent);
-                                logger.info("Persisted heartbeat: deviceId={}, totalGuards={}, onlineDevices={}",
+                                logger.debug("Persisted heartbeat: deviceId={}, totalGuards={}, onlineDevices={}",
                                         heartbeatEvent.getDeviceId(),
                                         heartbeatEvent.getTotalGuards(),
                                         heartbeatEvent.getOnlineDevices());

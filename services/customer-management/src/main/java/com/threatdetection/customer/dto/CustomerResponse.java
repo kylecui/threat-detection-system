@@ -21,6 +21,8 @@ public class CustomerResponse {
 
     private String customerId;
 
+    private Long tenantId;
+
     private String name;
 
     private String email;
@@ -60,6 +62,7 @@ public class CustomerResponse {
         return CustomerResponse.builder()
                 .id(customer.getId())
                 .customerId(customer.getCustomerId())
+                .tenantId(customer.getTenantId())
                 .name(customer.getName())
                 .email(customer.getEmail())
                 .phone(customer.getPhone())

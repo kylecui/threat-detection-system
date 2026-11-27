@@ -27,6 +27,11 @@ public class GlobalExceptionHandler implements ErrorWebExceptionHandler {
     @Override
     public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {
         log.error("Global exception caught: {}", ex.getMessage(), ex);
+
+        if (exchange.getResponse().isCommitted()) {
+            log.warn("Response is already committed; preserving the original exception without rewriting it");
+            return Mono.error(ex);
+        }
         
         // 设置响应状态和类型
         exchange.getResponse().setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR);
@@ -56,9 +61,13 @@ public class GlobalExceptionHandler implements ErrorWebExceptionHandler {
         }
         
         // 移除可能的敏感信息
-        return message
+        String sanitized = message
             .replaceAll("(?i)password[\\s=:]+\\S+", "password=***")
             .replaceAll("(?i)token[\\s=:]+\\S+", "token=***")
-            .substring(0, Math.min(message.length(), 200)); // 限制长度
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\r", "\\r")
+            .replace("\n", "\\n");
+        return sanitized.substring(0, Math.min(sanitized.length(), 200));
     }
 }

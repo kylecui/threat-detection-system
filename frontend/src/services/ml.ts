@@ -81,7 +81,8 @@ class MlService {
 
   async getDataReadiness(): Promise<MlDataReadiness> {
     const response = await apiClient.get<MlDataReadiness>(
-      '/api/v1/ml/train/data-readiness'
+      '/api/v1/ml/train/data-readiness',
+      { timeout: 7000, maxRetries: 0, suppressGlobalError: true }
     );
     return response.data;
   }

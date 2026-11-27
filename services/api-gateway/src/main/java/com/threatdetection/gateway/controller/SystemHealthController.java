@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -57,11 +59,43 @@ public class SystemHealthController {
     @Value("${gateway.health-check.ml-detection-url:http://localhost:8086/health}")
     private String mlDetectionHealthUrl;
 
+    @Value("${gateway.health-check.tire-url:http://localhost:8000/healthz}")
+    private String tireHealthUrl;
+
     @Value("${gateway.health-check.kafka-bootstrap:${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}}")
     private String kafkaBootstrap;
 
+    @Value("${gateway.health-check.postgres-host:${POSTGRES_HOST:postgres}}")
+    private String postgresHost;
+
+    @Value("${gateway.health-check.postgres-port:${POSTGRES_PORT:5432}}")
+    private int postgresPort;
+
+    @Value("${gateway.health-check.redis-host:${REDIS_HOST:redis}}")
+    private String redisHost;
+
+    @Value("${gateway.health-check.redis-port:${REDIS_PORT:6379}}")
+    private int redisPort;
+
     @GetMapping("/health")
     public Mono<Map<String, Object>> getSystemHealth() {
+        return collectSystemHealth();
+    }
+
+    /**
+     * Public readiness contract used by the installer, load balancer and UI.
+     * It returns 503 until every critical dependency is usable.
+     */
+    @GetMapping("/readiness")
+    public Mono<ResponseEntity<Map<String, Object>>> getReadiness() {
+        return collectSystemHealth().map(body -> {
+            boolean ready = "healthy".equals(body.get("status"));
+            body.put("ready", ready);
+            return ResponseEntity.status(ready ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE).body(body);
+        });
+    }
+
+    private Mono<Map<String, Object>> collectSystemHealth() {
         List<ServiceTarget> targets = List.of(
                 new ServiceTarget("data-ingestion", dataIngestionHealthUrl),
                 new ServiceTarget("stream-processing", streamProcessingHealthUrl),
@@ -69,17 +103,20 @@ public class SystemHealthController {
                 new ServiceTarget("alert-management", alertManagementHealthUrl),
                 new ServiceTarget("customer-management", customerManagementHealthUrl),
                 new ServiceTarget("threat-intelligence", threatIntelligenceHealthUrl),
-                new ServiceTarget("ml-detection", mlDetectionHealthUrl)
+                new ServiceTarget("ml-detection", mlDetectionHealthUrl),
+                new ServiceTarget("tire", tireHealthUrl)
         );
 
         Mono<List<ServiceCheckResult>> serviceChecks = Flux.fromIterable(targets)
                 .flatMap(this::checkServiceHealth)
                 .collectList();
 
-        Mono<String> kafkaCheck = checkKafkaHealth();
+        Mono<DependencyCheckResult> kafkaCheck = checkKafkaHealth();
+        Mono<DependencyCheckResult> postgresCheck = checkTcpHealth(postgresHost, postgresPort, "PostgreSQL");
+        Mono<DependencyCheckResult> redisCheck = checkTcpHealth(redisHost, redisPort, "Redis");
 
-        return Mono.zip(serviceChecks, kafkaCheck)
-                .map(tuple -> buildResponse(tuple.getT1(), tuple.getT2()));
+        return Mono.zip(serviceChecks, kafkaCheck, postgresCheck, redisCheck)
+                .map(tuple -> buildResponse(tuple.getT1(), tuple.getT2(), tuple.getT3(), tuple.getT4()));
     }
 
     private Mono<ServiceCheckResult> checkServiceHealth(ServiceTarget target) {
@@ -117,7 +154,12 @@ public class SystemHealthController {
                 .onErrorResume(ex -> Mono.just(new ServiceCheckResult(target.name(), "DOWN", toLatencyMs(startedAt), Map.of())));
     }
 
-    private Map<String, Object> buildResponse(List<ServiceCheckResult> results, String kafkaStatus) {
+    private Map<String, Object> buildResponse(
+            List<ServiceCheckResult> results,
+            DependencyCheckResult kafka,
+            DependencyCheckResult postgres,
+            DependencyCheckResult redis
+    ) {
         Map<String, Object> services = new LinkedHashMap<>();
 
         for (ServiceCheckResult result : results) {
@@ -127,9 +169,9 @@ public class SystemHealthController {
             services.put(result.name(), detail);
         }
 
-        services.put("kafka", Map.of("status", kafkaStatus));
-        services.put("redis", Map.of("status", resolveInfraStatus(results, "redis")));
-        services.put("postgres", Map.of("status", resolveInfraStatus(results, "postgres")));
+        services.put("kafka", dependencyDetail(kafka));
+        services.put("redis", dependencyDetail(redis));
+        services.put("postgres", dependencyDetail(postgres));
 
         int downCount = (int) services.values().stream()
                 .filter(value -> value instanceof Map<?, ?> map && "DOWN".equals(String.valueOf(map.get("status"))))
@@ -175,47 +217,6 @@ public class SystemHealthController {
                 : "DOWN";
     }
 
-    private String resolveInfraStatus(List<ServiceCheckResult> results, String infraName) {
-        boolean infraUp = results.stream().anyMatch(result -> hasInfraUp(result.body(), infraName));
-        return infraUp ? "UP" : "DOWN";
-    }
-
-    @SuppressWarnings("unchecked")
-    private boolean hasInfraUp(Map<?, ?> body, String infraName) {
-        if (body == null || body.isEmpty()) {
-            return false;
-        }
-
-        if (isUpStatus(body.get(infraName))) {
-            return true;
-        }
-
-        Object componentsObj = body.get("components");
-        if (!(componentsObj instanceof Map<?, ?> components)) {
-            return false;
-        }
-
-        if ("postgres".equals(infraName)) {
-            return isUpStatus(components.get("postgres"))
-                    || isUpStatus(components.get("db"))
-                    || isUpStatus(components.get("r2dbc"));
-        }
-
-        return isUpStatus(components.get(infraName));
-    }
-
-    @SuppressWarnings("unchecked")
-    private boolean isUpStatus(Object obj) {
-        if (obj == null) {
-            return false;
-        }
-        if (obj instanceof Map<?, ?> map) {
-            Object status = map.get("status");
-            return status != null && "UP".equalsIgnoreCase(String.valueOf(status));
-        }
-        return "UP".equalsIgnoreCase(String.valueOf(obj));
-    }
-
     private long toLatencyMs(long startedAt) {
         return Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
     }
@@ -224,8 +225,16 @@ public class SystemHealthController {
      * Direct TCP connect to Kafka broker to verify it is reachable.
      * Runs on boundedElastic scheduler to avoid blocking the event loop.
      */
-    private Mono<String> checkKafkaHealth() {
+    private Map<String, Object> dependencyDetail(DependencyCheckResult result) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("status", result.status());
+        detail.put("latencyMs", result.latencyMs());
+        return detail;
+    }
+
+    private Mono<DependencyCheckResult> checkKafkaHealth() {
         return Mono.fromCallable(() -> {
+            long startedAt = System.nanoTime();
             String host = kafkaBootstrap;
             int port = 9092;
             int colonIdx = kafkaBootstrap.lastIndexOf(':');
@@ -238,17 +247,33 @@ public class SystemHealthController {
             }
             try (Socket socket = new Socket()) {
                 socket.connect(new InetSocketAddress(host, port), 2000);
-                return "UP";
+                return new DependencyCheckResult("UP", toLatencyMs(startedAt));
             } catch (Exception e) {
                 log.warn("Kafka health check failed ({}:{}): {}", host, port, e.getMessage());
-                return "DOWN";
+                return new DependencyCheckResult("DOWN", toLatencyMs(startedAt));
             }
         }).subscribeOn(Schedulers.boundedElastic())
           .timeout(HEALTH_TIMEOUT)
-          .onErrorReturn("DOWN");
+          .onErrorReturn(new DependencyCheckResult("DOWN", HEALTH_TIMEOUT.toMillis()));
+    }
+
+    private Mono<DependencyCheckResult> checkTcpHealth(String host, int port, String dependency) {
+        return Mono.fromCallable(() -> {
+            long startedAt = System.nanoTime();
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(host, port), 2000);
+                return new DependencyCheckResult("UP", toLatencyMs(startedAt));
+            } catch (Exception e) {
+                log.warn("{} health check failed ({}:{}): {}", dependency, host, port, e.getMessage());
+                return new DependencyCheckResult("DOWN", toLatencyMs(startedAt));
+            }
+        }).subscribeOn(Schedulers.boundedElastic())
+          .timeout(HEALTH_TIMEOUT)
+          .onErrorReturn(new DependencyCheckResult("DOWN", HEALTH_TIMEOUT.toMillis()));
     }
 
     private record ServiceTarget(String name, String url) {}
 
     private record ServiceCheckResult(String name, String status, long latencyMs, Map<?, ?> body) {}
+    private record DependencyCheckResult(String status, long latencyMs) {}
 }

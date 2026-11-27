@@ -6,8 +6,10 @@ import type {
   Customer,
   PaginatedResponse,
   ThreatQueryFilter,
-  ChartDataPoint,
+  ThreatTrendPoint,
   TopAttacker,
+  OverviewSnapshot,
+  PortDistribution,
 } from '@/types';
 
 /**
@@ -16,6 +18,43 @@ import type {
  * 对接API Gateway: http://localhost:8888
  */
 class ThreatService {
+  private readonly overviewInFlight = new Map<string, Promise<OverviewSnapshot>>();
+  private readonly overviewCache = new Map<string, { expiresAt: number; value: OverviewSnapshot }>();
+
+  async getOverviewSnapshot(params: {
+    customerId?: string;
+    tenantId?: number;
+    hours?: number;
+  }): Promise<OverviewSnapshot> {
+    const key = `${params.customerId || ''}:${params.tenantId || ''}:${params.hours ?? 24}`;
+    const cached = this.overviewCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+    const pending = this.overviewInFlight.get(key);
+    if (pending) return pending;
+
+    const request = apiClient.get<OverviewSnapshot>(
+        '/api/v1/assessment/overview-snapshot',
+        {
+          params: {
+            customer_id: params.customerId,
+            tenant_id: params.customerId ? undefined : params.tenantId,
+            hours: params.hours ?? 24,
+          },
+          maxRetries: 1,
+          suppressGlobalError: true,
+        },
+      )
+      .then((response) => {
+        this.overviewCache.set(key, { expiresAt: Date.now() + 10_000, value: response.data });
+        return response.data;
+      })
+      .finally(() => this.overviewInFlight.delete(key));
+
+    this.overviewInFlight.set(key, request);
+    return request;
+  }
+
   /**
    * 获取威胁列表 (分页)
    */
@@ -66,8 +105,8 @@ class ThreatService {
   /**
    * 获取威胁趋势数据 (24小时)
    */
-  async getThreatTrend(customerId: string, hours: number = 24): Promise<ChartDataPoint[]> {
-    const response = await apiClient.get<ChartDataPoint[]>(
+  async getThreatTrend(customerId: string, hours: number = 24): Promise<ThreatTrendPoint[]> {
+    const response = await apiClient.get<ThreatTrendPoint[]>(
       '/api/v1/assessment/trend',
       {
         params: {
@@ -82,8 +121,8 @@ class ThreatService {
   /**
    * 获取端口分布
    */
-  async getPortDistribution(customerId: string, hours: number = 24): Promise<ChartDataPoint[]> {
-    const response = await apiClient.get<ChartDataPoint[]>(
+  async getPortDistribution(customerId: string, hours: number = 24): Promise<PortDistribution[]> {
+    const response = await apiClient.get<PortDistribution[]>(
       '/api/v1/assessment/port-distribution',
       {
         params: {
@@ -123,7 +162,7 @@ class ThreatService {
 
   async getTenantThreatList(
     customerIds: string[],
-    params: { page: number; page_size: number }
+    params: { page: number; size: number }
   ): Promise<PaginatedResponse<ThreatAssessment>> {
     const response = await apiClient.get<PaginatedResponse<ThreatAssessment>>(
       '/api/v1/assessment/assessments/tenant',
@@ -132,16 +171,16 @@ class ThreatService {
     return response.data;
   }
 
-  async getTenantTrend(customerIds: string[], hours: number = 24): Promise<ChartDataPoint[]> {
-    const response = await apiClient.get<ChartDataPoint[]>(
+  async getTenantTrend(customerIds: string[], hours: number = 24): Promise<ThreatTrendPoint[]> {
+    const response = await apiClient.get<ThreatTrendPoint[]>(
       '/api/v1/assessment/trend/tenant',
       { params: { customer_ids: customerIds.join(','), hours } }
     );
     return response.data;
   }
 
-  async getTenantPortDistribution(customerIds: string[], hours: number = 24): Promise<ChartDataPoint[]> {
-    const response = await apiClient.get<ChartDataPoint[]>(
+  async getTenantPortDistribution(customerIds: string[], hours: number = 24): Promise<PortDistribution[]> {
+    const response = await apiClient.get<PortDistribution[]>(
       '/api/v1/assessment/port-distribution/tenant',
       { params: { customer_ids: customerIds.join(','), hours } }
     );
@@ -150,7 +189,6 @@ class ThreatService {
 
   /**
    * 删除威胁记录 (管理员功能)
-   * TODO: Backend AssessmentController has no DELETE endpoint yet — this will 404 until implemented
    */
   async deleteThreat(id: number): Promise<void> {
     await apiClient.delete(`/api/v1/assessment/${id}`);
@@ -158,7 +196,6 @@ class ThreatService {
 
   /**
    * 批量删除威胁记录
-   * TODO: Backend AssessmentController has no batch-delete endpoint yet — this will 404 until implemented
    */
   async batchDeleteThreats(ids: number[]): Promise<void> {
     await apiClient.post('/api/v1/assessment/batch-delete', { ids });

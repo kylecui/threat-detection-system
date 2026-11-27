@@ -37,9 +37,37 @@ from admin.routes import router as admin_router
 from admin.database import admin_db
 from admin.auth import get_current_user, login_redirect
 from app import api_helpers
+from app.runtime_llm_config import runtime_llm_config
 from storage.result_store import get_result_store
 
 logger = logging.getLogger(__name__)
+
+
+async def _resolve_effective_llm_settings(
+    request: Request, local_user_id: int
+) -> dict[str, Any]:
+    """Resolve LLM policy without bypassing an unavailable platform decision.
+
+    ``None`` from the runtime client means the bridge is not configured and is
+    the only state allowed to use TIRE's legacy resolver.  A configured bridge
+    that is unavailable returns a concrete template-only decision instead.
+    """
+    platform = await runtime_llm_config.resolve(
+        request, local_user_id=local_user_id
+    )
+    if platform is not None:
+        if platform.get("configured"):
+            return platform
+        # Explicit assignments and locks are authoritative even when unusable;
+        # falling through to a global/env key would bypass the platform policy.
+        if platform.get("source") != "template":
+            return platform
+    legacy = admin_db.resolve_effective_llm_access(local_user_id)
+    # The legacy resolver already evaluates configured-only mode and decides
+    # whether an environment key is permitted.  Prevent the report layer from
+    # independently substituting its process-level key afterwards.
+    legacy["allow_environment_fallback"] = False
+    return legacy
 
 
 TIRE_LOOKUPS_TOTAL = Counter(
@@ -540,11 +568,12 @@ async def generate_report(
                 ),
             )
 
+        llm_settings = await _resolve_effective_llm_settings(request, user["id"])
+
         # Step 2: Check for a cached report (unless regenerate is requested)
         if not regenerate:
             from storage.result_store import result_store
 
-            llm_settings = admin_db.resolve_effective_llm_access(user["id"])
             snapshot_id = latest_snapshot.get("id") if latest_snapshot else None
 
             cached_report = result_store.get_latest_report(
@@ -576,8 +605,6 @@ async def generate_report(
                     ip,
                     user["id"],
                 )
-
-        llm_settings = admin_db.resolve_effective_llm_access(user["id"])
 
         # Resolve query_date from the latest snapshot for staleness detection
         from datetime import datetime

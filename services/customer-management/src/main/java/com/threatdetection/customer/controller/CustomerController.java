@@ -16,6 +16,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -39,9 +40,12 @@ public class CustomerController {
      */
     @PostMapping
     public ResponseEntity<CustomerResponse> createCustomer(
-            @Valid @RequestBody CreateCustomerRequest request) {
+            @Valid @RequestBody CreateCustomerRequest request,
+            @RequestHeader(value = "X-Auth-Roles", required = false) String roles,
+            @RequestHeader(value = "X-Tenant-Id", required = false) Long scopedTenantId) {
         
         log.info("API: Creating customer: {}", request.getCustomerId());
+        request.setTenantId(resolveTenantForWrite(request.getTenantId(), roles, scopedTenantId));
         CustomerResponse response = customerService.createCustomer(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -101,7 +105,8 @@ public class CustomerController {
             @RequestParam(required = false) Long tenantId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(defaultValue = "createdAt,desc") String sort) {
+            @RequestParam(defaultValue = "createdAt,desc") String sort,
+            @RequestParam(required = false) String customerId) {
         
         log.info("API: Fetching all customers, tenantId={}, page={}, size={}", tenantId, page, size);
         
@@ -110,7 +115,7 @@ public class CustomerController {
                 ? Sort.Direction.DESC : Sort.Direction.ASC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortParams[0]));
         
-        Page<CustomerResponse> customers = customerService.getAllCustomers(tenantId, pageable);
+        Page<CustomerResponse> customers = customerService.getAllCustomers(tenantId, customerId, pageable);
         return ResponseEntity.ok(customers);
     }
 
@@ -130,12 +135,15 @@ public class CustomerController {
     public ResponseEntity<Page<CustomerResponse>> searchCustomers(
             @RequestParam String keyword,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) String customerId) {
         
         log.info("API: Searching customers with keyword: {}", keyword);
         
         Pageable pageable = PageRequest.of(page, size);
-        Page<CustomerResponse> customers = customerService.searchCustomers(keyword, pageable);
+        Page<CustomerResponse> customers = customerService.searchCustomers(
+                keyword, tenantId, customerId, pageable);
         return ResponseEntity.ok(customers);
     }
 
@@ -148,12 +156,15 @@ public class CustomerController {
     public ResponseEntity<Page<CustomerResponse>> getCustomersByStatus(
             @PathVariable Customer.CustomerStatus status,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Long tenantId,
+            @RequestParam(required = false) String customerId) {
         
         log.info("API: Fetching customers by status: {}", status);
         
         Pageable pageable = PageRequest.of(page, size);
-        Page<CustomerResponse> customers = customerService.getCustomersByStatus(status, pageable);
+        Page<CustomerResponse> customers = customerService.getCustomersByStatus(
+                status, tenantId, customerId, pageable);
         return ResponseEntity.ok(customers);
     }
 
@@ -180,11 +191,13 @@ public class CustomerController {
     @DeleteMapping("/{customerId}")
     public ResponseEntity<Void> deleteCustomer(
             @PathVariable("customerId") String customerId,
-            @RequestParam(required = false) Boolean permanent) {
+            @RequestParam(required = false) Boolean permanent,
+            @RequestHeader(value = "X-Auth-Roles", required = false) String roles) {
         
         log.info("API: Deleting customer: {}, permanent={}", customerId, permanent);
         
         if (Boolean.TRUE.equals(permanent)) {
+            requireSuperAdmin(roles);
             customerService.hardDeleteCustomer(customerId);
         } else {
             customerService.deleteCustomer(customerId);
@@ -200,9 +213,11 @@ public class CustomerController {
      */
     @DeleteMapping("/{customerId}/hard")
     public ResponseEntity<Void> hardDeleteCustomer(
-            @PathVariable("customerId") String customerId) {
+            @PathVariable("customerId") String customerId,
+            @RequestHeader(value = "X-Auth-Roles", required = false) String roles) {
         
         log.warn("API: Hard deleting customer: {}", customerId);
+        requireSuperAdmin(roles);
         customerService.hardDeleteCustomer(customerId);
         return ResponseEntity.noContent().build();
     }
@@ -220,5 +235,39 @@ public class CustomerController {
         log.info("API: Partially updating customer: {}", customerId);
         CustomerResponse response = customerService.patchCustomer(customerId, updates);
         return ResponseEntity.ok(response);
+    }
+
+    private Long resolveTenantForWrite(Long requestedTenantId, String roles, Long scopedTenantId) {
+        if (hasRole(roles, "SUPER_ADMIN")) {
+            if (requestedTenantId != null && requestedTenantId > 0) {
+                return requestedTenantId;
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Select a tenant before creating a customer");
+        }
+        if (hasRole(roles, "TENANT_ADMIN") && scopedTenantId != null && scopedTenantId > 0) {
+            return scopedTenantId;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Customer creation requires a valid tenant scope");
+    }
+
+    private void requireSuperAdmin(String roles) {
+        if (!hasRole(roles, "SUPER_ADMIN")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Permanent customer deletion requires SUPER_ADMIN role");
+        }
+    }
+
+    private boolean hasRole(String roles, String requiredRole) {
+        if (roles == null || roles.isBlank()) {
+            return false;
+        }
+        for (String role : roles.split(",")) {
+            if (requiredRole.equals(role.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

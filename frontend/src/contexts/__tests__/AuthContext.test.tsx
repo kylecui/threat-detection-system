@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { AuthProvider, useAuth, type AuthUser } from '@/contexts/AuthContext';
+import { resetSessionRedirectGuardForTests } from '@/services/session';
 
 function wrapper({ children }: { children: ReactNode }) {
   return <AuthProvider>{children}</AuthProvider>;
@@ -10,6 +11,7 @@ function wrapper({ children }: { children: ReactNode }) {
 describe('AuthContext', () => {
   beforeEach(() => {
     localStorage.clear();
+    resetSessionRedirectGuardForTests();
     vi.restoreAllMocks();
   });
 
@@ -42,6 +44,10 @@ describe('AuthContext', () => {
     localStorage.setItem('user', JSON.stringify({ id: 1, username: 'u', roles: ['CUSTOMER_USER'] }));
     localStorage.setItem('customer_id', 'cust-2');
     localStorage.setItem('tenant_id', '22');
+    localStorage.setItem('scope_tenant_id', '22');
+    localStorage.setItem('scope_customer_id', 'cust-2');
+    document.cookie = 'tds_selected_tenant=22; path=/';
+    document.cookie = 'tds_selected_customer=cust-2; path=/';
 
     const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -54,6 +60,10 @@ describe('AuthContext', () => {
     expect(localStorage.getItem('user')).toBeNull();
     expect(localStorage.getItem('customer_id')).toBeNull();
     expect(localStorage.getItem('tenant_id')).toBeNull();
+    expect(localStorage.getItem('scope_tenant_id')).toBeNull();
+    expect(localStorage.getItem('scope_customer_id')).toBeNull();
+    expect(document.cookie).not.toContain('tds_selected_tenant');
+    expect(document.cookie).not.toContain('tds_selected_customer');
     expect(result.current.isAuthenticated).toBe(false);
     expect(result.current.user).toBeNull();
   });

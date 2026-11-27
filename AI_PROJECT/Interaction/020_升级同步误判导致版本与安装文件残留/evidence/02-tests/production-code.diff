@@ -1,0 +1,416 @@
+--- published-3.1.39/install.sh
++++ working-tree/install.sh
+@@ -11,6 +11,8 @@
+ 
+ SRC_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ SCRIPT_DIR="$SRC_ROOT/scripts"
++INTEGRITY_HELPER="$SCRIPT_DIR/verify_release_state.py"
++TRUSTED_MANIFEST=""
+ TARGET_DIR="/opt/threat-detection-system"
+ BACKUP_ROOT="/opt/threat-detection-system-backups"
+ UNIT_NAME="threat-detection-compose.service"
+@@ -19,6 +21,7 @@
+ WATCHDOG_TIMER_NAME="threat-detection-runtime-watchdog.timer"
+ WATCHDOG_SERVICE_PATH="/etc/systemd/system/$WATCHDOG_SERVICE_NAME"
+ WATCHDOG_TIMER_PATH="/etc/systemd/system/$WATCHDOG_TIMER_NAME"
++DIAG_PATH="/usr/local/sbin/tdsdiag"
+ NO_START=false
+ UNINSTALL=false
+ PURGE=false
+@@ -29,6 +32,8 @@
+ ROLLBACK_DIR=""
+ TARGET_EXISTED=false
+ INSTALL_ACTIVE=false
++PRESERVE_ROLLBACK=false
++ROLLBACK_RESULT="not-needed"
+ RELEASE_VERSION=""
+ INSTALLED_VERSION=""
+ INSTALL_MODE="fresh"
+@@ -183,6 +188,27 @@
+   (cd "$SRC_ROOT" && sha256sum -c --quiet MANIFEST.sha256) \
+     || die "Release verification failed; the system was not modified"
+   ok "Release manifest verified"
++}
++
++verify_release_source_state() {
++  python3 "$INTEGRITY_HELPER" verify-release "$SRC_ROOT" \
++    --manifest "$SRC_ROOT/MANIFEST.sha256" --expected "$RELEASE_VERSION" \
++    || die "Source release contents or version metadata are inconsistent"
++}
++
++verify_installed_release() {
++  local phase="${1:-content}" args=()
++  [[ -n "$TRUSTED_MANIFEST" && -f "$TRUSTED_MANIFEST" ]] \
++    || die "Trusted source manifest is unavailable; refusing to commit the installation"
++  case "$phase" in
++    content) ;;
++    environment) args+=(--runtime-env "$TARGET_DIR/.env") ;;
++    metadata) args+=(--metadata) ;;
++    *) die "Unknown installation verification phase" ;;
++  esac
++  python3 "$INTEGRITY_HELPER" verify-release "$TARGET_DIR" \
++    --manifest "$TRUSTED_MANIFEST" --expected "$RELEASE_VERSION" "${args[@]}" \
++    || die "Installed release contents or version metadata verification failed"
+ }
+ 
+ validate_postgres_init_scripts() {
+@@ -700,15 +726,35 @@
+ prepare_rollback() {
+   ROLLBACK_DIR="$(mktemp -d /var/tmp/threat-detection-rollback.XXXXXX)"
+   chmod 700 "$ROLLBACK_DIR"
++  # Keep the verifier and the verified source manifest outside the tree being replaced.
++  install -m 700 "$INTEGRITY_HELPER" "$ROLLBACK_DIR/verify_release_state.py"
++  INTEGRITY_HELPER="$ROLLBACK_DIR/verify_release_state.py"
++  install -m 600 "$SRC_ROOT/MANIFEST.sha256" "$ROLLBACK_DIR/release-manifest.sha256"
++  TRUSTED_MANIFEST="$ROLLBACK_DIR/release-manifest.sha256"
++  python3 "$INTEGRITY_HELPER" verify-release "$SRC_ROOT" \
++    --manifest "$TRUSTED_MANIFEST" --expected "$RELEASE_VERSION" \
++    || die "Source release changed before the transaction started"
+   if [[ -d "$TARGET_DIR" ]]; then
+     TARGET_EXISTED=true
+     mkdir -p "$ROLLBACK_DIR/target"
+     rsync -a "$TARGET_DIR/" "$ROLLBACK_DIR/target/"
+-  fi
+-  mkdir -p "$ROLLBACK_DIR/units"
+-  for unit_path in "$UNIT_PATH" "$WATCHDOG_SERVICE_PATH" "$WATCHDOG_TIMER_PATH"; do
+-    [[ ! -f "$unit_path" ]] || cp -a "$unit_path" "$ROLLBACK_DIR/units/"
++    python3 "$INTEGRITY_HELPER" snapshot "$ROLLBACK_DIR/target" "$ROLLBACK_DIR/target.snapshot.json"
++  else
++    python3 "$INTEGRITY_HELPER" snapshot "$TARGET_DIR" "$ROLLBACK_DIR/target.snapshot.json"
++  fi
++  local managed_path index=0
++  mkdir -p "$ROLLBACK_DIR/paths"
++  for managed_path in "$UNIT_PATH" "$WATCHDOG_SERVICE_PATH" "$WATCHDOG_TIMER_PATH" "$DIAG_PATH"; do
++    if [[ -e "$managed_path" || -L "$managed_path" ]]; then
++      cp -a -- "$managed_path" "$ROLLBACK_DIR/paths/$index"
++      python3 "$INTEGRITY_HELPER" snapshot "$ROLLBACK_DIR/paths/$index" "$ROLLBACK_DIR/path-$index.json"
++    else
++      python3 "$INTEGRITY_HELPER" snapshot "$managed_path" "$ROLLBACK_DIR/path-$index.json"
++    fi
++    index=$((index + 1))
+   done
++  PRESERVE_ROLLBACK=false
++  ROLLBACK_RESULT="prepared"
+   INSTALL_ACTIVE=true
+   ok "Transactional rollback snapshot prepared"
+ }
+@@ -738,12 +784,43 @@
+   warn "Failure diagnostics saved to $output (0600)"
+ }
+ 
++rollback_failed() {
++  PRESERVE_ROLLBACK=true
++  ROLLBACK_RESULT="failed"
++  if [[ -n "$ROLLBACK_DIR" && -d "$ROLLBACK_DIR" ]]; then
++    printf 'rollback_result=failed\nrecovery_directory=%s\n' "$ROLLBACK_DIR" \
++      >"$ROLLBACK_DIR/rollback-failure.txt" || true
++    chmod 600 "$ROLLBACK_DIR/rollback-failure.txt" 2>/dev/null || true
++  fi
++  warn "Rollback could not be verified. Recovery materials were retained at: $ROLLBACK_DIR"
++  return 1
++}
++
++restore_managed_paths() {
++  local managed_path index=0
++  for managed_path in "$UNIT_PATH" "$WATCHDOG_SERVICE_PATH" "$WATCHDOG_TIMER_PATH" "$DIAG_PATH"; do
++    if [[ -e "$ROLLBACK_DIR/paths/$index" || -L "$ROLLBACK_DIR/paths/$index" ]]; then
++      python3 "$INTEGRITY_HELPER" verify-snapshot "$ROLLBACK_DIR/paths/$index" "$ROLLBACK_DIR/path-$index.json" \
++        || return 1
++    fi
++    rm -f -- "$managed_path" || return 1
++    if [[ -e "$ROLLBACK_DIR/paths/$index" || -L "$ROLLBACK_DIR/paths/$index" ]]; then
++      cp -a -- "$ROLLBACK_DIR/paths/$index" "$managed_path" || return 1
++    fi
++    python3 "$INTEGRITY_HELPER" verify-snapshot "$managed_path" "$ROLLBACK_DIR/path-$index.json" \
++      || return 1
++    index=$((index + 1))
++  done
++}
++
+ rollback_install() {
+   local rc="$1"
+   [[ "$INSTALL_ACTIVE" == true ]] || return 0
+   INSTALL_ACTIVE=false
++  PRESERVE_ROLLBACK=true
++  ROLLBACK_RESULT="restoring"
+   warn "Installation failed (rc=$rc); restoring the pre-install state..."
+-  [[ ! -d "$TARGET_DIR" ]] || capture_failure_diagnostics
++  [[ ! -d "$TARGET_DIR" ]] || capture_failure_diagnostics || true
+   systemctl disable --now "$WATCHDOG_TIMER_NAME" >/dev/null 2>&1 || true
+   systemctl stop "$WATCHDOG_SERVICE_NAME" "$UNIT_NAME" >/dev/null 2>&1 || true
+   if [[ -f "$TARGET_DIR/.env" && -f "$TARGET_DIR/docker/docker-compose.yml" ]]; then
+@@ -753,36 +830,51 @@
+       compose_in "$TARGET_DIR" down -v --rmi local --remove-orphans >/dev/null 2>&1 || true
+     fi
+   fi
+-  rm -f -- "$UNIT_PATH" "$WATCHDOG_SERVICE_PATH" "$WATCHDOG_TIMER_PATH"
+-  if $TARGET_EXISTED && [[ -d "$ROLLBACK_DIR/target" ]]; then
+-    mkdir -p "$TARGET_DIR"
+-    rsync -a --delete "$ROLLBACK_DIR/target/" "$TARGET_DIR/"
+-    if [[ -d "$ROLLBACK_DIR/units" ]]; then
+-      find "$ROLLBACK_DIR/units" -maxdepth 1 -type f -exec install -m 644 {} /etc/systemd/system/ \;
+-    fi
+-    systemctl daemon-reload >/dev/null 2>&1 || true
+-    systemctl enable --now "$UNIT_NAME" >/dev/null 2>&1 || true
++  if $TARGET_EXISTED; then
++    [[ -d "$ROLLBACK_DIR/target" ]] || { rollback_failed; return 1; }
++    python3 "$INTEGRITY_HELPER" verify-snapshot "$ROLLBACK_DIR/target" "$ROLLBACK_DIR/target.snapshot.json" \
++      || { rollback_failed; return 1; }
++    mkdir -p "$TARGET_DIR" || { rollback_failed; return 1; }
++    rsync -a --checksum --delete "$ROLLBACK_DIR/target/" "$TARGET_DIR/" \
++      || { rollback_failed; return 1; }
++    python3 "$INTEGRITY_HELPER" verify-snapshot "$TARGET_DIR" "$ROLLBACK_DIR/target.snapshot.json" \
++      || { rollback_failed; return 1; }
++  else
++    rm -rf -- "$TARGET_DIR" || { rollback_failed; return 1; }
++    python3 "$INTEGRITY_HELPER" verify-snapshot "$TARGET_DIR" "$ROLLBACK_DIR/target.snapshot.json" \
++      || { rollback_failed; return 1; }
++  fi
++  restore_managed_paths || { rollback_failed; return 1; }
++  systemctl daemon-reload >/dev/null 2>&1 || { rollback_failed; return 1; }
++  if $TARGET_EXISTED; then
++    [[ ! -f "$UNIT_PATH" ]] \
++      || systemctl enable --now "$UNIT_NAME" >/dev/null 2>&1 || { rollback_failed; return 1; }
+     [[ ! -f "$WATCHDOG_TIMER_PATH" ]] \
+-      || systemctl enable --now "$WATCHDOG_TIMER_NAME" >/dev/null 2>&1 || true
++      || systemctl enable --now "$WATCHDOG_TIMER_NAME" >/dev/null 2>&1 || { rollback_failed; return 1; }
+     warn "The previous installation was restored; verify its status"
+   else
+-    rm -rf -- "$TARGET_DIR"
+-    systemctl daemon-reload >/dev/null 2>&1 || true
+     warn "State created by the failed fresh installation was removed"
+   fi
++  ROLLBACK_RESULT="restored"
++  PRESERVE_ROLLBACK=false
+   [[ ! -d "$ROLLBACK_DIR" ]] || rm -rf -- "$ROLLBACK_DIR"
++  ROLLBACK_DIR=""
++  return 0
+ }
+ 
+ cleanup_temp() {
+   [[ -z "$PREPARED_ENV" || ! -f "$PREPARED_ENV" ]] || rm -f -- "$PREPARED_ENV"
+-  [[ -z "$ROLLBACK_DIR" || ! -d "$ROLLBACK_DIR" || "$INSTALL_ACTIVE" == true ]] \
++  [[ -z "$ROLLBACK_DIR" || ! -d "$ROLLBACK_DIR" || "$INSTALL_ACTIVE" == true || "$PRESERVE_ROLLBACK" == true ]] \
+     || rm -rf -- "$ROLLBACK_DIR"
+ }
+ 
+ on_exit() {
+   local rc=$?
+-  [[ $rc -eq 0 ]] || rollback_install "$rc"
+-  cleanup_temp
++  trap - EXIT
++  if [[ $rc -ne 0 ]]; then
++    rollback_install "$rc" || rc=1
++  fi
++  cleanup_temp || rc=1
+   exit "$rc"
+ }
+ trap on_exit EXIT
+@@ -861,18 +953,31 @@
+     if [[ "$INSTALL_MODE" != "fresh" ]]; then
+       info "Overwriting the existing application tree with release $RELEASE_VERSION"
+     fi
+-    rsync -a --delete --exclude='.env' "$SRC_ROOT/" "$TARGET_DIR/"
++    rsync -a --checksum --delete --exclude='.env' "$SRC_ROOT/" "$TARGET_DIR/"
+   else
+     info "Running from the installed release tree; file synchronization is not required"
+   fi
++  verify_installed_release content
+   install -m 600 "$PREPARED_ENV" "$TARGET_DIR/.env"
+-  install -m 644 "$SRC_ROOT/VERSION" "$TARGET_DIR/.installed_version"
+-  install -m 755 "$TARGET_DIR/scripts/tdsdiag.sh" /usr/local/sbin/tdsdiag
++  verify_installed_release environment
++  printf '%s\n' "$RELEASE_VERSION" >"$ROLLBACK_DIR/installed-version"
++  install -m 644 "$ROLLBACK_DIR/installed-version" "$TARGET_DIR/.installed_version"
++  verify_installed_release metadata
++  install -m 755 "$TARGET_DIR/scripts/tdsdiag.sh" "$DIAG_PATH"
+   chmod 755 "$TARGET_DIR/scripts/runtime-watchdog.sh"
+   install -m 644 "$TARGET_DIR/deploy/systemd/threat-detection-compose.service" "$UNIT_PATH"
+   install -m 644 "$TARGET_DIR/deploy/systemd/threat-detection-runtime-watchdog.service" "$WATCHDOG_SERVICE_PATH"
+   install -m 644 "$TARGET_DIR/deploy/systemd/threat-detection-runtime-watchdog.timer" "$WATCHDOG_TIMER_PATH"
+   ok "Release files installed to $TARGET_DIR"
++}
++
++commit_install() {
++  # Content and metadata must still match before either success branch drops recovery.
++  verify_installed_release metadata
++  INSTALL_ACTIVE=false
++  ROLLBACK_RESULT="committed"
++  rm -rf -- "$ROLLBACK_DIR"
++  ROLLBACK_DIR=""
+ }
+ 
+ backup_existing_install() {
+@@ -1139,6 +1244,7 @@
+ detect_existing_install
+ 
+ ensure_dependencies
++verify_release_source_state
+ check_host_capacity
+ exec 9>/run/lock/threat-detection-install.lock
+ flock -n 9 || die "Another Threat Detection System install operation is running"
+@@ -1171,9 +1277,8 @@
+ systemctl enable "$WATCHDOG_TIMER_NAME" >/dev/null
+ 
+ if $NO_START; then
+-  INSTALL_ACTIVE=false
+-  rm -rf -- "$ROLLBACK_DIR"; ROLLBACK_DIR=""
+-  ok "Files installed with --no-start; containers were not built or started"
++  commit_install
++  ok "Release $RELEASE_VERSION files verified and installed with --no-start; containers were not built or started"
+   exit 0
+ fi
+ 
+@@ -1186,6 +1291,5 @@
+ verify_runtime
+ systemctl start "$WATCHDOG_TIMER_NAME"
+ 
+-INSTALL_ACTIVE=false
+-rm -rf -- "$ROLLBACK_DIR"; ROLLBACK_DIR=""
++commit_install
+ print_summary
+--- published-3.1.39/scripts/tdsdiag.sh
++++ working-tree/scripts/tdsdiag.sh
+@@ -11,8 +11,9 @@
+   cat <<'EOF'
+ Usage: sudo tdsdiag [--self-test] [--output FILE]
+ 
+-Collects service, container, resource, port and public health status without
+-reading .env values, database rows, private keys or application payload logs.
++Collects service, container, resource, port and public health status, plus
++release-version metadata. From .env only RELEASE_VERSION is read; credentials,
++database rows, private keys and application payload logs are not collected.
+ Exit codes: 0=collected/no critical failure, 2=collected/critical failure,
+ 1=invalid arguments or collection failure.
+ EOF
+@@ -39,6 +40,101 @@
+ }
+ 
+ critical=0
++
++# Collect and validate release metadata before the self-test can return. Only
++# allowlisted, validated version strings leave this boundary, including when the
++# helper is missing, fails, or returns an invalid document.
++version_metadata="$(python3 - "$TARGET_DIR" <<'PY'
++import json
++import re
++import subprocess
++import sys
++from pathlib import Path
++
++root = Path(sys.argv[1])
++keys = (
++    "file_version", "installed_version", "environment_version",
++    "template_version", "frontend_build_version",
++)
++version_pattern = re.compile(r"[0-9]+(?:\.[0-9]+)*(?:[+~-][0-9A-Za-z.-]+)?")
++values = {key: None for key in keys}
++consistency = "checker_missing"
++check_rc = 1
++helper = root / "scripts/verify_release_state.py"
++if helper.is_file() and not helper.is_symlink():
++    consistency = "checker_failed"
++    try:
++        result = subprocess.run(
++            [sys.executable, str(helper), "versions", str(root)],
++            capture_output=True, text=True, timeout=15, check=False,
++        )
++        check_rc = result.returncode
++        document = json.loads(result.stdout)
++        if not isinstance(document, dict):
++            raise ValueError("invalid document")
++        status = document.get("version_consistency")
++        if status not in {"consistent", "legacy", "unknown", "invalid", "mismatch"}:
++            raise ValueError("invalid status")
++        candidate = {key: document.get(key) for key in keys}
++        if any(
++            value is not None
++            and (not isinstance(value, str) or not version_pattern.fullmatch(value))
++            for value in candidate.values()
++        ):
++            raise ValueError("invalid version")
++        if status in {"consistent", "legacy"}:
++            if not candidate["file_version"] or not candidate["environment_version"]:
++                raise ValueError("incomplete version metadata")
++            present = [value for value in candidate.values() if value is not None]
++            if len(set(present)) != 1:
++                raise ValueError("contradictory version metadata")
++            if status == "consistent" and not candidate["installed_version"]:
++                raise ValueError("installation marker missing")
++        values = candidate
++        consistency = status
++    except (OSError, ValueError, subprocess.SubprocessError):
++        check_rc = 1
++
++if values["file_version"] is None:
++    marker = root / "VERSION"
++    try:
++        if marker.is_file() and not marker.is_symlink():
++            candidate = marker.read_text(encoding="utf-8").strip()
++            if version_pattern.fullmatch(candidate):
++                values["file_version"] = candidate
++    except (OSError, UnicodeError):
++        pass
++
++for key in keys:
++    print(f"{key}={values[key] or 'unknown'}")
++print(f"version_consistency={consistency}")
++print(f"version_check_rc={check_rc}")
++PY
++)"
++file_version="unknown"
++installed_version="unknown"
++environment_version="unknown"
++template_version="unknown"
++frontend_build_version="unknown"
++version_consistency="checker_failed"
++version_check_rc=1
++while IFS='=' read -r key value; do
++  case "$key" in
++    file_version) file_version="$value" ;;
++    installed_version) installed_version="$value" ;;
++    environment_version) environment_version="$value" ;;
++    template_version) template_version="$value" ;;
++    frontend_build_version) frontend_build_version="$value" ;;
++    version_consistency) version_consistency="$value" ;;
++    version_check_rc) version_check_rc="$value" ;;
++  esac
++done <<<"$version_metadata"
++if [[ "$version_check_rc" != 0 || ( "$version_consistency" != consistent && "$version_consistency" != legacy ) ]]; then
++  critical=1
++elif [[ "$version_consistency" == legacy ]]; then
++  echo "[WARN] Legacy installation has no installation marker; available release metadata agrees" >&2
++fi
++
+ unit_state="$(systemctl is-active threat-detection-compose.service 2>/dev/null || true)"
+ unit_enabled="$(systemctl is-enabled threat-detection-compose.service 2>/dev/null || true)"
+ [[ "$unit_state" == active ]] || critical=1
+@@ -118,6 +214,9 @@
+   [[ "$runtime_consistency" == ok ]] || printf '%s\n' "$runtime_check_output" >&2
+   [[ "$v1_syslog_tcp" == ok ]] \
+     || echo "[ERR] V1 Syslog TCP listener is unavailable inside the Logstash container" >&2
++  [[ "$version_check_rc" == 0 && ( "$version_consistency" == consistent || "$version_consistency" == legacy ) ]] \
++    || printf '[ERR] Release version metadata is inconsistent or unavailable (status=%s, rc=%s)\n' \
++      "$version_consistency" "$version_check_rc" >&2
+   echo "[ERR] tdsdiag self-test found a critical failure" >&2
+   exit 2
+ fi
+@@ -128,10 +227,17 @@
+ timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+ [[ -n "$OUTPUT" ]] || OUTPUT="/tmp/tdsdiag-${timestamp}.tar.gz"
+ 
+-version="$(tr -d '\r\n' <"$TARGET_DIR/VERSION" 2>/dev/null || echo unknown)"
++version="$file_version"
+ cat >"$work_dir/diag-summary.txt" <<EOF
+ captured_at=${timestamp}
+ version=${version}
++file_version=${file_version}
++installed_version=${installed_version}
++environment_version=${environment_version}
++template_version=${template_version}
++frontend_build_version=${frontend_build_version}
++version_consistency=${version_consistency}
++version_check_rc=${version_check_rc}
+ unit_active=${unit_state}
+ unit_enabled=${unit_enabled}
+ running_containers=${running_count}

@@ -50,6 +50,22 @@ public class AssessmentController {
         this.threatAssessmentService = threatAssessmentService;
     }
 
+    @GetMapping("/overview-snapshot")
+    @Operation(summary = "Get a consistent dashboard overview in one request")
+    public ResponseEntity<OverviewSnapshotResponse> getOverviewSnapshot(
+            @RequestParam(name = "customer_id", required = false) String customerId,
+            @RequestParam(name = "tenant_id", required = false) Long tenantId,
+            @RequestParam(name = "hours", defaultValue = "24") int hours) {
+        if ((customerId == null || customerId.isBlank()) && tenantId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        try {
+            return ResponseEntity.ok(threatQueryService.getOverviewSnapshot(customerId, tenantId, hours));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
     /**
      * 执行威胁评估
      * 
@@ -132,6 +148,38 @@ public class AssessmentController {
         }
     }
 
+    @DeleteMapping("/{assessmentId}")
+    @Operation(summary = "Delete a threat assessment")
+    public ResponseEntity<Void> deleteAssessment(
+            @PathVariable Long assessmentId,
+            @RequestParam(name = "customer_id", required = false) String customerId,
+            @RequestParam(name = "tenant_id", required = false) Long tenantId) {
+        try {
+            threatQueryService.deleteAssessment(assessmentId, customerId, tenantId);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            logger.warn("Assessment delete rejected: id={}, customerId={}, tenantId={}, reason={}",
+                    assessmentId, customerId, tenantId, e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @PostMapping("/batch-delete")
+    @Operation(summary = "Delete multiple threat assessments")
+    public ResponseEntity<Map<String, Integer>> batchDeleteAssessments(
+            @Valid @RequestBody BatchDeleteAssessmentRequest request,
+            @RequestParam(name = "customer_id", required = false) String customerId,
+            @RequestParam(name = "tenant_id", required = false) Long tenantId) {
+        try {
+            int deleted = threatQueryService.deleteAssessments(request.getIds(), customerId, tenantId);
+            return ResponseEntity.ok(Map.of("deleted", deleted));
+        } catch (IllegalArgumentException e) {
+            logger.warn("Assessment batch delete rejected: customerId={}, tenantId={}, reason={}",
+                    customerId, tenantId, e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+    }
+
     /**
      * 查询评估列表 (分页)
      * 
@@ -165,7 +213,10 @@ public class AssessmentController {
             @RequestParam(name = "end_time", required = false) String endTime,
 
             @Parameter(description = "Attacker MAC filter", required = false)
-            @RequestParam(name = "attack_mac", required = false) String attackMac) {
+            @RequestParam(name = "attack_mac", required = false) String attackMac,
+
+            @Parameter(description = "Detection window tier (1=30s, 2=5m, 3=15m)", required = false)
+            @RequestParam(name = "detection_tier", required = false) Integer detectionTier) {
 
         logger.info("Querying assessment list: customerId={}, page={}, size={}, threatLevel={}, startTime={}, endTime={}, attackMac={}",
                 customerId, page, size, threatLevel, startTime, endTime, attackMac);
@@ -175,7 +226,7 @@ public class AssessmentController {
             Instant parsedEndTime = endTime != null && !endTime.isBlank() ? Instant.parse(endTime) : null;
 
             Page<ThreatAssessmentDetailResponse> result = threatQueryService.getAssessmentList(
-                    customerId, page, size, threatLevel, parsedStartTime, parsedEndTime, attackMac);
+                    customerId, page, size, threatLevel, parsedStartTime, parsedEndTime, attackMac, detectionTier);
             return ResponseEntity.ok(result);
         } catch (DateTimeParseException e) {
             logger.warn("Invalid time format when querying assessment list: customerId={}, startTime={}, endTime={}",
@@ -329,16 +380,16 @@ public class AssessmentController {
     }
 
     /**
-     * 获取端口分布 (TOP 10)
+     * 获取原始攻击事件端口分布 (TOP 15)
      * 
-     * <p>前端对接: Dashboard端口分布饼图
+     * <p>前端对接: Dashboard端口分布横向条形图
      * 
      * @param customerId 客户ID (必需)
      * @return 端口分布列表
      */
     @GetMapping("/port-distribution")
     @Operation(summary = "Get port distribution",
-               description = "Get top 10 attacked ports distribution")
+               description = "Get top 15 attacked ports from raw attack events")
     public ResponseEntity<List<PortDistribution>> getPortDistribution(
             @Parameter(description = "Customer ID", required = true)
             @RequestParam(name = "customer_id") String customerId,

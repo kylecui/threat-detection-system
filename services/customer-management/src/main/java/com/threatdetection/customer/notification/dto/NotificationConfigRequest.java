@@ -43,7 +43,7 @@ public class NotificationConfigRequest {
     /**
      * 短信接收人列表 (手机号)
      */
-    private List<@Pattern(regexp = "^1[3-9]\\d{9}$", message = "Invalid phone number") String> smsRecipients;
+    private List<@Pattern(regexp = "^\\+?[1-9]\\d{7,14}$", message = "Invalid E.164 phone number") String> smsRecipients;
 
     // ========== Slack配置 ==========
     

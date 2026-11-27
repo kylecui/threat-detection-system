@@ -15,9 +15,4 @@ ALTER TABLE auth_users
 ADD CONSTRAINT fk_auth_users_customer
 FOREIGN KEY (customer_id) REFERENCES customers(customer_id);
 
--- 3. Assign orphaned test customers to default-tenant (id=1)
---    These were seeded in 17-customers-init.sql without tenant_id
-UPDATE customers
-SET tenant_id = (SELECT id FROM tenants WHERE tenant_id = 'default-tenant')
-WHERE tenant_id IS NULL
-  AND customer_id IN ('customer_a', 'customer_b', 'customer_c', 'customer_d', 'customer_test');
+-- Production data is never assigned to a tenant by a name-based migration.

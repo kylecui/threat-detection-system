@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 /**
  * 端口分布DTO
  * 
- * <p>对齐前端需求: 端口分布饼图数据
+ * <p>对齐前端需求: 原始攻击事件端口分布数据
  */
 @Data
 @Builder
@@ -22,7 +22,7 @@ public class PortDistribution {
     private Integer port;
     
     /**
-     * 端口名称/服务名称 (如 "3389-RDP", "445-SMB")
+     * 已知端口的服务名称 (如 "RDP", "SMB")；未知端口为空
      */
     private String portName;
     

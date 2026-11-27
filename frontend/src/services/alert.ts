@@ -56,7 +56,8 @@ class AlertService {
   ): Promise<Alert> {
     const response = await apiClient.post<Alert>(
       `/api/v1/alerts/${id}/resolve`,
-      data
+      data,
+      { suppressGlobalError: true }
     );
     return response.data;
   }
@@ -65,7 +66,8 @@ class AlertService {
   async assign(id: number, assignedTo: string): Promise<Alert> {
     const response = await apiClient.post<Alert>(
       `/api/v1/alerts/${id}/assign`,
-      { assignedTo }
+      { assignedTo },
+      { suppressGlobalError: true }
     );
     return response.data;
   }
@@ -74,7 +76,8 @@ class AlertService {
   async escalate(id: number, reason: string): Promise<Alert> {
     const response = await apiClient.post<Alert>(
       `/api/v1/alerts/${id}/escalate`,
-      { reason }
+      { reason },
+      { suppressGlobalError: true }
     );
     return response.data;
   }
@@ -82,7 +85,9 @@ class AlertService {
   /** 取消升级 */
   async cancelEscalation(id: number): Promise<Alert> {
     const response = await apiClient.post<Alert>(
-      `/api/v1/alerts/${id}/cancel-escalation`
+      `/api/v1/alerts/${id}/cancel-escalation`,
+      undefined,
+      { suppressGlobalError: true }
     );
     return response.data;
   }

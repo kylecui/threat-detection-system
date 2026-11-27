@@ -108,6 +108,17 @@ public class ThreatAssessmentService {
      * 执行评估的核心逻辑
      */
     private ThreatAssessment performAssessment(AggregatedAttackData data) {
+        int detectionTier = normalizeDetectionTier(data.getDetectionTier());
+        if (data.getWindowStart() != null) {
+            java.util.Optional<ThreatAssessment> existing = repository
+                    .findFirstByCustomerIdAndAttackMacIgnoreCaseAndDetectionTierAndWindowStart(
+                            data.getCustomerId(), data.getAttackMac(), detectionTier, data.getWindowStart());
+            if (existing.isPresent()) {
+                logger.info("Duplicate threat window ignored: customerId={}, attackMac={}, tier={}, windowStart={}",
+                        data.getCustomerId(), data.getAttackMac(), detectionTier, data.getWindowStart());
+                return existing.get();
+            }
+        }
         // 1. 计算威胁评分
         ScoreBreakdown breakdown = calculator.calculateScoreWithBreakdown(data);
         double threatScore = breakdown.getNormalizedScore();
@@ -133,6 +144,9 @@ public class ThreatAssessmentService {
         assessment.setUniqueIps(data.getUniqueIps());
         assessment.setUniquePorts(data.getUniquePorts());
         assessment.setUniqueDevices(data.getUniqueDevices());
+        assessment.setDetectionTier(detectionTier);
+        assessment.setWindowStart(data.getWindowStart());
+        assessment.setWindowEnd(data.getWindowEnd());
         
         // 设置端口列表 (用于端口攻击分布统计)
         if (data.getPortList() != null && !data.getPortList().isEmpty()) {
@@ -237,6 +251,7 @@ public class ThreatAssessmentService {
         fallback.setUniqueIps(data.getUniqueIps());
         fallback.setUniquePorts(data.getUniquePorts());
         fallback.setUniqueDevices(data.getUniqueDevices());
+        fallback.setDetectionTier(normalizeDetectionTier(data.getDetectionTier()));
         fallback.setMlWeight(1.0);
         fallback.setPreMLScore(0.0);
         
@@ -247,5 +262,13 @@ public class ThreatAssessmentService {
         fallback.setCreatedAt(Instant.now());
         
         return fallback;
+    }
+
+    private int normalizeDetectionTier(Integer tier) {
+        if (tier == null || tier < 1 || tier > 3) {
+            logger.warn("Missing or invalid detection tier {}; using Tier 2 compatibility default", tier);
+            return 2;
+        }
+        return tier;
     }
 }

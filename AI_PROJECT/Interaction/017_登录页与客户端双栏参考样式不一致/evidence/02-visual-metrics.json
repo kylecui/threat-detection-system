@@ -1,0 +1,234 @@
+[
+  {
+    "scene": "02-desktop-zh-1440",
+    "card": {
+      "x": 330,
+      "y": 220,
+      "width": 780,
+      "height": 460
+    },
+    "brand": {
+      "x": 331,
+      "y": 221,
+      "width": 412.328125,
+      "height": 458
+    },
+    "panel": {
+      "x": 743.328125,
+      "y": 221,
+      "width": 365.671875,
+      "height": 458
+    },
+    "input": {
+      "height": 44,
+      "background": "rgb(255, 255, 255)"
+    },
+    "passwordToggles": [
+      {
+        "width": 44,
+        "height": 44,
+        "name": "显示密码"
+      }
+    ],
+    "theme": "light",
+    "loginBackground": "rgb(237, 243, 246)",
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "pageErrors": []
+  },
+  {
+    "scene": "02-desktop-en-1440-dark-preference",
+    "card": {
+      "x": 330,
+      "y": 220,
+      "width": 780,
+      "height": 460
+    },
+    "brand": {
+      "x": 331,
+      "y": 221,
+      "width": 412.328125,
+      "height": 458
+    },
+    "panel": {
+      "x": 743.328125,
+      "y": 221,
+      "width": 365.671875,
+      "height": 458
+    },
+    "input": {
+      "height": 44,
+      "background": "rgb(255, 255, 255)"
+    },
+    "passwordToggles": [
+      {
+        "width": 44,
+        "height": 44,
+        "name": "Show password"
+      }
+    ],
+    "theme": "dark",
+    "loginBackground": "rgb(237, 243, 246)",
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "pageErrors": []
+  },
+  {
+    "scene": "02-mobile-zh-390",
+    "card": {
+      "x": 12,
+      "y": 138.65625,
+      "width": 366,
+      "height": 566.6875
+    },
+    "brand": {
+      "x": 13,
+      "y": 139.65625,
+      "width": 364,
+      "height": 170.890625
+    },
+    "panel": {
+      "x": 13,
+      "y": 310.546875,
+      "width": 364,
+      "height": 393.796875
+    },
+    "input": {
+      "height": 44,
+      "background": "rgb(255, 255, 255)"
+    },
+    "passwordToggles": [
+      {
+        "width": 44,
+        "height": 44,
+        "name": "显示密码"
+      }
+    ],
+    "theme": "light",
+    "loginBackground": "rgb(237, 243, 246)",
+    "scrollWidth": 390,
+    "clientWidth": 390,
+    "pageErrors": []
+  },
+  {
+    "scene": "02-bootstrap-en-320-short-errors",
+    "card": {
+      "x": 12,
+      "y": 12,
+      "width": 296,
+      "height": 1169.375
+    },
+    "brand": {
+      "x": 13,
+      "y": 13,
+      "width": 294,
+      "height": 227.78125
+    },
+    "panel": {
+      "x": 13,
+      "y": 240.78125,
+      "width": 294,
+      "height": 939.59375
+    },
+    "input": {
+      "height": 44,
+      "background": "rgb(255, 255, 255)"
+    },
+    "passwordToggles": [
+      {
+        "width": 44,
+        "height": 44,
+        "name": "Show password"
+      },
+      {
+        "width": 44,
+        "height": 44,
+        "name": "Show password"
+      }
+    ],
+    "theme": "light",
+    "loginBackground": "rgb(237, 243, 246)",
+    "scrollWidth": 320,
+    "clientWidth": 320,
+    "pageErrors": []
+  },
+  {
+    "scene": "02-bootstrap-en-1280-short",
+    "card": {
+      "x": 250,
+      "y": 32,
+      "width": 780,
+      "height": 845.59375
+    },
+    "brand": {
+      "x": 251,
+      "y": 33,
+      "width": 412.328125,
+      "height": 843.59375
+    },
+    "panel": {
+      "x": 663.328125,
+      "y": 33,
+      "width": 365.671875,
+      "height": 843.59375
+    },
+    "input": {
+      "height": 44,
+      "background": "rgb(255, 255, 255)"
+    },
+    "passwordToggles": [
+      {
+        "width": 44,
+        "height": 44,
+        "name": "Show password"
+      },
+      {
+        "width": 44,
+        "height": 44,
+        "name": "Show password"
+      }
+    ],
+    "theme": "light",
+    "loginBackground": "rgb(237, 243, 246)",
+    "scrollWidth": 1280,
+    "clientWidth": 1280,
+    "pageErrors": []
+  },
+  {
+    "scene": "02-failure-en-320-expired",
+    "card": {
+      "x": 12,
+      "y": 12,
+      "width": 296,
+      "height": 845.578125
+    },
+    "brand": {
+      "x": 13,
+      "y": 13,
+      "width": 294,
+      "height": 227.78125
+    },
+    "panel": {
+      "x": 13,
+      "y": 240.78125,
+      "width": 294,
+      "height": 615.796875
+    },
+    "input": {
+      "height": 44,
+      "background": "rgb(255, 255, 255)"
+    },
+    "passwordToggles": [
+      {
+        "width": 44,
+        "height": 44,
+        "name": "Show password"
+      }
+    ],
+    "theme": "light",
+    "loginBackground": "rgb(237, 243, 246)",
+    "scrollWidth": 320,
+    "clientWidth": 320,
+    "pageErrors": []
+  }
+]

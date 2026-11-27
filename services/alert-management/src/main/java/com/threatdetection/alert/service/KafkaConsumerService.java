@@ -6,6 +6,7 @@ import com.threatdetection.alert.repository.CustomerNotificationConfigRepository
 import com.threatdetection.alert.service.alert.AlertService;
 import com.threatdetection.alert.service.alert.DeduplicationService;
 import com.threatdetection.alert.service.notification.NotificationService;
+import com.threatdetection.alert.service.notification.NotificationPolicyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,9 +50,32 @@ public class KafkaConsumerService {
     private final DeduplicationService deduplicationService;
     private final CustomerNotificationConfigRepository customerNotificationConfigRepository;
     private final ObjectMapper objectMapper;
+    private final NotificationPolicyService notificationPolicyService;
+
+    /**
+     * 告警中心只接收达到该级别的评估结果。流处理与威胁评估链路仍会保留
+     * INFO 结果；这里只控制是否创建可处置告警，避免正常背景流量淹没告警中心。
+     */
+    private AlertSeverity minimumIngestionSeverity = AlertSeverity.LOW;
     
     // @Value("${integration-test.email.recipient}")
     private String defaultEmailRecipient = "";
+
+    @Value("${alert.ingestion.minimum-severity:LOW}")
+    void setMinimumIngestionSeverity(String configuredSeverity) {
+        if (configuredSeverity == null || configuredSeverity.isBlank()) {
+            minimumIngestionSeverity = AlertSeverity.LOW;
+            return;
+        }
+
+        try {
+            minimumIngestionSeverity = AlertSeverity.valueOf(
+                    configuredSeverity.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            minimumIngestionSeverity = AlertSeverity.LOW;
+            log.warn("Unknown alert ingestion minimum severity '{}'; using LOW", configuredSeverity);
+        }
+    }
 
     /**
      * 监听威胁检测事件（批量模式，提升性能）
@@ -86,7 +110,11 @@ public class KafkaConsumerService {
                 batchSize, partitions.get(0), offsets.get(0), offsets.get(batchSize - 1));
 
         // 🛡️ 防护: 过滤掉反序列化失败的 null 消息
-        events.removeIf(event -> event == null);
+        // Kafka and unit-test callers may provide immutable lists. Build a
+        // filtered working copy instead of mutating the deserializer result.
+        events = events.stream()
+                .filter(event -> event != null)
+                .collect(Collectors.toCollection(ArrayList::new));
         if (events.isEmpty()) {
             log.warn("⚠️ 批量中所有消息均为 null（反序列化失败），跳过处理并提交 offset");
             acknowledgment.acknowledge();
@@ -115,6 +143,17 @@ public class KafkaConsumerService {
                     }
                     
                     AlertProcessingResult result = prepareThreatAlert(event);
+
+                    if (result.isSuppressed) {
+                        skippedCount++;
+                        processedCount++;
+                        if (log.isDebugEnabled()) {
+                            log.debug("事件 {}/{} 低于告警入库阈值，保留评估但不创建告警: MAC={}, severity={}, minimum={}",
+                                    i + 1, batchSize, event.get("attackMac"),
+                                    result.severity, minimumIngestionSeverity);
+                        }
+                        continue;
+                    }
                     
                     if (result.isDedup) {
                         deduplicatedCount++;
@@ -221,6 +260,8 @@ public class KafkaConsumerService {
     private static class AlertProcessingResult {
         Alert alert;
         boolean isDedup;
+        boolean isSuppressed;
+        AlertSeverity severity;
         boolean needsNotification;
         AlertNotificationInfo notificationInfo;
     }
@@ -291,12 +332,20 @@ public class KafkaConsumerService {
             // 根据威胁等级映射告警严重程度
             AlertSeverity alertSeverity = mapThreatLevelToSeverity(threatLevel);
 
+            // INFO 等低于配置阈值的结果仍由评估链路保存，但不进入告警中心。
+            // 必须在去重查询和对象序列化前完成过滤，避免无效数据库开销。
+            if (alertSeverity.getThreshold() < minimumIngestionSeverity.getThreshold()) {
+                AlertProcessingResult result = new AlertProcessingResult();
+                result.isSuppressed = true;
+                result.severity = alertSeverity;
+                return result;
+            }
+
             // 生成告警标题
-            String alertTitle = String.format("[%s] %s 威胁检测 - %s",
-                source,
-                threatLevel != null ? threatLevel : "UNKNOWN",
-                attackMac
-            );
+            String alertTitle = String.format("%s · %s · %d次",
+                    formatWindowLabel(tier, windowType),
+                    attackMac,
+                    attackCount != null ? attackCount : 0);
 
             // 创建告警对象
             Alert alert = Alert.builder()
@@ -316,6 +365,7 @@ public class KafkaConsumerService {
             // 构建处理结果
             AlertProcessingResult result = new AlertProcessingResult();
             result.alert = alert;
+            result.severity = alertSeverity;
             
             // 检查是否为重复告警
             if (deduplicationService.isDuplicate(alert)) {
@@ -328,15 +378,14 @@ public class KafkaConsumerService {
             
             result.isDedup = false;
             
-            // 检查是否需要发送通知（CRITICAL级别）
-            if (alertSeverity == AlertSeverity.CRITICAL) {
-                result.needsNotification = true;
-                AlertNotificationInfo notifInfo = new AlertNotificationInfo();
-                notifInfo.customerId = customerId;
-                notifInfo.severity = alertSeverity;
-                notifInfo.attackMac = attackMac;
-                result.notificationInfo = notifInfo;
-            }
+            // Every severity reaches the customer policy. Filtering here used
+            // to hard-code CRITICAL and made the saved policy ineffective.
+            result.needsNotification = true;
+            AlertNotificationInfo notifInfo = new AlertNotificationInfo();
+            notifInfo.customerId = customerId;
+            notifInfo.severity = alertSeverity;
+            notifInfo.attackMac = attackMac;
+            result.notificationInfo = notifInfo;
             
             return result;
 
@@ -364,11 +413,11 @@ public class KafkaConsumerService {
                 AlertNotificationInfo notifInfo = batchItems.get(i).notificationInfo;
                 
                 try {
-                    sendCriticalAlertNotification(savedAlert, notifInfo.customerId);
+                    sendAlertNotification(savedAlert, notifInfo.customerId);
                     successCount++;
                 } catch (Exception e) {
                     failureCount++;
-                    log.error("异步发送CRITICAL告警通知失败: alertId={}, customerId={}", 
+                    log.error("异步发送告警通知失败: alertId={}, customerId={}", 
                              savedAlert.getId(), notifInfo.customerId, e);
                 }
             }
@@ -382,13 +431,16 @@ public class KafkaConsumerService {
      * 发送CRITICAL告警通知
      * 根据客户配置发送到指定的邮箱地址
      */
-    private void sendCriticalAlertNotification(Alert alert, String customerId) {
+    private void sendAlertNotification(Alert alert, String customerId) {
         // 获取客户通知配置
         Optional<CustomerNotificationConfig> configOpt = 
             customerNotificationConfigRepository.findByCustomerIdAndIsActive(customerId, true);
         
         if (configOpt.isEmpty()) {
-            log.warn("客户 {} 没有激活的通知配置，使用默认邮箱", customerId);
+            if (alert.getSeverity() != AlertSeverity.CRITICAL) {
+                return;
+            }
+            log.warn("客户 {} 没有激活的通知配置，CRITICAL 告警使用默认邮箱", customerId);
             if (defaultEmailRecipient == null || defaultEmailRecipient.trim().isEmpty()) {
                 log.info("默认邮箱未配置，跳过邮件通知: customerId={}", customerId);
                 return;
@@ -398,6 +450,11 @@ public class KafkaConsumerService {
         }
         
         CustomerNotificationConfig config = configOpt.get();
+
+        if (hasAnyConfiguredChannel(config)) {
+            sendConfiguredChannels(alert, customerId, config);
+            return;
+        }
         
         // 检查邮件通知是否启用
         if (!Boolean.TRUE.equals(config.getEmailEnabled())) {
@@ -406,7 +463,7 @@ public class KafkaConsumerService {
         }
         
         // 检查告警级别是否需要通知
-        if (!shouldNotify(config, alert.getSeverity())) {
+        if (!notificationPolicyService.shouldNotify(config, alert.getSeverity())) {
             log.info("告警级别 {} 不在客户 {} 的通知范围内", alert.getSeverity(), customerId);
             return;
         }
@@ -431,14 +488,94 @@ public class KafkaConsumerService {
     /**
      * 发送单个邮件通知
      */
+    private boolean hasAnyConfiguredChannel(CustomerNotificationConfig config) {
+        return Boolean.TRUE.equals(config.getEmailEnabled())
+                || Boolean.TRUE.equals(config.getSmsEnabled())
+                || Boolean.TRUE.equals(config.getSlackEnabled())
+                || Boolean.TRUE.equals(config.getWebhookEnabled());
+    }
+
+    private void sendConfiguredChannels(
+            Alert alert,
+            String customerId,
+            CustomerNotificationConfig config) {
+        if (!notificationPolicyService.shouldNotify(config, alert.getSeverity())) {
+            log.info("Alert severity {} is outside customer {} notification policy",
+                    alert.getSeverity(), customerId);
+            return;
+        }
+
+        if (notificationPolicyService.isQuietHours(config)) {
+            log.info("Notification suppressed by quiet hours: alertId={}, customerId={}",
+                    alert.getId(), customerId);
+            return;
+        }
+
+        int deliveryCount = 0;
+        if (Boolean.TRUE.equals(config.getEmailEnabled())) {
+            for (String recipient : parseEmailRecipients(config.getEmailRecipients())) {
+                if (queueWithinLimit(alert, customerId, config, NotificationChannel.EMAIL, recipient)) {
+                    deliveryCount++;
+                }
+            }
+        }
+        if (Boolean.TRUE.equals(config.getSmsEnabled())) {
+            for (String recipient : parseEmailRecipients(config.getSmsRecipients())) {
+                if (queueWithinLimit(alert, customerId, config, NotificationChannel.SMS, recipient)) {
+                    deliveryCount++;
+                }
+            }
+        }
+        if (Boolean.TRUE.equals(config.getSlackEnabled()) && hasText(config.getSlackWebhookUrl())) {
+            if (queueWithinLimit(alert, customerId, config,
+                    NotificationChannel.SLACK, config.getSlackWebhookUrl())) {
+                deliveryCount++;
+            }
+        }
+        if (Boolean.TRUE.equals(config.getWebhookEnabled()) && hasText(config.getWebhookUrl())) {
+            if (queueWithinLimit(alert, customerId, config,
+                    NotificationChannel.WEBHOOK, config.getWebhookUrl())) {
+                deliveryCount++;
+            }
+        }
+
+        if (deliveryCount == 0) {
+            log.warn("Customer {} has no enabled notification channel with a valid recipient", customerId);
+        } else {
+            log.info("Alert notifications queued: alertId={}, customerId={}, deliveries={}",
+                    alert.getId(), customerId, deliveryCount);
+        }
+    }
+
     private void sendEmailNotification(Alert alert, String recipient) {
+        sendChannelNotification(alert, null, NotificationChannel.EMAIL, recipient);
+    }
+
+    private boolean queueWithinLimit(
+            Alert alert,
+            String customerId,
+            CustomerNotificationConfig config,
+            NotificationChannel channel,
+            String recipient) {
+        if (!notificationPolicyService.tryAcquireDeliverySlot(config)) {
+            log.warn("Notification rate limit reached: alertId={}, customerId={}, channel={}",
+                    alert.getId(), customerId, channel);
+            return false;
+        }
+        sendChannelNotification(alert, customerId, channel, recipient);
+        return true;
+    }
+
+    private void sendChannelNotification(
+            Alert alert, String customerId, NotificationChannel channel, String recipient) {
         Notification notification = new Notification();
         notification.setAlert(alert);
-        notification.setChannel(NotificationChannel.EMAIL);
+        notification.setCustomerId(customerId);
+        notification.setChannel(channel);
         notification.setRecipient(recipient);
-        notification.setSubject(String.format("【严重威胁】%s", alert.getTitle()));
+        notification.setSubject(String.format("【%s告警】%s", alert.getSeverity().getDescription(), alert.getTitle()));
         notification.setContent(String.format(
-            "检测到严重威胁！\n\n" +
+            "检测到威胁告警！\n\n" +
             "告警ID: %d\n" +
             "通知ID: %s\n" +
             "标题: %s\n" +
@@ -508,27 +645,59 @@ public class KafkaConsumerService {
         }
     }
 
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
     /**
      * 格式化时间窗口描述
      */
     private String formatWindowDescription(Integer tier, String windowType) {
+        return formatWindowLabel(tier, windowType) + "窗口内";
+    }
+
+    /**
+     * 将流处理层的检测层级转换为面向值班人员的短标签。windowType 在生产环境
+     * 是可配置的业务名称；历史消息可能仍携带 SLIDING/TUMBLING 等技术值，
+     * 对这些值使用稳定的中文默认名称，避免把实现细节暴露在告警标题中。
+     */
+    private String formatWindowLabel(Integer tier, String windowType) {
+        String duration;
+        String defaultPurpose;
+
         if (tier == null) {
-            return "未知时间窗口";
+            duration = "未知时长";
+            defaultPurpose = "检测";
+        } else {
+            switch (tier) {
+                case 1:
+                    duration = "30秒";
+                    defaultPurpose = "快速检测";
+                    break;
+                case 2:
+                    duration = "5分钟";
+                    defaultPurpose = "持续检测";
+                    break;
+                case 3:
+                    duration = "15分钟";
+                    defaultPurpose = "低速检测";
+                    break;
+                default:
+                    duration = "Tier-" + tier;
+                    defaultPurpose = "检测";
+                    break;
+            }
         }
-        
-        // 根据窗口类型生成描述
-        String windowName = windowType != null ? windowType : "未知";
-        
-        switch (tier) {
-            case 1:
-                return String.format("30秒窗口(%s)", windowName);
-            case 2:
-                return String.format("5分钟窗口(%s)", windowName);
-            case 3:
-                return String.format("15分钟窗口(%s)", windowName);
-            default:
-                return String.format("Tier-%d窗口(%s)", tier, windowName);
+
+        String purpose = isBusinessWindowName(windowType) ? windowType.trim() : defaultPurpose;
+        return purpose.startsWith(duration) ? purpose : duration + purpose;
+    }
+
+    private boolean isBusinessWindowName(String windowType) {
+        if (windowType == null || windowType.isBlank()) {
+            return false;
         }
+        return !windowType.trim().matches("[A-Z0-9_-]+");
     }
 
     /**

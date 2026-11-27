@@ -15,5 +15,22 @@ gateway:
   rate-limit:
     enabled: false
 
+# The isolated gateway test intentionally starts without PostgreSQL. Disable
+# only dependency-backed health contributors so /actuator/health verifies the
+# gateway context itself instead of the absent integration environment.
+management:
+  health:
+    db:
+      enabled: false
+    r2dbc:
+      enabled: false
+
 server:
   port: 0
+
+security:
+  config-encryption-key: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+  secret-migration-enabled: false
+internal:
+  tire-service-token: test-tire-service-token-which-is-long-enough
+  alert-service-token: test-alert-service-token-which-is-at-least-sixty-four-characters-long

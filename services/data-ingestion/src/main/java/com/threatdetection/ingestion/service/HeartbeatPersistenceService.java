@@ -23,19 +23,26 @@ public class HeartbeatPersistenceService {
     private final DeviceInventoryRepository deviceInventoryRepository;
     private final TopologySnapshotRepository topologySnapshotRepository;
     private final DiscoveredHostRepository discoveredHostRepository;
+    private final DevSerialToCustomerMappingService customerMappingService;
 
     public HeartbeatPersistenceService(
             DeviceInventoryRepository deviceInventoryRepository,
             TopologySnapshotRepository topologySnapshotRepository,
-            DiscoveredHostRepository discoveredHostRepository
+            DiscoveredHostRepository discoveredHostRepository,
+            DevSerialToCustomerMappingService customerMappingService
     ) {
         this.deviceInventoryRepository = deviceInventoryRepository;
         this.topologySnapshotRepository = topologySnapshotRepository;
         this.discoveredHostRepository = discoveredHostRepository;
+        this.customerMappingService = customerMappingService;
     }
 
     @Transactional
     public void persistHeartbeat(HeartbeatEvent heartbeat) {
+        if (!customerMappingService.isCustomerOperational(heartbeat.getCustomerId())) {
+            throw new IllegalStateException(
+                    "Heartbeat rejected because the customer is inactive, suspended or unknown");
+        }
         Instant now = Instant.now();
         Instant snapshotInstant = heartbeat.getTimestamp().atZone(ZoneId.systemDefault()).toInstant();
 
@@ -95,7 +102,7 @@ public class HeartbeatPersistenceService {
             }
         }
 
-        logger.info("Persisted heartbeat: deviceId={}, customerId={}, hostsUpserted={}",
+        logger.debug("Persisted heartbeat: deviceId={}, customerId={}, hostsUpserted={}",
                 heartbeat.getDeviceId(), heartbeat.getCustomerId(), hostsUpserted);
     }
 }
