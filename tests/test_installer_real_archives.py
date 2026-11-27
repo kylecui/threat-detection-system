@@ -56,6 +56,10 @@ class HistoricalArchiveTransactionTests(unittest.TestCase):
             self.assertTrue(all(member.isfile() or member.isdir() for member in members))
             stream.extractall(extraction, filter="data")
         shutil.move(extraction / prefix, case.target)
+        control_home = case.root / "host-control"
+        (control_home / "tls").mkdir(parents=True)
+        (control_home / "control.env").write_text("JZ_CONTROL_TLS_DIR=/fixture/tls\n", encoding="utf-8")
+        (control_home / "tls/client.p12").write_bytes(b"synthetic fixture; never used by Docker")
         # Generate only synthetic credentials using the actual historical helper.
         subprocess.run(
             [sys.executable, str(case.target / "scripts/prepare_release_env.py"),
@@ -96,6 +100,8 @@ class HistoricalArchiveTransactionTests(unittest.TestCase):
         started = time.monotonic()
         case, archive = self.prepare_case(old)
         before = self.environment(case.target / ".env")
+        control_home = case.root / "host-control"
+        control_before = transaction.tree_state(control_home)
         result = case.run_shell("detect_existing_install\nprepare_runtime_env\nprepare_rollback\nsync_release_tree\ncommit_install\ncleanup_temp\n")
         case.assert_ok(result)
         expected = (case.source / "VERSION").read_text().strip()
@@ -113,6 +119,11 @@ class HistoricalArchiveTransactionTests(unittest.TestCase):
         for line in entries:
             expected_hash, relative = line.split("  ", 1)
             self.assertEqual(hashlib.sha256((case.target / relative).read_bytes()).hexdigest(), expected_hash, relative)
+        self.assertIn("docker/docker-compose.control.yml", {
+            line.split("  ", 1)[1] for line in entries
+        })
+        self.assertTrue((case.target / "scripts/compose-runtime.sh").is_file())
+        self.assertEqual(transaction.tree_state(control_home), control_before)
         for external in case.paths:
             relative = "scripts/tdsdiag.sh" if external.name == "tdsdiag" else f"deploy/systemd/{external.name}"
             self.assertEqual(external.read_bytes(), (case.source / relative).read_bytes())
@@ -126,10 +137,13 @@ class HistoricalArchiveTransactionTests(unittest.TestCase):
         (case.target / "local-only.txt").write_text("operator local state\n", encoding="utf-8")
         before = transaction.tree_state(case.target)
         external = [transaction.tree_state(path) for path in case.paths]
+        control_home = case.root / "host-control"
+        control_before = transaction.tree_state(control_home)
         result = case.run_shell("prepare_runtime_env\nprepare_rollback\nsync_release_tree\nrollback_install 42\ncleanup_temp\n")
         case.assert_ok(result)
         self.assertEqual(transaction.tree_state(case.target), before)
         self.assertEqual([transaction.tree_state(path) for path in case.paths], external)
+        self.assertEqual(transaction.tree_state(control_home), control_before)
         self.assertFalse(list(case.root.glob("rollback.*")))
         self.assertNotRegex((case.root / "commands.log").read_text(), r"compose .* down -v")
         entries = (case.source / "MANIFEST.sha256").read_text().splitlines()

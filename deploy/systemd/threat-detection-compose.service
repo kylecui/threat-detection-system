@@ -11,9 +11,9 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/threat-detection-system
-ExecStart=/usr/bin/docker compose --env-file .env -f docker/docker-compose.yml up -d --remove-orphans
+ExecStart=/opt/threat-detection-system/scripts/compose-runtime.sh /opt/threat-detection-system .env up -d --remove-orphans
 ExecStartPost=/opt/threat-detection-system/scripts/runtime-watchdog.sh --recover
-ExecStop=/usr/bin/docker compose --env-file .env -f docker/docker-compose.yml stop
+ExecStop=/opt/threat-detection-system/scripts/compose-runtime.sh /opt/threat-detection-system .env stop
 TimeoutStartSec=600
 TimeoutStopSec=180
 

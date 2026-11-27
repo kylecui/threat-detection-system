@@ -11,6 +11,7 @@ die()  { printf "${RED}[ERR]${RST}   %s\n" "$*" >&2; exit 1; }
 
 SRC_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_DIR="$SRC_ROOT/scripts"
+CONTROL_ENV_FILE="${JZ_CONTROL_ENV_FILE:-/etc/jz-control/control.env}"
 INTEGRITY_HELPER="$SCRIPT_DIR/verify_release_state.py"
 TRUSTED_MANIFEST=""
 TARGET_DIR="/opt/threat-detection-system"
@@ -254,9 +255,13 @@ confirm() {
   [[ "$reply" == y || "$reply" == Y ]]
 }
 
+compose_release() {
+  JZ_CONTROL_ENV_FILE="$CONTROL_ENV_FILE" "$SCRIPT_DIR/compose-runtime.sh" "$@"
+}
+
 compose_in() {
   local root="$1"; shift
-  (cd "$root" && docker compose --env-file .env -f docker/docker-compose.yml "$@")
+  compose_release "$root" .env "$@"
 }
 
 installed_project_name() {
@@ -630,8 +635,7 @@ validate_compose_ports() {
   port_specs="$(mktemp /tmp/threat-detection-ports.XXXXXX)"
   chmod 600 "$config_json" "$port_specs"
 
-  if ! docker compose --env-file "$PREPARED_ENV" \
-      -f "$SRC_ROOT/docker/docker-compose.yml" config --format json >"$config_json"; then
+  if ! compose_release "$SRC_ROOT" "$PREPARED_ENV" config --format json >"$config_json"; then
     rm -f -- "$config_json" "$port_specs"
     die "Docker Compose JSON rendering failed"
   fi
@@ -767,11 +771,8 @@ capture_failure_diagnostics() {
     printf '\n===== compose ps =====\n'
     [[ ! -f "$TARGET_DIR/.env" ]] || compose_in "$TARGET_DIR" ps -a --no-trunc || true
     printf '\n===== compose logs (last 150 lines per service) =====\n'
-    [[ ! -f "$TARGET_DIR/.env" ]] || (
-      cd "$TARGET_DIR"
-      timeout 30 docker compose --env-file .env -f docker/docker-compose.yml \
-        logs --no-color --tail=150
-    ) || true
+    [[ ! -f "$TARGET_DIR/.env" ]] || JZ_CONTROL_ENV_FILE="$CONTROL_ENV_FILE" \
+      timeout 30 "$SCRIPT_DIR/compose-runtime.sh" "$TARGET_DIR" .env logs --no-color --tail=150 || true
     printf '\n===== listening ports =====\n'
     ss -ltnup || true
     printf '\n===== systemd unit =====\n'
@@ -886,6 +887,7 @@ Removal plan (uploaded release archives and APT/Docker packages are preserved):
   containers : Compose project from $TARGET_DIR/docker/docker-compose.yml
   install    : $TARGET_DIR
   backups    : $BACKUP_ROOT
+  preserved  : /etc/jz-control/ (host-managed control configuration and certificates)
   diagnostic : /usr/local/sbin/tdsdiag
   logs       : /var/log/threat-detection-install*.log
   purge only : project images, named volumes, generated .env and database data
@@ -1250,7 +1252,7 @@ exec 9>/run/lock/threat-detection-install.lock
 flock -n 9 || die "Another Threat Detection System install operation is running"
 prepare_runtime_env
 
-docker compose --env-file "$PREPARED_ENV" -f "$SRC_ROOT/docker/docker-compose.yml" config --quiet \
+compose_release "$SRC_ROOT" "$PREPARED_ENV" config --quiet \
   || die "Docker Compose configuration validation failed"
 ok "Docker Compose configuration validated"
 validate_compose_ports

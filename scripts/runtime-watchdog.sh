@@ -41,7 +41,7 @@ done
   || { echo "[ERR] Threat Detection System is not installed in $TARGET_DIR" >&2; exit 1; }
 
 compose() {
-  (cd "$TARGET_DIR" && docker compose --env-file .env -f docker/docker-compose.yml "$@")
+  "$TARGET_DIR/scripts/compose-runtime.sh" "$TARGET_DIR" .env "$@"
 }
 
 containerd_task_state() {
@@ -82,11 +82,8 @@ runtime_reason() {
 recover_service() {
   local service="$1" deadline id reason
   echo "[WARN] Recreating inconsistent service: $service" >&2
-  if ! (
-    cd "$TARGET_DIR"
-    timeout 300 docker compose --env-file .env -f docker/docker-compose.yml \
-      up -d --no-deps --force-recreate "$service"
-  ); then
+  if ! timeout 300 "$TARGET_DIR/scripts/compose-runtime.sh" "$TARGET_DIR" .env \
+      up -d --no-deps --force-recreate "$service"; then
     echo "[ERR] Failed to recreate service: $service" >&2
     return 1
   fi

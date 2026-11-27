@@ -62,6 +62,7 @@ INSTALL_FILES = {
     "deploy/systemd/threat-detection-runtime-watchdog.timer",
     "scripts/prepare_release_env.py",
     "scripts/verify_release_state.py",
+    "scripts/compose-runtime.sh",
     "scripts/runtime-watchdog.sh",
     "scripts/tdsdiag.sh",
 }
@@ -69,6 +70,7 @@ EXECUTABLE_FILES = {
     "install.sh",
     "scripts/prepare_release_env.py",
     "scripts/verify_release_state.py",
+    "scripts/compose-runtime.sh",
     "scripts/runtime-watchdog.sh",
     "scripts/tdsdiag.sh",
 }
@@ -101,7 +103,8 @@ def should_include(relative: Path) -> bool:
     parts = relative.parts
     if any(part in SKIP_DIRS for part in parts):
         return False
-    if relative.name == ".env" or relative.name.startswith(".env.local"):
+    name = relative.name.lower()
+    if name.startswith(".env.") or name.endswith((".env", ".pem", ".key", ".p12", ".pfx", ".pkcs12")):
         return False
     if relative.name.endswith(SKIP_SUFFIXES):
         return False
@@ -121,7 +124,7 @@ def iter_tree(relative_root: str):
 
 def compose_runtime_files() -> set[Path]:
     compose = ROOT / "docker" / "docker-compose.yml"
-    required = {Path("docker/docker-compose.yml")}
+    required = {Path("docker/docker-compose.yml"), Path("docker/docker-compose.control.yml")}
     for line in compose.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
         if not stripped.startswith("- ./") or ":/docker-entrypoint-initdb.d/" not in stripped:

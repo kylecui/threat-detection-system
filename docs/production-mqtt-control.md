@@ -5,11 +5,13 @@
 ## 启用
 
 1. 在配置平台审批并注册 controller/platform、专用账户及动作范围。v1.1 在配置平台注册项设置 `"device_scope": "all_registered"` 可按已注册的安装序列码直寻内部设备。威胁平台仍检查本地客户当前有效绑定，按大小写不敏感匹配，并把绑定表中的原始序列码经请求信封发送。配置平台不支持该模式时，继续使用显式设备 grant。
-2. 通过合并版注册脚本一次性交付MQTT密码和HMAC签名密钥，客户端证书经可信CA签发后转换成`client.p12`，服务器CA存入`trust.p12`，将目录置于源码目录之外并限制宿主权限。证书SAN必须匹配`JZ_CONTROL_BROKER_URL`主机名；不得关校验。
-3. 通过私密环境文件或秘密管理服务注入 `JZ_CONTROL_BROKER_URL=ssl://<主机>:<TLS端口>`、`JZ_CONTROL_{CONTROLLER_ID,PLATFORM_ID,USERNAME,PASSWORD,SIGNING_SECRET}`、`JZ_CONTROL_{KEY_STORE,TRUST_STORE,KEY_STORE_PASSWORD,TRUST_STORE_PASSWORD,TLS_DIR}`。专用 MQTT 用户名以 `control-` 开头。两个 PKCS12 容器路径位于只读 `/run/jz-control` 挂载，默认文件名为 `client.p12` 与 `trust.p12`。配置平台注册的 `secret_env` 必须取得同一密钥。服务器证书及 SAN 校验保持启用。
-4. 使用现有Compose参数并追加`-f docker/docker-compose.control.yml`；该覆盖文件不改EMQX数据端口。主服务`application.yml`默认`JZ_CONTROL_ENABLED=false`，未配置控制能力不会阻塞现有分析。
+2. 通过合并版注册脚本一次性交付 MQTT 密码和 HMAC 签名密钥。推荐由宿主管理员将客户端 PKCS12 放在 `/etc/jz-control/tls/client.p12`，将服务器 CA 信任库放在 `/etc/jz-control/tls/trust.p12`。目录建议由 root 持有并设为 0700，环境文件与证书文件建议设为 0600。服务器证书 SAN 必须与 `JZ_CONTROL_BROKER_URL` 的主机名匹配。
+3. 在宿主机 `/etc/jz-control/control.env` 配置 `JZ_CONTROL_TLS_DIR=/etc/jz-control/tls`、`JZ_CONTROL_BROKER_URL=ssl://<主机>:<TLS端口>`、`JZ_CONTROL_{CONTROLLER_ID,PLATFORM_ID,USERNAME,PASSWORD,SIGNING_SECRET,KEY_STORE_PASSWORD,TRUST_STORE_PASSWORD}`。专用 MQTT 用户名以 `control-` 开头。容器内的 PKCS12 来自只读挂载 `/run/jz-control`，默认文件名为 `client.p12` 和 `trust.p12`，可用 `JZ_CONTROL_KEY_STORE` 和 `JZ_CONTROL_TRUST_STORE` 指定容器路径。配置平台注册的 `secret_env` 使用同一签名密钥。此文件只放控制变量，以免 Docker Compose 使用后加载的值覆盖基础配置。
+4. 宿主机配置一次即可。后续 `sudo ./install.sh` 升级、systemd 启停和 watchdog 自愈都会自动读取该文件，并加载包内 `docker/docker-compose.control.yml`。两个文件均满足条件时才加载覆盖层。没有可读的 `control.env`，或回滚到没有覆盖文件的旧包时，Compose 使用基础文件，控制能力默认关闭。`--uninstall` 和 `--purge` 保留 `/etc/jz-control/`，环境及证书由宿主管理员维护。
 5. 默认启动时初始化控制请求日志与事件表。禁止启动 DDL 的环境由管理员先按 `DeviceControlService.initializeJournal` 校验并补齐请求表，执行下方事件 DDL，再设置 `JZ_CONTROL_INITIALIZE_SCHEMA=false`。缺表或连接未就绪时控制提交返回 503。
 6. 方案 A 的 Mosquitto ACL 允许专用账户发布精确 `request`，订阅同前缀精确 `result`、`event`。Gateway 在两条订阅都获得 QoS 1 后标记 ready。检查双方时间、客户端证书有效期、Broker SAN、ACL 与 HMAC 密钥，再用隔离设备运行实际联调。
+
+自定义控制环境文件时，选用安装树和备份目录之外的绝对路径。在安装进程与 `threat-detection-compose.service`、`threat-detection-runtime-watchdog.service` 的 systemd drop-in 中将 `JZ_CONTROL_ENV_FILE` 设为同一路径。默认路径无需设置环境覆盖。若先安装服务再新增或更换 `control.env`，重启主 Compose 服务以应用新配置。
 
 ## API和Web
 

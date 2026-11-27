@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -16,6 +17,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 PREFIX = f"threat-detection-system-{VERSION}-linux-x86_64"
+BASH = shutil.which("bash")
+if os.name == "nt":
+    git_bash = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe"
+    if git_bash.is_file():
+        BASH = str(git_bash)
 
 
 class ReleaseArchiveContractTest(unittest.TestCase):
@@ -67,6 +73,8 @@ class ReleaseArchiveContractTest(unittest.TestCase):
                 ".env.example",
                 "MANIFEST.sha256",
                 "docker/docker-compose.yml",
+                "docker/docker-compose.control.yml",
+                "scripts/compose-runtime.sh",
                 "scripts/runtime-watchdog.sh",
                 "scripts/tdsdiag.sh",
                 "scripts/verify_release_state.py",
@@ -74,13 +82,18 @@ class ReleaseArchiveContractTest(unittest.TestCase):
                 "deploy/systemd/threat-detection-runtime-watchdog.timer",
             }
             self.assertTrue(required.issubset({path.relative_to(root).as_posix() for path in root.rglob("*")}))
+            manifest_paths = set()
             for line in (root / "MANIFEST.sha256").read_text(encoding="utf-8").splitlines():
                 expected, relative = line.split("  ", 1)
+                manifest_paths.add(relative)
                 self.assertEqual(expected, hashlib.sha256((root / relative).read_bytes()).hexdigest(), relative)
+            self.assertIn("docker/docker-compose.control.yml", manifest_paths)
+            self.assertIn("scripts/compose-runtime.sh", manifest_paths)
 
             for relative in (
                 "install.sh",
                 "scripts/prepare_release_env.py",
+                "scripts/compose-runtime.sh",
                 "scripts/runtime-watchdog.sh",
                 "scripts/tdsdiag.sh",
                 "scripts/verify_release_state.py",
@@ -99,9 +112,169 @@ class ReleaseArchiveContractTest(unittest.TestCase):
         for name in names:
             relative_parts = Path(name).parts[1:]
             self.assertFalse(forbidden_parts.intersection(relative_parts), name)
-            self.assertNotEqual(Path(name).name, ".env", name)
-            self.assertFalse(name.endswith((".pem", ".key", ".p12", ".pfx", ".bak", ".backup")), name)
+            self.assertFalse(name.lower().endswith((".env", ".pem", ".key", ".p12", ".pfx", ".pkcs12", ".bak", ".backup")), name)
             self.assertFalse(name.endswith((".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx")), name)
+
+    def test_secret_filenames_are_excluded_from_recursive_release_sources(self) -> None:
+        for name in (".env", ".env.local", "control.env", "client.p12", "trust.P12", "private.key", "server.pem"):
+            with self.subTest(name=name):
+                self.assertFalse(self.packer.should_include(Path("config-repo") / "tls" / name))
+
+
+def shell_function(source: str, name: str) -> str:
+    body = source.split(f"{name}() {{\n", 1)[1].split("\n}\n", 1)[0]
+    return f"{name}() {{\n{body}\n}}\n"
+
+
+@unittest.skipUnless(BASH, "requires Bash or Git for Windows Bash")
+class ComposeRuntimeContractTest(unittest.TestCase):
+    """Probe real shell composition and installed entry points with recording Docker."""
+
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory(prefix="tds-compose-contract-")
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.source = self.root / "source release"
+        self.target = self.root / "target release"
+        self.control_env = self.root / "host config/control.env"
+        self.control_env.parent.mkdir()
+        self.log = self.root / "compose-calls"
+        self.wrapper = (ROOT / "scripts/compose-runtime.sh").read_text(encoding="utf-8")
+        self.installer = (ROOT / "install.sh").read_text(encoding="utf-8")
+        self.watchdog = (ROOT / "scripts/runtime-watchdog.sh").read_text(encoding="utf-8")
+        for release in (self.source, self.target):
+            (release / "docker").mkdir(parents=True)
+            (release / "scripts").mkdir()
+            for name in ("docker-compose.yml", "docker-compose.control.yml"):
+                (release / "docker" / name).write_text("services: {}\n", encoding="utf-8")
+            (release / ".env").write_text("# base\n", encoding="utf-8")
+            wrapper = release / "scripts/compose-runtime.sh"
+            wrapper.write_text(self.wrapper, encoding="utf-8", newline="\n")
+            wrapper.chmod(0o755)
+        (self.root / "prepared.env").write_text("# prospective base\n", encoding="utf-8")
+        (self.root / "bin").mkdir()
+        docker = self.root / "bin/docker"
+        docker.write_text(
+            '#!/usr/bin/env bash\n'
+            '{ printf \'%s\\0\' "$PWD" "$@"; printf \'\\n\'; } >>"$COMPOSE_TEST_LOG"\n'
+            'if [[ "${*: -3}" == "ps -q api-gateway" ]]; then echo fixture; fi\n',
+            encoding="utf-8", newline="\n",
+        )
+        docker.chmod(0o755)
+
+    def run_calls(self, body: str) -> list[list[str]]:
+        self.log.unlink(missing_ok=True)
+        # PWD is in the active shell's path format on both Linux and Windows.
+        prelude = r'''
+fixture="$PWD"
+export PATH="$fixture/bin:$PATH" COMPOSE_TEST_LOG="$fixture/compose-calls"
+export JZ_CONTROL_ENV_FILE="$fixture/host config/control.env"
+CONTROL_ENV_FILE="$JZ_CONTROL_ENV_FILE"
+SRC_ROOT="$fixture/source release"
+SCRIPT_DIR="$SRC_ROOT/scripts"
+TARGET_DIR="$fixture/target release"
+PREPARED_ENV="$fixture/prepared.env"
+timeout() { shift; "$@"; }
+runtime_reason() { return 1; }
+warn() { :; }
+'''
+        result = subprocess.run(
+            [BASH, "-ec", prelude + body], cwd=self.root, text=True,
+            capture_output=True, check=False, timeout=35,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return [line.rstrip("\0").split("\0") for line in self.log.read_text(encoding="utf-8").splitlines()]
+
+    def assert_compose(self, call: list[str], root: str, primary: str, overlay: bool, *command: str) -> None:
+        cwd = call[0]
+        self.assertTrue(cwd.endswith(f"/{root}"), call)
+        fixture = cwd.rsplit("/", 1)[0]
+        args = ["compose", "--env-file", primary.replace("{fixture}", fixture)]
+        if overlay:
+            args.extend(["--env-file", f"{fixture}/host config/control.env"])
+        args.extend(["-f", "docker/docker-compose.yml"])
+        if overlay:
+            args.extend(["-f", "docker/docker-compose.control.yml"])
+        self.assertEqual(call[1:], args + list(command))
+
+    def test_installer_preflights_source_then_uses_target_overlay_only_when_available(self) -> None:
+        main = self.installer.rsplit("\nvalidate_target\n", 1)[1]
+        quiet = next(line.rstrip(" \\") for line in main.splitlines() if "config --quiet" in line)
+        ports = shell_function(self.installer, "validate_compose_ports")
+        rendering = next(line.strip().removeprefix("if ! ").split(" >", 1)[0]
+                         for line in ports.splitlines() if "config --format json" in line)
+        functions = shell_function(self.installer, "compose_release") + shell_function(self.installer, "compose_in")
+        for present in (False, True):
+            with self.subTest(control_env=present):
+                if present:
+                    self.control_env.write_text("JZ_CONTROL_TLS_DIR=/fixture/tls\n", encoding="utf-8")
+                calls = self.run_calls(functions + quiet + "\n" + rendering + '\ncompose_in "$TARGET_DIR" down --remove-orphans\n')
+                self.assertEqual(len(calls), 3)
+                self.assert_compose(calls[0], "source release", "{fixture}/prepared.env", present, "config", "--quiet")
+                self.assert_compose(calls[1], "source release", "{fixture}/prepared.env", present, "config", "--format", "json")
+                self.assert_compose(calls[2], "target release", ".env", present, "down", "--remove-orphans")
+        (self.target / "docker/docker-compose.control.yml").unlink()
+        call, = self.run_calls(functions + 'compose_in "$TARGET_DIR" down --remove-orphans\n')
+        self.assert_compose(call, "target release", ".env", False, "down", "--remove-orphans")
+
+    def test_systemd_start_stop_and_watchdog_recreation_share_the_same_overlay(self) -> None:
+        unit = (ROOT / "deploy/systemd/threat-detection-compose.service").read_text(encoding="utf-8")
+        commands = [
+            line.split("=", 1)[1].replace("/opt/threat-detection-system", '"$TARGET_DIR"')
+            for line in unit.splitlines() if line.startswith(("ExecStart=", "ExecStop="))
+        ]
+        watchdog = shell_function(self.watchdog, "compose") + shell_function(self.watchdog, "recover_service")
+        for kind in ("missing", "directory", "file"):
+            with self.subTest(control_env=kind):
+                if kind == "directory":
+                    self.control_env.mkdir()
+                if kind == "file":
+                    self.control_env.rmdir()
+                    self.control_env.write_text("JZ_CONTROL_TLS_DIR=/fixture/tls\n", encoding="utf-8")
+                calls = self.run_calls(watchdog + "\n".join(commands) + "\ncompose config --services\nrecover_service api-gateway\n")
+                expected = [
+                    ("up", "-d", "--remove-orphans"), ("stop",), ("config", "--services"),
+                    ("up", "-d", "--no-deps", "--force-recreate", "api-gateway"), ("ps", "-q", "api-gateway"),
+                ]
+                self.assertEqual(len(calls), len(expected))
+                for call, command in zip(calls, expected):
+                    self.assert_compose(call, "target release", ".env", kind == "file", *command)
+
+    def test_uninstall_and_purge_do_not_target_host_control_material(self) -> None:
+        self.control_env.write_text("JZ_CONTROL_TLS_DIR=/fixture/tls\n", encoding="utf-8")
+        tls = self.control_env.parent / "tls"
+        tls.mkdir()
+        certificate = tls / "client.p12"
+        certificate.write_bytes(b"synthetic fixture")
+        functions = "".join(shell_function(self.installer, name) for name in (
+            "installed_project_name", "show_remove_plan", "remove_installation",
+        ))
+        # Record the deletion arguments without giving the installer a real
+        # filesystem writer or access to a running systemd/Docker daemon.
+        calls = self.run_calls(functions + r'''
+BACKUP_ROOT="$fixture/backups"
+TARGET_DIR="$fixture/absent-installation"
+UNIT_NAME=threat-detection-compose.service
+WATCHDOG_SERVICE_NAME=threat-detection-runtime-watchdog.service
+WATCHDOG_TIMER_NAME=threat-detection-runtime-watchdog.timer
+UNIT_PATH="$fixture/$UNIT_NAME"
+WATCHDOG_SERVICE_PATH="$fixture/$WATCHDOG_SERVICE_NAME"
+WATCHDOG_TIMER_PATH="$fixture/$WATCHDOG_TIMER_NAME"
+DRY_RUN=false
+systemctl() { :; }
+docker() { :; }
+ok() { :; }
+die() { echo "$*" >&2; exit 1; }
+confirm() { return 0; }
+rm() { { printf '%s\0' rm "$@"; printf '\n'; } >>"$COMPOSE_TEST_LOG"; }
+remove_installation false
+remove_installation true
+''')
+        self.assertEqual(len(calls), 4)
+        self.assertTrue(any(call[1:3] == ["-rf", "--"] for call in calls))
+        self.assertFalse(any("host config" in arg or "/etc/jz-control" in arg for call in calls for arg in call))
+        self.assertTrue(self.control_env.is_file())
+        self.assertEqual(certificate.read_bytes(), b"synthetic fixture")
 
 
 class ReleaseContractTest(unittest.TestCase):
