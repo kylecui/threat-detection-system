@@ -6,16 +6,18 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import DeviceControlPanel from "../DeviceControlPanel";
 import {
+  createUuidV4,
   deviceControl,
   type ControlEvent,
   type ControlRecord,
 } from "@/services/deviceControl";
 
 const access = vi.hoisted(() => ({ role: "SUPER_ADMIN" }));
-vi.mock("@/services/deviceControl", () => ({
+vi.mock("@/services/deviceControl", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/deviceControl")>()),
   deviceControl: {
     readiness: vi.fn(),
     history: vi.fn(),
@@ -35,6 +37,10 @@ vi.mock("../PermissionGate", () => ({
 }));
 
 describe("device control execution feedback", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     access.role = "SUPER_ADMIN";
@@ -81,6 +87,13 @@ describe("device control execution feedback", () => {
   });
   const uuid4 =
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  const stubHttpCrypto = () => {
+    const getRandomValues = vi.fn(
+      globalThis.crypto.getRandomValues.bind(globalThis.crypto),
+    );
+    vi.stubGlobal("crypto", { randomUUID: undefined, getRandomValues });
+    return getRandomValues;
+  };
   const showChannel = async () => {
     render(<DeviceControlPanel customerId="customer-a" devSerial="SERIAL-A" />);
     fireEvent.click(await screen.findByText("命令与通道"));
@@ -97,6 +110,54 @@ describe("device control execution feedback", () => {
     (await screen.findByText(label, { selector: "button span" })).closest(
       "button",
     )!;
+
+  it("submits capabilities with a Web Crypto UUID when HTTP has no randomUUID", async () => {
+    const getRandomValues = stubHttpCrypto();
+    vi.mocked(deviceControl.history).mockResolvedValue([]);
+    render(<DeviceControlPanel customerId="customer-a" devSerial="SERIAL-A" />);
+    const button = await confirmButton("读取授权能力");
+    await waitFor(() => expect(button).toBeEnabled());
+    await act(async () => fireEvent.click(button));
+    expect(getRandomValues).toHaveBeenCalledWith(expect.any(Uint8Array));
+    expect(deviceControl.submit).toHaveBeenCalledWith(
+      "customer-a",
+      "SERIAL-A",
+      "capabilities",
+      {},
+      expect.stringMatching(uuid4),
+    );
+    expect(button).toBeEnabled();
+  });
+
+  it("clears busy and allows another click after synchronous UUID generation failure", async () => {
+    const getRandomValues = stubHttpCrypto();
+    getRandomValues.mockImplementationOnce(() => {
+      throw new Error("test RNG failure");
+    });
+    vi.mocked(deviceControl.history).mockResolvedValue([]);
+    render(<DeviceControlPanel customerId="customer-a" devSerial="SERIAL-A" />);
+    const button = await confirmButton("读取授权能力");
+    await waitFor(() => expect(button).toBeEnabled());
+    await act(async () => fireEvent.click(button));
+    expect(screen.getByText(/本次请求未确认/)).toBeInTheDocument();
+    expect(deviceControl.submit).not.toHaveBeenCalled();
+    expect(button).toBeEnabled();
+
+    await act(async () => fireEvent.click(button));
+    expect(deviceControl.submit).toHaveBeenCalledWith(
+      "customer-a",
+      "SERIAL-A",
+      "capabilities",
+      {},
+      expect.stringMatching(uuid4),
+    );
+    expect(button).toBeEnabled();
+  });
+
+  it("still formats a UUID v4 without either Web Crypto generator", () => {
+    vi.stubGlobal("crypto", undefined);
+    expect(createUuidV4()).toMatch(uuid4);
+  });
 
   it("blocks containment approval commands before submit", async () => {
     vi.mocked(deviceControl.history).mockResolvedValue([
@@ -182,7 +243,8 @@ describe("device control execution feedback", () => {
     );
   });
 
-  it("warns about repair effects before submitting for a tenant admin", async () => {
+  it("prefills a repair UUID on HTTP and warns a tenant admin before submitting", async () => {
+    stubHttpCrypto();
     access.role = "TENANT_ADMIN";
     const metadata = "c".repeat(64);
     vi.mocked(deviceControl.history).mockResolvedValue([

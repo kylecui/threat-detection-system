@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Alert, Button, Collapse, Input, Modal, Space, Table } from "antd";
 import PermissionGate from "./PermissionGate";
 import type { AppRole } from "@/contexts/AuthContext";
+import { createUuidV4 } from "@/services/deviceControl";
 
 export const controlWriters: AppRole[] = [
   "SUPER_ADMIN",
@@ -73,7 +74,7 @@ export default function DeviceControlOperations({
       initial.expected_base_token = baseToken;
     }
     if (action === "channel.reconcile.review" || action === "channel.repair") {
-      initial.operation_id = crypto.randomUUID().toLowerCase();
+      initial.operation_id = createUuidV4();
     }
     if (action === "channel.repair") {
       const metadata = latest("channel.diagnostics")?.metadataSha256;

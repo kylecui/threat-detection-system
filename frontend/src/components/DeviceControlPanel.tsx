@@ -15,6 +15,7 @@ import {
 } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import {
+  createUuidV4,
   deviceControl,
   type ControlEvent,
   type ControlRecord,
@@ -372,13 +373,13 @@ export default function DeviceControlPanel({
         text: yaml,
         action,
       };
-      busyRef.current = true;
-      setBusy(true);
-      setOperationError(false);
-      const fingerprint = JSON.stringify({ action, params });
-      if (retry.current?.fingerprint !== fingerprint)
-        retry.current = { fingerprint, key: crypto.randomUUID() };
       try {
+        busyRef.current = true;
+        setBusy(true);
+        setOperationError(false);
+        const fingerprint = JSON.stringify({ action, params });
+        if (retry.current?.fingerprint !== fingerprint)
+          retry.current = { fingerprint, key: createUuidV4() };
         const accepted = await deviceControl.submit(
           customerId,
           devSerial,
